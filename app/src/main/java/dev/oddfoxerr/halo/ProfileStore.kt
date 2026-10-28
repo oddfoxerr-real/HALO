@@ -95,6 +95,33 @@ class ProfileStore(context: Context) {
         get() = prefs.getBoolean("dynamic_colors", false)
         set(value) { prefs.edit().putBoolean("dynamic_colors", value).apply() }
 
+
+    /** Opt-in media pill outline on unlocked screens. */
+    var pillEnabled: Boolean
+        get() = prefs.getBoolean("pill_enabled", false)
+        set(value) { prefs.edit().putBoolean("pill_enabled", value).apply() }
+    var pillMediaColors: Boolean
+        get() = prefs.getBoolean("pill_media_colors", true)
+        set(value) { prefs.edit().putBoolean("pill_media_colors", value).apply() }
+    var pillWidthDp: Float
+        get() = prefs.getFloat("pill_width", 230f).coerceIn(120f, 320f)
+        set(value) { prefs.edit().putFloat("pill_width", value.coerceIn(120f, 320f)).apply() }
+    var pillHeightDp: Float
+        get() = prefs.getFloat("pill_height", 52f).coerceIn(32f, 84f)
+        set(value) { prefs.edit().putFloat("pill_height", value.coerceIn(32f, 84f)).apply() }
+    var pillBottomDp: Float
+        get() = prefs.getFloat("pill_bottom", 48f).coerceIn(8f, 280f)
+        set(value) { prefs.edit().putFloat("pill_bottom", value.coerceIn(8f, 280f)).apply() }
+    var pillGlow: Float
+        get() = prefs.getFloat("pill_glow", .65f).coerceIn(0f, 1f)
+        set(value) { prefs.edit().putFloat("pill_glow", value.coerceIn(0f, 1f)).apply() }
+    var pillThicknessDp: Float
+        get() = prefs.getFloat("pill_thickness", 2.5f).coerceIn(1f, 6f)
+        set(value) { prefs.edit().putFloat("pill_thickness", value.coerceIn(1f, 6f)).apply() }
+    var pillColor: Long
+        get() = prefs.getLong("pill_color", 0xFF1ED760L)
+        set(value) { prefs.edit().putLong("pill_color", value).apply() }
+
     fun isQuietNow(): Boolean {
         val c = Calendar.getInstance()
         val minute = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
