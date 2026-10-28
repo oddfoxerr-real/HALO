@@ -24,13 +24,14 @@ jobs:
           tar -xJf source/HALO-v0.4.1.tar.xz -C .
           test -f app/build.gradle.kts
           test -f app/src/main/java/dev/oddfoxerr/halo/MainActivity.kt
-      - name: Commit extracted source to repository
-        continue-on-error: true
+      - name: Publish native source files
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git reset -- .github/workflows
           if ! git diff --cached --quiet; then
             git commit -m "feat: publish HALO v0.4.1 native Android source"
             git push origin HEAD:main
@@ -40,22 +41,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install SDK 36
-        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Install Android SDK platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-36' 'build-tools;36.0.0'
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Test and build HALO APK
+      - name: Run tests and build HALO APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
-      - name: Verify signing
+      - name: Verify signed APK
         shell: bash
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS.txt
-      - name: Upload installable HALO APK
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
           name: HALO-v0.4.1-debug-apk
