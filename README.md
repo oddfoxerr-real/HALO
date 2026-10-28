@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.4.1 debug APK built in GitHub Actions · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
+**v0.5.0 debug APK built in GitHub Actions · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -24,10 +24,10 @@ HALO is a real Android notification-listener app rather than a browser simulatio
 5. On Apps select installed applications and assign character rules.
 6. Receive a real notification. HALO will animate only when its notification rules, quiet hours, permissions and screen behavior allow it.
 
-## Verified v0.4.1 GitHub Actions build
+## Verified v0.5.0 GitHub Actions build
 
 - **Successful CI run:** https://github.com/oddfoxerr-real/HALO/actions/runs/40759790614
-- **APK artifact:** `HALO-v0.4.1-debug-apk` (contains `app-debug.apk` and SHA-256 checksum)
+- **APK artifact:** `HALO-v0.5.0-debug-apk` (contains `app-debug.apk` and SHA-256 checksum)
 - **CI checks passed:** unit tests, debug APK assembly, APK signing verification, and artifact upload.
 - **Still unverified:** installation and background overlay behavior on the Samsung Galaxy A56.
 - **Note:** a previous HALO v0.1 debug APK may use a different signing certificate. If Android rejects the update due to a certificate mismatch, retain the existing app data before replacing the old build.
@@ -36,11 +36,11 @@ HALO is a real Android notification-listener app rather than a browser simulatio
 
 The repository must be **separate from CYN and Gro-Ler**. Create `oddfoxerr-real/HALO` (if needed) and upload all project files to the repo root, preserving `.github/workflows/android-debug.yml`.
 
-1. Push to `main` or `prototype/v0.4.1`, or select **Actions → Build HALO Android APK → Run workflow**.
+1. Push to `main` or `prototype/v0.5.0`, or select **Actions → Build HALO Android APK → Run workflow**.
 2. The workflow installs JDK 17, Android SDK 36, Gradle 8.13, runs `:app:testDebugUnitTest :app:assembleDebug`, and verifies the APK signature.
-3. Open the completed run → **Artifacts → HALO-v0.4.1-debug-apk**. GitHub distributes the APK in a ZIP. Extract `app-debug.apk` to install it. For a direct Release asset, push a `v0.4.1` tag; `.github/workflows/android-release.yml` then publishes a named APK to GitHub Releases.
+3. Open the completed run → **Artifacts → HALO-v0.5.0-debug-apk**. GitHub distributes the APK in a ZIP. Extract `app-debug.apk` to install it. For a direct Release asset, push a `v0.5.0` tag; `.github/workflows/android-release.yml` then publishes a named APK to GitHub Releases.
 
-**The v0.4.1 debug APK has been compiled and signature-verified on GitHub Actions.** It has not been physically tested on a Galaxy A56 or published as a tagged GitHub Release. Download the successful run's APK artifact. Do not label the older v0.1 APK as v0.4.1.
+**The v0.5.0 debug APK has been compiled and signature-verified on GitHub Actions.** It has not been physically tested on a Galaxy A56 or published as a tagged GitHub Release. Download the successful run's APK artifact. Do not label the older v0.1 APK as v0.5.0.
 
 ### Local build
 
@@ -92,4 +92,13 @@ Ideas researched from [aodNotify on Google Play](https://play.google.com/store/a
 
 The previous Work-created v0.1 debug build may use a **different debug signing key** than GitHub Actions. Android cannot install an update signed by a different certificate. If installation fails with a signature conflict, do not assume the APK is corrupted; a consistently managed signing key is needed for seamless updates. Do not commit private signing keys to GitHub.
 
-**Pill Halo / Samsung Now Bar integration is intentionally excluded from this release.** That feature is planned only after this native notification build is installed and verified.
+**Samsung-native Now Bar integration is not exposed through public Android APIs.** HALO v0.5 offers its own separately positioned unlocked-screen media outline.
+ 
+## v0.5 — Pill Halo (opt-in media outline)
+
+- Add **Settings → Pill Halo → Calibrate on phone** to size and position the outline on the actual display.
+- Detect supported playing media sessions through Android's notification-listener-authorized `MediaSessionManager`; no microphone or audio capture.
+- Color presets for Spotify, YouTube Music, SoundCloud and a user-configurable fallback color.
+- Display the pill only when HALO is enabled, playback is active, overlays are permitted, the phone is interactive and unlocked, and quiet hours are not active.
+- Disabled by default. A transparent non-touch overlay does not replace Samsung's Now Bar, AOD or other protected SystemUI surfaces.
+- Samsung Galaxy A56 real-device verification remains necessary before claiming lock-screen support.
