@@ -8,6 +8,7 @@
         </intent>
     </queries>
     <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+        <activity android:name=".PillPreviewActivity" android:exported="false" />
         <activity android:name=".PreviewActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
