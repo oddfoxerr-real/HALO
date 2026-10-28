@@ -1,14 +1,19 @@
 package dev.oddfoxerr.halo
 
 import android.app.Notification
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -17,21 +22,93 @@ import java.util.Calendar
 
 /** Local, event-driven notification listener. Does not read or persist message bodies. */
 class HaloNotificationListener : NotificationListenerService() {
+    companion object {
+        @Volatile private var instance: HaloNotificationListener? = null
+        fun requestPillRefresh() {
+            val service = instance ?: return
+            service.main.post { service.refreshPill(); service.scheduleQuietCheck() }
+        }
+    }
+
+    private var mediaManager: MediaSessionManager? = null
+    private val mediaControllers = mutableListOf<MediaController>()
+    private val mediaCallback = object : MediaController.Callback() {
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            main.post { refreshPill() }
+        }
+    }
+    private val sessionsCallback = MediaSessionManager.OnActiveSessionsChangedListener { sessions ->
+        main.post { setMediaControllers(sessions.orEmpty()) }
+    }
+
+    private fun startMediaObservation() {
+        val component = ComponentName(this, HaloNotificationListener::class.java)
+        val manager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        mediaManager = manager
+        try {
+            manager.addOnActiveSessionsChangedListener(sessionsCallback, component, main)
+            setMediaControllers(manager.getActiveSessions(component))
+        } catch (_: SecurityException) {
+            setMediaControllers(emptyList())
+        }
+    }
+
+    private fun setMediaControllers(controllers: List<MediaController>) {
+        mediaControllers.forEach { it.unregisterCallback(mediaCallback) }
+        mediaControllers.clear()
+        mediaControllers.addAll(controllers)
+        mediaControllers.forEach {
+            try { it.registerCallback(mediaCallback, main) } catch (_: RuntimeException) { }
+        }
+        refreshPill()
+        scheduleQuietCheck()
+    }
+
+    private fun stopMediaObservation() {
+        try { mediaManager?.removeOnActiveSessionsChangedListener(sessionsCallback) }
+        catch (_: RuntimeException) { }
+        mediaManager = null
+        setMediaControllers(emptyList())
+        PillHaloOverlay.dismiss()
+    }
+
+    private fun refreshPill() {
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
+        val active = mediaControllers.firstOrNull {
+            try { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            catch (_: RuntimeException) { false }
+        }
+        if (!PillHaloPolicy.shouldShow(
+                store.masterEnabled && store.pillEnabled, unlocked, active != null, store.isQuietNow()
+            )) {
+            PillHaloOverlay.dismiss()
+            return
+        }
+        val pkg = active?.packageName.orEmpty()
+        val color = if (store.pillMediaColors) PillHaloPolicy.mediaColor(pkg, store.pillColor)
+            else store.pillColor
+        PillHaloOverlay.show(this, color, store)
+    }
+
     private val tracker = NotificationTracker()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var store: ProfileStore
     private val quietCheck = object : Runnable {
         override fun run() {
             refreshIndicator()
+            refreshPill()
             scheduleQuietCheck()
         }
     }
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> HaloOverlay.dismiss()
-                Intent.ACTION_SCREEN_ON, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
+                Intent.ACTION_SCREEN_OFF -> { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }
+                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
                     refreshIndicator()
+                    refreshPill()
                     scheduleQuietCheck()
                 }
             }
@@ -41,7 +118,9 @@ class HaloNotificationListener : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         store = ProfileStore(this)
+        instance = this
         val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_USER_PRESENT)
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_TIME_CHANGED)
@@ -61,6 +140,7 @@ class HaloNotificationListener : NotificationListenerService() {
                 }.orEmpty()
             } catch (_: Exception) { emptyList() }
             tracker.restoreEligible(present)
+            startMediaObservation()
             NotificationActivityState.connected(tracker.size())
             refreshIndicator()
             scheduleQuietCheck()
@@ -83,6 +163,7 @@ class HaloNotificationListener : NotificationListenerService() {
 
     private fun onIncoming(sbn: StatusBarNotification, importance: Int?) {
         main.post {
+            refreshPill()
             if (!isRelevant(sbn)) return@post
             val eligible = isAlerting(importance)
             if (tracker.posted(sbn.key, sbn.packageName, eligible) == null) {
@@ -107,6 +188,7 @@ class HaloNotificationListener : NotificationListenerService() {
                 NotificationActivityState.event(sbn.packageName, EventType.DISMISSED, tracker.size())
                 refreshIndicator()
                 scheduleQuietCheck()
+                refreshPill()
             }
         }
     }
@@ -114,6 +196,7 @@ class HaloNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         main.post {
             tracker.clear()
+            stopMediaObservation()
             main.removeCallbacks(quietCheck)
             NotificationActivityState.disconnected()
             HaloOverlay.dismiss()
@@ -122,6 +205,8 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        stopMediaObservation()
+        instance = null
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) { }
         HaloOverlay.dismiss()
@@ -163,7 +248,7 @@ class HaloNotificationListener : NotificationListenerService() {
 
     private fun scheduleQuietCheck() {
         main.removeCallbacks(quietCheck)
-        if (!store.quietEnabled || tracker.size() == 0) return
+        if (!store.quietEnabled || (tracker.size() == 0 && !store.pillEnabled)) return
         // At most one callback per minute while quiet hours and active notifications coexist.
         val now = Calendar.getInstance()
         val delay = 60_100L - now.get(Calendar.SECOND) * 1_000L - now.get(Calendar.MILLISECOND)
