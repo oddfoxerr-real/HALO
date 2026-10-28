@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.4.1 source checkpoint · Android 16 / Galaxy A56 · Kotlin · Jetpack Compose Material 3**
+**v0.4.1 debug APK built in GitHub Actions · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -24,6 +24,14 @@ HALO is a real Android notification-listener app rather than a browser simulatio
 5. On Apps select installed applications and assign character rules.
 6. Receive a real notification. HALO will animate only when its notification rules, quiet hours, permissions and screen behavior allow it.
 
+## Verified v0.4.1 GitHub Actions build
+
+- **Successful CI run:** https://github.com/oddfoxerr-real/HALO/actions/runs/40759790614
+- **APK artifact:** `HALO-v0.4.1-debug-apk` (contains `app-debug.apk` and SHA-256 checksum)
+- **CI checks passed:** unit tests, debug APK assembly, APK signing verification, and artifact upload.
+- **Still unverified:** installation and background overlay behavior on the Samsung Galaxy A56.
+- **Note:** a previous HALO v0.1 debug APK may use a different signing certificate. If Android rejects the update due to a certificate mismatch, retain the existing app data before replacing the old build.
+
 ## Build APK via GitHub Actions
 
 The repository must be **separate from CYN and Gro-Ler**. Create `oddfoxerr-real/HALO` (if needed) and upload all project files to the repo root, preserving `.github/workflows/android-debug.yml`.
@@ -32,7 +40,7 @@ The repository must be **separate from CYN and Gro-Ler**. Create `oddfoxerr-real
 2. The workflow installs JDK 17, Android SDK 36, Gradle 8.13, runs `:app:testDebugUnitTest :app:assembleDebug`, and verifies the APK signature.
 3. Open the completed run → **Artifacts → HALO-v0.4.1-debug-apk**. GitHub distributes the APK in a ZIP. Extract `app-debug.apk` to install it. For a direct Release asset, push a `v0.4.1` tag; `.github/workflows/android-release.yml` then publishes a named APK to GitHub Releases.
 
-This is a source checkpoint. **The v0.4 APK has not been compiled, tested on a Galaxy A56, or released to GitHub from this environment.** Do not label the older v0.1 debug APK as v0.4.
+**The v0.4.1 debug APK has been compiled and signature-verified on GitHub Actions.** It has not been physically tested on a Galaxy A56 or published as a tagged GitHub Release. Download the successful run's APK artifact. Do not label the older v0.1 APK as v0.4.1.
 
 ### Local build
 
@@ -75,7 +83,7 @@ Ideas researched from [aodNotify on Google Play](https://play.google.com/store/a
 
 ### Verification still needed
 
-- Gradle build and lint on Android SDK 36.
+- Android lint on SDK 36 (CI compile and unit tests already passed).
 - Test the overlay's touch pass-through and screen cutout handling on the Samsung A56.
 - Confirm notification arrival, dismissal, background execution and battery saver behavior on One UI.
 - Check performance and notification-rank handling across Samsung notification channels.
