@@ -163,7 +163,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.4", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.5", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -196,7 +196,8 @@ private fun HaloApp(
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                             enabled = value
                             store.masterEnabled = value
-                            if (!value) HaloOverlay.dismiss()
+                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }
+                            HaloNotificationListener.requestPillRefresh()
                         }
                     }
                     item {
@@ -285,6 +286,22 @@ private fun HaloApp(
                     item { SectionCard { QuietHoursEditor(store) } }
                     item {
                         SectionCard {
+                            Text("Pill Halo · Samsung-style", fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium)
+                            Text("An optional media-reactive outline on unlocked screens. Samsung's protected Now Bar itself cannot be recolored.",
+                                color = Muted)
+                            var pill by remember { mutableStateOf(store.pillEnabled) }
+                            SwitchRow("Show media pill", "Only while an Android media session is playing.", pill) {
+                                pill = it; store.pillEnabled = it
+                                HaloNotificationListener.requestPillRefresh()
+                            }
+                            Button(onClick = {
+                                context.startActivity(Intent(context, PillPreviewActivity::class.java))
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Calibrate on phone") }
+                        }
+                    }
+                    item {
+                        SectionCard {
                             Text("Notification behavior", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             var silent by remember { mutableStateOf(store.showSilent) }
                             var screen by remember { mutableStateOf(store.onlyScreenOn) }
@@ -303,7 +320,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { HaloOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
+                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
                             Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -447,6 +464,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
     SwitchRow("Enable quiet hours", "Suppress effects during your sleep schedule.", enabled) {
         enabled = it; store.quietEnabled = it
         if (it && store.isQuietNow()) HaloOverlay.dismiss()
+        HaloNotificationListener.requestPillRefresh()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(value = start, onValueChange = { start = it.take(5) }, label = { Text("From HH:mm") }, singleLine = true, modifier = Modifier.weight(1f))
@@ -460,6 +478,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
         if (valid) {
             store.quietStart = a!!; store.quietEnd = b!!
             if (store.isQuietNow()) HaloOverlay.dismiss()
+            HaloNotificationListener.requestPillRefresh()
         }
     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
 }
