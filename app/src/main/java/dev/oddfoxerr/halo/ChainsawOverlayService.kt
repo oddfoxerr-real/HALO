@@ -61,7 +61,7 @@ class ChainsawOverlayService : Service() {
                 return
             }
 
-            val interactive = power.isInteractive && !keyguard.isKeyguardLocked
+            val interactive = ChainsawOverlayPolicy.mayRender(power.isInteractive, keyguard.isKeyguardLocked)
             if (!interactive) {
                 view.visibility = View.INVISIBLE
                 previousFrame = SystemClock.elapsedRealtime()
@@ -171,7 +171,7 @@ class ChainsawOverlayService : Service() {
         val view = ChainsawView(applicationContext).apply {
             this.thickness = thickness
             this.glow = glow
-            visibility = if (power.isInteractive && !keyguard.isKeyguardLocked) View.VISIBLE else View.INVISIBLE
+            visibility = if (ChainsawOverlayPolicy.mayRender(power.isInteractive, keyguard.isKeyguardLocked)) View.VISIBLE else View.INVISIBLE
         }
         manager.addView(view, params)
         windowManager = manager
