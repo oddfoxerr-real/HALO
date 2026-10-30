@@ -24,6 +24,8 @@ import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationManagerCompat
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * User-started Muviz-style music edge. Audio is not recorded: this uses Android's
@@ -53,6 +55,8 @@ class MusicEdgeService : Service() {
     private var onlyWhilePlaying = false
     private var allowedSources: Set<String> = emptySet()
     private val handler = Handler(Looper.getMainLooper())
+    private val frameQueued = AtomicBoolean(false)
+    private val pendingFrame = AtomicReference<Pair<FloatArray, Float>?>(null)
     private val mediaManager by lazy { getSystemService(MediaSessionManager::class.java) }
     private var sensitivity = 1.5f
     private var rate = 1f
@@ -65,8 +69,11 @@ class MusicEdgeService : Service() {
         override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
             if (fft == null || !isRunning) return
             val spectrum = EdgeSpectrum.fromFft(fft, samplingRate)
-            val bass = EdgeSpectrum.bass(spectrum)
+            pendingFrame.set(spectrum to EdgeSpectrum.bass(spectrum))
+            if (!frameQueued.compareAndSet(false, true)) return
             handler.post {
+                frameQueued.set(false)
+                val (spectrum, bass) = pendingFrame.getAndSet(null) ?: return@post
                 if (!isRunning) return@post
                 val view = edgeView ?: return@post
                 if (!Settings.canDrawOverlays(this@MusicEdgeService)) {
@@ -251,6 +258,8 @@ class MusicEdgeService : Service() {
     override fun onDestroy() {
         isRunning = false
         handler.removeCallbacksAndMessages(null)
+        pendingFrame.set(null)
+        frameQueued.set(false)
         visualizer?.let {
             try { it.setDataCaptureListener(null, 0, false, false) } catch (_: Exception) { }
             try { it.enabled = false } catch (_: Exception) { }
