@@ -1,7 +1,7 @@
 name: Build HALO Android APK
 on:
   push:
-    branches: [main, 'prototype/**', 'feature/**']
+    branches: [main, 'prototype/**', 'feature/**', 'fix/**']
     paths:
       - 'app/**'
       - 'gradle/**'
