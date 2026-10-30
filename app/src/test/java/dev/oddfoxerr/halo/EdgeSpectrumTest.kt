@@ -13,7 +13,7 @@ class EdgeSpectrumTest {
 
     @Test fun spectralBassAndTrebleAreDifferent() {
         val low = ByteArray(1024)
-        low[4] = 120
+        low[2] = 120
         val high = ByteArray(1024)
         high[200] = 120
         assertTrue(EdgeSpectrum.bass(EdgeSpectrum.fromFft(low, 48000000)) > 0f)
