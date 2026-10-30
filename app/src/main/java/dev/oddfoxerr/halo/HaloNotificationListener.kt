@@ -26,7 +26,7 @@ class HaloNotificationListener : NotificationListenerService() {
         @Volatile private var instance: HaloNotificationListener? = null
         fun requestPillRefresh() {
             val service = instance ?: return
-            service.main.post { service.refreshPill(); service.scheduleQuietCheck() }
+            service.main.post { service.refreshIndicator(); service.refreshPill(); service.scheduleQuietCheck() }
         }
     }
 
@@ -73,6 +73,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshPill() {
+        if (ChainsawOverlayService.isRunning) { PillHaloOverlay.dismiss(); return }
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
@@ -224,7 +225,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun mayShow(): Boolean {
-        if (!store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
+        if (ChainsawOverlayService.isRunning || !store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
         if (store.onlyScreenOn) {
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (!power.isInteractive) return false
