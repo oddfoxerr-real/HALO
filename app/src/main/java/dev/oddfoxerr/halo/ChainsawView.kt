@@ -118,7 +118,7 @@ class ChainsawView(context: Context) : View(context) {
             EdgeMode.CHAIN -> drawMechanical(canvas, length, unit)
         }
         paint.alpha = 255
-        if (keepAnimating && isAttachedToWindow && visibility == VISIBLE) postInvalidateOnAnimation()
+        if (keepAnimating && isAttachedToWindow && visibility == VISIBLE) postInvalidateDelayed(16L)
     }
 
     private fun drawWave(canvas: Canvas, length: Float, unit: Float) {
