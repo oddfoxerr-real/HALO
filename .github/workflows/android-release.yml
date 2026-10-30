@@ -2,14 +2,22 @@ name: Release HALO Android APK
 
 on:
   push:
-    tags: ['v*']
     branches: [main]
+    tags: ['v*']
     paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: halo-release-publishing
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -19,22 +27,11 @@ jobs:
       - name: Checkout HALO source
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install Android SDK 36
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
-
       - name: Resolve APK version and release tag
+        id: version
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           VERSION_NAME="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
@@ -44,16 +41,43 @@ jobs:
           fi
           RELEASE_TAG="v${VERSION_NAME}"
           if [[ "${GITHUB_REF}" == refs/tags/* && "${GITHUB_REF_NAME}" != "${RELEASE_TAG}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} doesn't match Android version ${RELEASE_TAG}"
+            echo "Tag ${GITHUB_REF_NAME} does not match Android version ${RELEASE_TAG}"
             exit 1
           fi
-          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists: refusing to silently replace its signed APK."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 17
+        if: steps.version.outputs.publish == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 36
+        if: steps.version.outputs.publish == 'true'
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'"
+
+      - name: Set up Gradle
+        if: steps.version.outputs.publish == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
 
       - name: Run tests and assemble installable debug APK
+        if: steps.version.outputs.publish == 'true'
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 
       - name: Verify signature and generate checksum
+        if: steps.version.outputs.publish == 'true'
         shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
@@ -61,6 +85,7 @@ jobs:
           sha256sum "HALO-${RELEASE_TAG}-debug.apk" > SHA256SUMS.txt
 
       - name: Keep CI build artifact
+        if: steps.version.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: HALO-release-build
@@ -70,16 +95,15 @@ jobs:
           if-no-files-found: error
 
       - name: Publish installable APK to GitHub Releases
+        if: steps.version.outputs.publish == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "HALO-${RELEASE_TAG}-debug.apk" SHA256SUMS.txt --clobber
-          else
-            gh release create "$RELEASE_TAG" "HALO-${RELEASE_TAG}-debug.apk" SHA256SUMS.txt \
-              --target "$GITHUB_SHA" \
-              --title "HALO ${RELEASE_TAG} (Debug)" \
-              --notes "Android notification character studio for Samsung Galaxy devices. Includes Material 3 UI, per-app character animations, app rules, full-phone preview, and experimental Pill Halo media lighting. This is a development APK signed using the CI debug key; installation on Galaxy A56 is not yet device-verified."
-          fi
+          gh release create "$RELEASE_TAG" "HALO-${RELEASE_TAG}-debug.apk" SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "HALO ${RELEASE_TAG} (Debug APK)" \
+            --prerelease \
+            --notes "HALO Android developer preview. Includes native Material 3 notification characters, per-app rules, full-screen preview, optional Pill Halo, and the bass-driven Chainsaw Music visualizer with local-file playback. Android's Visualizer permission is requested only when music analysis starts. Device-output analysis and One UI background overlays remain hardware/player-dependent. This APK uses CI debug signing; Android may reject an in-place upgrade from builds signed with a different key. Hardware validation on Galaxy A56 is still pending."
