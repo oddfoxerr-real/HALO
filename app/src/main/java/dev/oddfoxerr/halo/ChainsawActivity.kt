@@ -46,7 +46,7 @@ class ChainsawActivity : ComponentActivity() {
     private var rate by mutableFloatStateOf(1f)
     private var thickness by mutableFloatStateOf(1f)
     private var glow by mutableFloatStateOf(.6f)
-    private var immersive by mutableStateOf(false)
+    private var controlsHidden by mutableStateOf(false)
     private val preferences by lazy { getSharedPreferences("chainsaw_music", MODE_PRIVATE) }
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -95,8 +95,8 @@ class ChainsawActivity : ComponentActivity() {
                     AndroidView(factory = { chain }, modifier = Modifier.fillMaxSize(), update = {
                         it.thickness = thickness; it.glow = glow; it.invalidate()
                     })
-                    if (immersive) {
-                        TextButton(onClick = { immersive = false }, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+                    if (controlsHidden) {
+                        TextButton(onClick = { controlsHidden = false }, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
                             Text("Show controls")
                         }
                     } else {
@@ -118,7 +118,7 @@ class ChainsawActivity : ComponentActivity() {
                             Control("Chain speed", rate, .25f..3f) { rate = it; save() }
                             Control("Edge size", thickness, .6f..1.6f) { thickness = it; save() }
                             Control("Glow", glow, 0f..1f) { glow = it; save() }
-                            Button(onClick = { immersive = true }, modifier = Modifier.fillMaxWidth()) { Text("Hide controls") }
+                            Button(onClick = { controlsHidden = true }, modifier = Modifier.fillMaxWidth()) { Text("Hide controls") }
                             Text("Runs while this screen is open. Device audio availability depends on Android and the player. No microphone recording or audio files are uploaded or saved.",
                                 color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                             TextButton(onClick = { finish() }) { Text("Back to HALO") }
