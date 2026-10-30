@@ -179,7 +179,7 @@ class HaloNotificationListener : NotificationListenerService() {
             }
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
-                when (store.notificationEdgeMode) {
+                when (store.notificationModeFor(sbn.packageName)) {
                     NotificationEdgeMode.CHARACTER -> HaloOverlay.showNotification(this, profile, true)
                     NotificationEdgeMode.BORDER -> {
                         HaloOverlay.dismiss()
@@ -260,7 +260,8 @@ class HaloNotificationListener : NotificationListenerService() {
             NotificationEdgeOverlay.dismiss()
             return
         }
-        val mode = store.notificationEdgeMode
+        val mode = tracker.newestIndicatorPackages().firstOrNull()?.let(store::notificationModeFor)
+            ?: store.notificationEdgeMode
         if (mode == NotificationEdgeMode.BORDER) HaloOverlay.dismiss()
         if (mode == NotificationEdgeMode.CHARACTER || !store.notificationBorderPersistent) {
             if (mode == NotificationEdgeMode.CHARACTER) NotificationEdgeOverlay.dismiss()
