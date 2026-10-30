@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.8.0 candidate — Muviz-style music and notification perimeter studio · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
+**v0.9.0 clean-room Muviz feature study · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -151,3 +151,14 @@ The new `MusicEdgeService` uses the Android `Visualizer.setDataCaptureListener` 
 **Performance work:** character preview waveform geometry is bounded to roughly 64 line segments and refreshed at about 30 fps rather than drawing hundreds of nodes every screen refresh. The music overlay removes unnecessary full-window hardware layer caching, limits animation to new FFT callbacks, and suppresses other overlapping HALO overlays to reduce occlusion and touch glitches.
 
 The v0.8 debug release must only be considered ready after GitHub Actions successfully compiles/tests/signs it and a GitHub Release is published. CI checks cannot substitute for checking actual Samsung freezing or playback capture with a device.
+
+## v0.9 — Public-feature audit, album artwork and smoother rendering
+
+This update is **not** a decompilation of Muviz Edge. The clean-room comparison and optional local APK inspection instructions are in [docs/MUVIZ_EDGE_STUDY.md](docs/MUVIZ_EDGE_STUDY.md). HALO uses its own implementation based on published behavior and Android's public APIs.
+
+- In Music Edge Studio choose **My colors** or **Album artwork**. Album cover colors use sampled Android media-session metadata and fall back to a saved color if missing; no images are stored or uploaded.
+- **Only while music is playing** optionally hides the edge when Android exposes no active playing media session.
+- **Music sources** lets you limit lighting to selected installed player apps; no selection allows all. App filtering requires Notification Access and operates on music **source** packages, not foreground screen detection.
+- FFT data is coalesced before UI delivery and the edge renderer interpolates smoothly between Android audio callbacks. Rendering rests after the signal decays.
+- Existing Character / Full border / Both notification modes remain unchanged.
+- Some apps/DRM content do not expose audio data to Android Visualizer. HALO cannot bypass those restrictions. No direct Muviz binary analysis or Samsung hardware validation has been performed.

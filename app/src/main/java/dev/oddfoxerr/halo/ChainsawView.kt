@@ -7,15 +7,17 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
+import android.os.SystemClock
 import android.view.View
 import kotlin.math.atan2
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.sin
 
 /**
  * Low-overdraw Muviz-style edge visualizer.
  * Preserves the existing public class name so saved projects and activities can upgrade safely.
- * No animation loop: the view redraws only when fresh audio FFT arrives.
+ * Audio callbacks set targets; rendering interpolates on screen refresh until the signal decays.
  */
 class ChainsawView(context: Context) : View(context) {
     val motor = ChainDynamics()
@@ -39,32 +41,66 @@ class ChainsawView(context: Context) : View(context) {
     private val point = FloatArray(2)
     private val tangent = FloatArray(2)
     private val bands = FloatArray(EdgeSpectrum.BAND_COUNT)
-    private var phase = 0f
+    private val targets = FloatArray(EdgeSpectrum.BAND_COUNT)
+    private var targetPulse = 0f
     private var pulse = 0f
-    private var audioActive = false
+    private var phase = 0f
+    private var lastFrameMs = 0L
+    private var lastAudioMs = 0L
+    private var sensitivityValue = 1f
+    private var speedValue = 1f
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
+    /** Keep FFT capture independent from display refresh and avoid unbounded queued frames. */
     fun updateSpectrum(fftBands: FloatArray, bass: Float, dtSeconds: Float, sensitivity: Float, speed: Float) {
-        val dt = dtSeconds.coerceIn(0f, .08f)
-        val response = (.28f + .34f * sensitivity.coerceIn(.5f, 5f) / 5f).coerceIn(.28f, .65f)
-        audioActive = fftBands.any { it > .008f }
-        for (i in bands.indices) {
-            val target = ((fftBands.getOrElse(i) { 0f }) * sensitivity * .75f).coerceIn(0f, 1f)
-            bands[i] += (target - bands[i]) * response
-            if (!audioActive && bands[i] < .004f) bands[i] = 0f
+        sensitivityValue = sensitivity.coerceIn(.5f, 5f)
+        speedValue = speed.coerceIn(.25f, 3f)
+        for (i in targets.indices) {
+            targets[i] = ((fftBands.getOrElse(i) { 0f }) * sensitivityValue * .75f).coerceIn(0f, 1f)
         }
-        pulse += ((bass * sensitivity).coerceIn(0f, 1f) - pulse) * response
-        if (!audioActive && pulse < .004f) pulse = 0f
-        motor.step(bass, dt, sensitivity, speed)
-        if (audioActive) phase = (phase + dt * 1.15f * speed) % 1f
+        targetPulse = (bass * sensitivityValue).coerceIn(0f, 1f)
+        lastAudioMs = SystemClock.uptimeMillis()
         postInvalidateOnAnimation()
+    }
+
+    override fun onDetachedFromWindow() {
+        lastFrameMs = 0L
+        super.onDetachedFromWindow()
+    }
+
+    private fun advanceFrame(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        val dt = if (lastFrameMs == 0L) 1f / 60f
+            else ((now - lastFrameMs) / 1000f).coerceIn(0f, .05f)
+        lastFrameMs = now
+        val fresh = now - lastAudioMs < 300L
+        val rise = 1f - exp(-dt * 22f)
+        val fall = 1f - exp(-dt * 8f)
+        var strongest = 0f
+        for (i in bands.indices) {
+            val target = if (fresh) targets[i] else 0f
+            val response = if (target > bands[i]) rise else fall
+            bands[i] += (target - bands[i]) * response
+            if (bands[i] < .0025f) bands[i] = 0f
+            strongest = max(strongest, bands[i])
+        }
+        val targetBass = if (fresh) targetPulse else 0f
+        pulse += (targetBass - pulse) * if (targetBass > pulse) rise else fall
+        if (pulse < .0025f) pulse = 0f
+        motor.step(targetBass, dt, sensitivityValue, speedValue)
+        if (fresh && targetBass > .008f) {
+            phase = (phase + dt * 1.15f * speedValue) % 1f
+        }
+        return (fresh && targets.any { it > .006f }) || strongest > .008f ||
+            pulse > .008f || motor.speed > .02f
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val keepAnimating = advanceFrame()
         val unit = density * thickness.coerceIn(.6f, 1.6f)
         val pad = 13f * unit
         bounds.set(pad, pad, width - pad, height - pad)
@@ -82,6 +118,7 @@ class ChainsawView(context: Context) : View(context) {
             EdgeMode.CHAIN -> drawMechanical(canvas, length, unit)
         }
         paint.alpha = 255
+        if (keepAnimating && isAttachedToWindow && visibility == VISIBLE) postInvalidateDelayed(16L)
     }
 
     private fun drawWave(canvas: Canvas, length: Float, unit: Float) {
