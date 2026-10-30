@@ -8,16 +8,22 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.media.audiofx.Visualizer
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
+import androidx.core.app.NotificationManagerCompat
 
 /**
  * User-started Muviz-style music edge. Audio is not recorded: this uses Android's
@@ -28,6 +34,7 @@ class MusicEdgeService : Service() {
     companion object {
         const val ACTION_START = "dev.oddfoxerr.halo.MUSIC_START"
         const val ACTION_STOP = "dev.oddfoxerr.halo.MUSIC_STOP"
+        const val ACTION_REFRESH = "dev.oddfoxerr.halo.MUSIC_REFRESH"
         private const val CHANNEL = "halo_music_edge_v2"
         private const val NOTICE_ID = 709
         @Volatile var isRunning: Boolean = false
@@ -38,6 +45,15 @@ class MusicEdgeService : Service() {
     private var edgeView: ChainsawView? = null
     private var visualizer: Visualizer? = null
     private var previousCaptureMs = 0L
+    private var previousSessionMs = 0L
+    private var currentPlayingPackage: String? = null
+    private var liveColor = android.graphics.Color.rgb(170, 91, 255)
+    private var defaultColor = liveColor
+    private var colorSource = EdgeColorSource.MANUAL
+    private var onlyWhilePlaying = false
+    private var allowedSources: Set<String> = emptySet()
+    private val handler = Handler(Looper.getMainLooper())
+    private val mediaManager by lazy { getSystemService(MediaSessionManager::class.java) }
     private var sensitivity = 1.5f
     private var rate = 1f
     private val power by lazy { getSystemService(PowerManager::class.java) }
@@ -47,35 +63,95 @@ class MusicEdgeService : Service() {
         override fun onWaveFormDataCapture(v: Visualizer?, waveform: ByteArray?, samplingRate: Int) = Unit
 
         override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-            val view = edgeView ?: return
             if (fft == null || !isRunning) return
-            if (!Settings.canDrawOverlays(this@MusicEdgeService)) {
-                stopSelf()
-                return
-            }
-            val allowed = ChainsawOverlayPolicy.mayRender(power.isInteractive, keyguard.isKeyguardLocked)
-            if (!allowed) {
-                view.visibility = View.INVISIBLE
-                previousCaptureMs = SystemClock.elapsedRealtime()
-                return
-            }
-            view.visibility = View.VISIBLE
-            val now = SystemClock.elapsedRealtime()
             val spectrum = EdgeSpectrum.fromFft(fft, samplingRate)
-            view.updateSpectrum(spectrum, EdgeSpectrum.bass(spectrum),
-                (now - previousCaptureMs) / 1000f, sensitivity, rate)
-            previousCaptureMs = now
+            val bass = EdgeSpectrum.bass(spectrum)
+            handler.post {
+                if (!isRunning) return@post
+                val view = edgeView ?: return@post
+                if (!Settings.canDrawOverlays(this@MusicEdgeService)) {
+                    stopSelf()
+                    return@post
+                }
+                val now = SystemClock.elapsedRealtime()
+                if (now - previousSessionMs > 1600L) {
+                    refreshMediaSession()
+                    previousSessionMs = now
+                }
+                val shouldShow = MediaEdgePolicy.shouldShow(
+                    power.isInteractive, !keyguard.isKeyguardLocked,
+                    currentPlayingPackage, onlyWhilePlaying, allowedSources
+                )
+                if (!shouldShow) {
+                    view.visibility = View.INVISIBLE
+                    previousCaptureMs = now
+                    return@post
+                }
+                view.visibility = View.VISIBLE
+                view.updateSpectrum(
+                    spectrum, bass, (now - previousCaptureMs) / 1000f, sensitivity, rate
+                )
+                previousCaptureMs = now
+            }
         }
+    }
+
+    private fun loadPreferences() {
+        val prefs = getSharedPreferences("chainsaw_music", MODE_PRIVATE)
+        sensitivity = prefs.getFloat("sensitivity", 1.5f).coerceIn(.5f, 5f)
+        rate = prefs.getFloat("rate", 1f).coerceIn(.25f, 3f)
+        defaultColor = prefs.getInt("edge_color", android.graphics.Color.rgb(170, 91, 255))
+        colorSource = MediaEdgePolicy.colorSource(prefs.getString("color_source", "MANUAL"))
+        onlyWhilePlaying = prefs.getBoolean("only_while_playing", false)
+        allowedSources = prefs.getStringSet("allowed_sources", emptySet())?.toSet().orEmpty()
+        edgeView?.apply {
+            mode = EdgeSpectrum.mode(prefs.getString("edge_mode", "WAVE"))
+            thickness = prefs.getFloat("thickness", 1f).coerceIn(.6f, 1.6f)
+            glow = prefs.getFloat("glow", .6f).coerceIn(0f, 1f)
+            edgeColor = defaultColor
+        }
+        refreshMediaSession()
+    }
+
+    private fun refreshMediaSession() {
+        var activePackage: String? = null
+        var albumColor = defaultColor
+        if (NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
+            try {
+                val listener = ComponentName(this, HaloNotificationListener::class.java)
+                val controller = mediaManager.getActiveSessions(listener).firstOrNull {
+                    it.playbackState?.state == PlaybackState.STATE_PLAYING
+                }
+                activePackage = controller?.packageName
+                if (colorSource == EdgeColorSource.ALBUM_ART) {
+                    albumColor = MediaArtworkColor.fromMetadata(controller?.metadata, defaultColor)
+                }
+            } catch (_: SecurityException) {
+                // A revoked notification-listener grant must not crash the overlay.
+            } catch (_: RuntimeException) {
+                // Media controllers can die while the player is changing tracks.
+            }
+        }
+        currentPlayingPackage = activePackage
+        liveColor = albumColor
+        edgeView?.edgeColor = liveColor
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REFRESH && isRunning) {
+            loadPreferences()
+            return START_NOT_STICKY
+        }
         if (intent?.action != ACTION_START) {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (isRunning) return START_NOT_STICKY
+        if (isRunning) {
+            loadPreferences()
+            return START_NOT_STICKY
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
             !Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -92,15 +168,13 @@ class MusicEdgeService : Service() {
             }
 
             val prefs = getSharedPreferences("chainsaw_music", MODE_PRIVATE)
-            sensitivity = prefs.getFloat("sensitivity", 1.5f).coerceIn(.5f, 5f)
-            rate = prefs.getFloat("rate", 1f).coerceIn(.25f, 3f)
+            loadPreferences()
             val view = ChainsawView(applicationContext).apply {
                 mode = EdgeSpectrum.mode(prefs.getString("edge_mode", "WAVE"))
                 edgeColor = prefs.getInt("edge_color", android.graphics.Color.rgb(170, 91, 255))
                 thickness = prefs.getFloat("thickness", 1f).coerceIn(.6f, 1.6f)
                 glow = prefs.getFloat("glow", .6f).coerceIn(0f, 1f)
-                visibility = if (ChainsawOverlayPolicy.mayRender(power.isInteractive, keyguard.isKeyguardLocked))
-                    View.VISIBLE else View.INVISIBLE
+                visibility = View.INVISIBLE
             }
             val manager = getSystemService(WINDOW_SERVICE) as WindowManager
             val lp = WindowManager.LayoutParams(
@@ -130,7 +204,9 @@ class MusicEdgeService : Service() {
             }
             check(source.setEnabled(true) == Visualizer.SUCCESS) { "Unable to start music visualizer" }
             previousCaptureMs = SystemClock.elapsedRealtime()
+            previousSessionMs = 0L
             isRunning = true
+            loadPreferences()
             HaloOverlay.dismiss()
             PillHaloOverlay.dismiss()
             NotificationEdgeOverlay.dismiss()
@@ -174,6 +250,7 @@ class MusicEdgeService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        handler.removeCallbacksAndMessages(null)
         visualizer?.let {
             try { it.setDataCaptureListener(null, 0, false, false) } catch (_: Exception) { }
             try { it.enabled = false } catch (_: Exception) { }
