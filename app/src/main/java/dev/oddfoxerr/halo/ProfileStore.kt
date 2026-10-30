@@ -122,6 +122,23 @@ class ProfileStore(context: Context) {
         get() = prefs.getLong("pill_color", 0xFF1ED760L)
         set(value) { prefs.edit().putLong("pill_color", value).apply() }
 
+    /** Global notification placement: character, full perimeter, or both. */
+    var notificationEdgeMode: NotificationEdgeMode
+        get() = EdgeSpectrum.notificationMode(prefs.getString("notification_edge_mode", "CHARACTER"))
+        set(value) { prefs.edit().putString("notification_edge_mode", value.name).apply() }
+    var notificationEdgeStyle: NotificationEdgeStyle
+        get() = EdgeSpectrum.notificationStyle(prefs.getString("notification_edge_style", "PULSE"))
+        set(value) { prefs.edit().putString("notification_edge_style", value.name).apply() }
+    var notificationBorderPersistent: Boolean
+        get() = prefs.getBoolean("notification_border_persistent", false)
+        set(value) { prefs.edit().putBoolean("notification_border_persistent", value).apply() }
+    var notificationBorderThickness: Float
+        get() = prefs.getFloat("notification_border_thickness", 3f).coerceIn(1f, 8f)
+        set(value) { prefs.edit().putFloat("notification_border_thickness", value.coerceIn(1f, 8f)).apply() }
+    var notificationBorderGlow: Float
+        get() = prefs.getFloat("notification_border_glow", .65f).coerceIn(0f, 1f)
+        set(value) { prefs.edit().putFloat("notification_border_glow", value.coerceIn(0f, 1f)).apply() }
+
     fun isQuietNow(): Boolean {
         val c = Calendar.getInstance()
         val minute = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
