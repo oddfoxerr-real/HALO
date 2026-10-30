@@ -126,8 +126,10 @@ class MusicEdgeService : Service() {
         if (NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)) {
             try {
                 val listener = ComponentName(this, HaloNotificationListener::class.java)
-                val controller = mediaManager.getActiveSessions(listener).firstOrNull {
-                    it.playbackState?.state == PlaybackState.STATE_PLAYING
+                val controllers = mediaManager.getActiveSessions(listener)
+                val controller = controllers.firstOrNull {
+                    it.playbackState?.state == PlaybackState.STATE_PLAYING &&
+                        (allowedSources.isEmpty() || it.packageName in allowedSources)
                 }
                 activePackage = controller?.packageName
                 if (colorSource == EdgeColorSource.ALBUM_ART) {
