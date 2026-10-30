@@ -142,6 +142,9 @@ class ChainsawOverlayService : Service() {
             previousFrame = SystemClock.elapsedRealtime()
             lastBassSignal = previousFrame
             isRunning = true
+            HaloOverlay.dismiss()
+            PillHaloOverlay.dismiss()
+            HaloNotificationListener.requestPillRefresh()
             handler.post(frame)
         } catch (_: Exception) {
             stopSelf()
@@ -220,6 +223,7 @@ class ChainsawOverlayService : Service() {
         overlay = null
         windowManager = null
         isRunning = false
+        HaloNotificationListener.requestPillRefresh()
         super.onDestroy()
     }
 }
