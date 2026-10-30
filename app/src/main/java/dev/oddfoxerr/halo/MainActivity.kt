@@ -163,7 +163,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.5", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.6", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -231,6 +231,14 @@ private fun HaloApp(
                                 Spacer(Modifier.width(8.dp))
                                 Text("Preview on phone")
                             }
+                        }
+                    }
+                    item {
+                        SectionCard {
+                            Text("Chainsaw music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("A steel chain circles the display, clogs in quiet sections, and restarts on bass hits.", color = Muted)
+                            Button(onClick = { context.startActivity(Intent(context, ChainsawActivity::class.java)) },
+                                modifier = Modifier.fillMaxWidth()) { Text("Open music visualizer") }
                         }
                     }
                     item { Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }

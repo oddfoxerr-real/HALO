@@ -102,3 +102,29 @@ The previous Work-created v0.1 debug build may use a **different debug signing k
 - Display the pill only when HALO is enabled, playback is active, overlays are permitted, the phone is interactive and unlocked, and quiet hours are not active.
 - Disabled by default. A transparent non-touch overlay does not replace Samsung's Now Bar, AOD or other protected SystemUI surfaces.
 - Samsung Galaxy A56 real-device verification remains necessary before claiming lock-screen support.
+
+## v0.6 — Chainsaw music studio
+
+Home → **Open music visualizer** launches a native Canvas music mode inspired by
+Chainsaw Man's mechanical aesthetic, using original steel-tooth and resin artwork.
+Teeth circulate around the rounded screen perimeter. Bass onsets kick the motor,
+throw sparks and clear the jam; quiet sections make it decelerate, stutter and clog.
+Sensitivity, chain speed, edge size and glow are saved independently of notification profiles.
+
+Choose **Use device audio** while another player is running, or **Open music file**
+to play a song through HALO. Android's Visualizer API supplies real FFT data: no
+random or timed fake beats. Device-output analysis is hardware/player dependent;
+if it is blocked or silent, HALO shows a no-signal message and the chain stays jammed.
+The local-file path attaches directly to the MediaPlayer audio session.
+
+Android requires `RECORD_AUDIO` for Visualizer analysis and `MODIFY_AUDIO_SETTINGS`
+for output-mix access. Permission is requested only when starting this feature.
+No microphone API is used, and no audio is recorded, uploaded, or stored. Files are
+selected with Android's document picker, without broad storage permission.
+Playback and analysis stop when leaving the music screen or losing audio focus.
+This first music mode is an in-app full-display visualizer, **not a background,
+lock-screen or always-on-display music overlay**. Existing notification effects are unchanged.
+
+Validation: unit tests cover silence, bass restart, re-jamming, sustained tones,
+FFT band selection and frame-rate independence. Physical Samsung playback and
+rendering still require device testing. APK build status is tracked in GitHub Actions.
