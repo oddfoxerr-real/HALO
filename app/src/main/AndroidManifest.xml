@@ -12,6 +12,8 @@
         </intent>
     </queries>
     <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+        <activity android:name=".MusicEdgeActivity" android:exported="false" />
+        <service android:name=".MusicEdgeService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".ChainsawActivity" android:exported="false" />
         <service android:name=".ChainsawOverlayService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".PillPreviewActivity" android:exported="false" />

@@ -46,7 +46,8 @@ class ProfileStore(context: Context) {
             packageName = packageName,
             character = character,
             enabled = prefs.getBoolean("rule.$packageName.enabled", true),
-            colorOverride = color.takeIf { it >= 0L }
+            colorOverride = color.takeIf { it >= 0L },
+            notificationModeOverride = NotificationEdgeMode.entries.firstOrNull { it.name == prefs.getString("rule.$packageName.notification_mode", "") }
         )
     }
     fun writeRule(rule: ApplicationRule) {
@@ -55,6 +56,7 @@ class ProfileStore(context: Context) {
             .putString("rule.${rule.packageName}.character", rule.character.name)
             .putBoolean("rule.${rule.packageName}.enabled", rule.enabled)
             .putLong("rule.${rule.packageName}.color", rule.colorOverride ?: -1L)
+            .putString("rule.${rule.packageName}.notification_mode", rule.notificationModeOverride?.name ?: "")
             .apply()
     }
     fun clearRule(packageName: String) {
@@ -63,6 +65,7 @@ class ProfileStore(context: Context) {
             .remove("rule.$packageName.character")
             .remove("rule.$packageName.enabled")
             .remove("rule.$packageName.color")
+            .remove("rule.$packageName.notification_mode")
             .apply()
     }
     val configuredPackages: Set<String> get() = prefs.getStringSet("configured_packages", emptySet())?.toSet().orEmpty()
@@ -72,6 +75,9 @@ class ProfileStore(context: Context) {
         val base = read(rule.character)
         return base.copy(color = rule.colorOverride ?: base.color, enabled = rule.enabled && base.enabled)
     }
+
+    fun notificationModeFor(packageName: String): NotificationEdgeMode =
+        readRule(packageName).notificationModeOverride ?: notificationEdgeMode
 
     var masterEnabled: Boolean
         get() = prefs.getBoolean("master_enabled", true)
@@ -121,6 +127,23 @@ class ProfileStore(context: Context) {
     var pillColor: Long
         get() = prefs.getLong("pill_color", 0xFF1ED760L)
         set(value) { prefs.edit().putLong("pill_color", value).apply() }
+
+    /** Global notification placement: character, full perimeter, or both. */
+    var notificationEdgeMode: NotificationEdgeMode
+        get() = EdgeSpectrum.notificationMode(prefs.getString("notification_edge_mode", "CHARACTER"))
+        set(value) { prefs.edit().putString("notification_edge_mode", value.name).apply() }
+    var notificationEdgeStyle: NotificationEdgeStyle
+        get() = EdgeSpectrum.notificationStyle(prefs.getString("notification_edge_style", "PULSE"))
+        set(value) { prefs.edit().putString("notification_edge_style", value.name).apply() }
+    var notificationBorderPersistent: Boolean
+        get() = prefs.getBoolean("notification_border_persistent", false)
+        set(value) { prefs.edit().putBoolean("notification_border_persistent", value).apply() }
+    var notificationBorderThickness: Float
+        get() = prefs.getFloat("notification_border_thickness", 3f).coerceIn(1f, 8f)
+        set(value) { prefs.edit().putFloat("notification_border_thickness", value.coerceIn(1f, 8f)).apply() }
+    var notificationBorderGlow: Float
+        get() = prefs.getFloat("notification_border_glow", .65f).coerceIn(0f, 1f)
+        set(value) { prefs.edit().putFloat("notification_border_glow", value.coerceIn(0f, 1f)).apply() }
 
     fun isQuietNow(): Boolean {
         val c = Calendar.getInstance()

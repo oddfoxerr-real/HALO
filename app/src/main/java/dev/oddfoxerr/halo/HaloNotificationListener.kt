@@ -73,7 +73,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshPill() {
-        if (ChainsawOverlayService.isRunning) { PillHaloOverlay.dismiss(); return }
+        if (ChainsawOverlayService.isRunning || MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { PillHaloOverlay.dismiss(); return }
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
@@ -106,7 +106,7 @@ class HaloNotificationListener : NotificationListenerService() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }
+                Intent.ACTION_SCREEN_OFF -> { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
                     refreshIndicator()
                     refreshPill()
@@ -178,8 +178,23 @@ class HaloNotificationListener : NotificationListenerService() {
                 return@post
             }
             val profile = store.readForPackage(sbn.packageName)
-            if (profile.enabled) HaloOverlay.showNotification(this, profile, true)
-            else refreshIndicatorIfIdle()
+            if (profile.enabled) {
+                when (store.notificationModeFor(sbn.packageName)) {
+                    NotificationEdgeMode.CHARACTER -> HaloOverlay.showNotification(this, profile, true)
+                    NotificationEdgeMode.BORDER -> {
+                        HaloOverlay.dismiss()
+                        PillHaloOverlay.dismiss()
+                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
+                            store.notificationBorderPersistent, store)
+                    }
+                    NotificationEdgeMode.BOTH -> {
+                        PillHaloOverlay.dismiss()
+                        HaloOverlay.showNotification(this, profile, true)
+                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
+                            store.notificationBorderPersistent, store)
+                    }
+                }
+            } else refreshIndicatorIfIdle()
         }
     }
 
@@ -201,6 +216,7 @@ class HaloNotificationListener : NotificationListenerService() {
             main.removeCallbacks(quietCheck)
             NotificationActivityState.disconnected()
             HaloOverlay.dismiss()
+            NotificationEdgeOverlay.dismiss()
         }
         super.onListenerDisconnected()
     }
@@ -211,6 +227,7 @@ class HaloNotificationListener : NotificationListenerService() {
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) { }
         HaloOverlay.dismiss()
+        NotificationEdgeOverlay.dismiss()
         super.onDestroy()
     }
 
@@ -225,7 +242,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun mayShow(): Boolean {
-        if (ChainsawOverlayService.isRunning || !store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
+        if (MusicEdgeService.isRunning || ChainsawOverlayService.isRunning || !store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
         if (store.onlyScreenOn) {
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (!power.isInteractive) return false
@@ -240,8 +257,21 @@ class HaloNotificationListener : NotificationListenerService() {
     private fun refreshIndicator() {
         if (!mayShow()) {
             HaloOverlay.dismiss()
+            NotificationEdgeOverlay.dismiss()
             return
         }
+        val mode = tracker.newestIndicatorPackages().firstOrNull()?.let(store::notificationModeFor)
+            ?: store.notificationEdgeMode
+        if (mode == NotificationEdgeMode.BORDER) HaloOverlay.dismiss()
+        if (mode == NotificationEdgeMode.CHARACTER || !store.notificationBorderPersistent) {
+            if (mode == NotificationEdgeMode.CHARACTER) NotificationEdgeOverlay.dismiss()
+        } else {
+            val borderProfile = tracker.newestIndicatorPackages().asSequence()
+                .map(store::readForPackage).firstOrNull { it.enabled }
+            if (borderProfile == null) NotificationEdgeOverlay.dismiss()
+            else NotificationEdgeOverlay.showStatic(this, borderProfile.color, store)
+        }
+        if (mode == NotificationEdgeMode.BORDER) return
         val profile = tracker.newestIndicatorPackages().asSequence()
             .map(store::readForPackage).firstOrNull { it.enabled && it.persistent }
         if (profile == null) HaloOverlay.dismiss() else HaloOverlay.showIndicator(this, profile)

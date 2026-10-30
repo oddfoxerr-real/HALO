@@ -118,7 +118,7 @@ class CharacterView(context: Context, private val overlay: Boolean = false) : Vi
             paint.clearShadowLayer()
         }
         canvas.restore()
-        if (animated && previewFrame == null && isAttachedToWindow) postInvalidateOnAnimation()
+        if (animated && previewFrame == null && isAttachedToWindow) postInvalidateDelayed(32L)
     }
 
     private fun drawWave(canvas: Canvas, x: Float, y: Float, w: Float, h: Float, color: Int, alpha: Float, progress: Float, t: Float, dp: Float) {
@@ -132,7 +132,7 @@ class CharacterView(context: Context, private val overlay: Boolean = false) : Vi
             val bulge = r * .85f * gaussian((py - waveY) / max(1f, r * 1.7f)) * (1f - ease(.15f, .43f, t))
             val tether = r * .47f * progress * gaussian((py - y) / max(1f, r))
             path.lineTo(x - bulge - tether, py)
-            py += max(dp * 3f, 3f)
+            py += max(h / 64f, dp * 6f)
         }
         path.lineTo(x, h)
         path.close()

@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.7.0 floating-edge debug APK released · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
+**v0.8.0 candidate — Muviz-style music and notification perimeter studio · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -138,3 +138,16 @@ rendering still require device testing. The prototype APK build passed in [GitHu
 - Floating effects are **hidden on locked, sleeping and AOD screens**. HALO notification and Pill Halo overlays are suppressed while floating mode runs to avoid stacking semi-transparent windows.
 - Output-mix FFT session 0 can be silent, unsupported or restricted for certain players/hardware. HALO does not simulate beats when audio is inaccessible. Local-file and in-app visualization remain available as alternatives.
 - **Status:** [v0.7.0 debug APK released](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.7.0) following GitHub Actions unit tests, APK build and signature verification. The floating-overlay behavior is **not yet tested on a real Galaxy A56**. An in-place Android update from earlier builds may fail if the CI debug signing certificate differs.
+
+
+## v0.8 — Music edge studio and full-screen notification lighting
+
+**Major correction:** the Chainsaw Man-inspired chain is no longer the entire music visualization experience. The Home music action opens a separate Material 3 `MusicEdgeActivity`. The default is a neon **Wave** profile, with **Spectrum**, **Neon trail** and optional **Mechanical** styles; colors, sensitivity, size, glow and speed are saved. A clearly labeled **demo-signal preview** lets you inspect animations without requesting access to audio. The existing local-file mechanical prototype remains in source but is no longer the primary UI.
+
+The new `MusicEdgeService` uses the Android `Visualizer.setDataCaptureListener` FFT callback rather than synchronous `getFft` polling every 33 ms. The new renderer draws a bounded 112-point wave or at most 88 bars, instead of repeatedly painting hundreds of tiny teeth around a full-screen translucent window. Audio access is opt-in, an ongoing notification contains **Stop visualizer**, and locked/sleeping screens hide the overlay. The visualizer does not use the microphone input, network or audio uploads. Android/Samsung may still block some media session data. The system-wide overlay remains experimental until tested on a physical Galaxy A56.
+
+**Notifications** now have **Character / Full border / Both** modes, selectable in Settings and overridable per installed app. The full display perimeter has **Pulse**, **Outline sweep** and **Soft glow** styles, adjustable thickness/glow, a test button and a persistent-until-dismissed option. Per-app HEX colors also drive the perimeter. This follows the display border, **not** the protected screen coordinates of Samsung's native heads-up cards, Now Bar, AOD or notification shade.
+
+**Performance work:** character preview waveform geometry is bounded to roughly 64 line segments and refreshed at about 30 fps rather than drawing hundreds of nodes every screen refresh. The music overlay removes unnecessary full-window hardware layer caching, limits animation to new FFT callbacks, and suppresses other overlapping HALO overlays to reduce occlusion and touch glitches.
+
+The v0.8 debug release must only be considered ready after GitHub Actions successfully compiles/tests/signs it and a GitHub Release is published. CI checks cannot substitute for checking actual Samsung freezing or playback capture with a device.

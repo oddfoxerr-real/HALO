@@ -163,7 +163,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.6", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.8", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -196,7 +196,7 @@ private fun HaloApp(
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                             enabled = value
                             store.masterEnabled = value
-                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }
+                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
                             HaloNotificationListener.requestPillRefresh()
                         }
                     }
@@ -235,10 +235,10 @@ private fun HaloApp(
                     }
                     item {
                         SectionCard {
-                            Text("Chainsaw music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("A steel chain circles the display, clogs in quiet sections, and restarts on bass hits.", color = Muted)
-                            Button(onClick = { context.startActivity(Intent(context, ChainsawActivity::class.java)) },
-                                modifier = Modifier.fillMaxWidth()) { Text("Open music visualizer") }
+                            Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
+                            Button(onClick = { context.startActivity(Intent(context, MusicEdgeActivity::class.java)) },
+                                modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
                         }
                     }
                     item { Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
@@ -294,6 +294,60 @@ private fun HaloApp(
                     item { SectionCard { QuietHoursEditor(store) } }
                     item {
                         SectionCard {
+                            Text("Notification edge lighting", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Light all four sides of the display, keep the app character, or combine both. Each installed app can override this setting.", color = Muted)
+                            var mode by remember { mutableStateOf(store.notificationEdgeMode) }
+                            Text("Default notification style", style = MaterialTheme.typography.labelLarge)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(NotificationEdgeMode.entries) { option ->
+                                    FilterChip(
+                                        selected = mode == option,
+                                        onClick = {
+                                            mode = option
+                                            store.notificationEdgeMode = option
+                                            HaloOverlay.dismiss()
+                                            NotificationEdgeOverlay.dismiss()
+                                            HaloNotificationListener.requestPillRefresh()
+                                        },
+                                        label = { Text(option.title) }
+                                    )
+                                }
+                            }
+                            Text("Border animation", style = MaterialTheme.typography.labelLarge)
+                            var borderStyle by remember { mutableStateOf(store.notificationEdgeStyle) }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(NotificationEdgeStyle.entries) { option ->
+                                    FilterChip(
+                                        selected = borderStyle == option,
+                                        onClick = { borderStyle = option; store.notificationEdgeStyle = option },
+                                        label = { Text(option.title) }
+                                    )
+                                }
+                            }
+                            var persistent by remember { mutableStateOf(store.notificationBorderPersistent) }
+                            SwitchRow("Keep border until dismissal",
+                                "Otherwise the effect fades after the app's configured duration.",
+                                persistent) { persistent = it; store.notificationBorderPersistent = it }
+                            var borderThickness by remember { mutableStateOf(store.notificationBorderThickness) }
+                            SettingSlider("Border thickness", "%.1f dp".format(borderThickness),
+                                borderThickness, 1f..8f) {
+                                borderThickness = it; store.notificationBorderThickness = it
+                            }
+                            var borderGlow by remember { mutableStateOf(store.notificationBorderGlow) }
+                            SettingSlider("Border glow", "${(borderGlow * 100).toInt()}%",
+                                borderGlow, 0f..1f) {
+                                borderGlow = it; store.notificationBorderGlow = it
+                            }
+                            Button(onClick = {
+                                if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
+                                    4200L, false, store) else requestOverlay()
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Test full-screen border") }
+                            Text("The border follows your screen, not the protected bounds of Samsung's actual heads-up notification cards.", color = Muted,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    item {
+                        SectionCard {
                             Text("Pill Halo · Samsung-style", fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium)
                             Text("An optional media-reactive outline on unlocked screens. Samsung's protected Now Bar itself cannot be recolored.",
@@ -328,7 +382,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
+                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
                             Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -471,7 +525,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
     Text("Quiet hours", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     SwitchRow("Enable quiet hours", "Suppress effects during your sleep schedule.", enabled) {
         enabled = it; store.quietEnabled = it
-        if (it && store.isQuietNow()) HaloOverlay.dismiss()
+        if (it && store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
         HaloNotificationListener.requestPillRefresh()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -485,7 +539,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
         valid = a != null && b != null
         if (valid) {
             store.quietStart = a!!; store.quietEnd = b!!
-            if (store.isQuietNow()) HaloOverlay.dismiss()
+            if (store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
             HaloNotificationListener.requestPillRefresh()
         }
     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
@@ -550,6 +604,23 @@ private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) 
                         CharacterApp.entries.forEach { app -> DropdownMenuItem(text = { Text(app.displayName) }, onClick = {
                             change(current.copy(character = app)); expanded = false
                         }) }
+                    }
+                }
+                Text("Notification effect for this app", style = MaterialTheme.typography.labelLarge)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = current.notificationModeOverride == null,
+                            onClick = { change(current.copy(notificationModeOverride = null)) },
+                            label = { Text("Use default") }
+                        )
+                    }
+                    items(NotificationEdgeMode.entries) { option ->
+                        FilterChip(
+                            selected = current.notificationModeOverride == option,
+                            onClick = { change(current.copy(notificationModeOverride = option)) },
+                            label = { Text(option.title) }
+                        )
                     }
                 }
                 Text("Per-app color override", style = MaterialTheme.typography.labelLarge)
