@@ -103,6 +103,7 @@ object NotificationEdgeOverlay {
     private var border: NotificationBorderView? = null
     private var generation = 0L
     val isAnimating: Boolean get() = border?.isAnimating == true
+    val isVisible: Boolean get() = border != null
 
     fun show(context: Context, color: Long, duration: Long, persistent: Boolean, store: ProfileStore) {
         if (!Settings.canDrawOverlays(context) || MusicEdgeService.isRunning || ChainsawOverlayService.isRunning) return
