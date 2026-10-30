@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.7.0 floating-edge candidate · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
+**v0.7.0 floating-edge debug APK released · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -40,7 +40,7 @@ The repository must be **separate from CYN and Gro-Ler**. Create `oddfoxerr-real
 2. The workflow installs JDK 17, Android SDK 36, Gradle 8.13, runs `:app:testDebugUnitTest :app:assembleDebug`, and verifies the APK signature.
 3. Open the completed run → **Artifacts → HALO-debug-apk**. GitHub distributes the APK in a ZIP. Extract `app-debug.apk` to install it. On merge to `main`, `.github/workflows/android-release.yml` publishes a named APK to GitHub Releases for the current `versionName` if that version does not yet exist.
 
-**The v0.6.0 prototype APK compiled and passed unit tests and APK signature verification on GitHub Actions.** It has not been physically tested on a Galaxy A56. The earlier [v0.5.0 GitHub Release](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.5.0) exists. The v0.6.0 direct Release APK will publish after this branch is merged and its release workflow passes. Use the Actions artifact until then.
+**The v0.6.0 debug APK passed GitHub Actions unit tests and signature verification and was published in [GitHub Releases](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.6.0).** The newer [v0.7.0 APK](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.7.0) adds optional floating mode. Neither version has been validated on a physical Galaxy A56.
 
 ### Local build
 
@@ -137,4 +137,4 @@ rendering still require device testing. The prototype APK build passed in [GitHu
 - The notification has an explicit **Stop edge** action. HALO does not automatically start the floating mode after reboot. Stopping the service releases the audio effect and removes the window.
 - Floating effects are **hidden on locked, sleeping and AOD screens**. HALO notification and Pill Halo overlays are suppressed while floating mode runs to avoid stacking semi-transparent windows.
 - Output-mix FFT session 0 can be silent, unsupported or restricted for certain players/hardware. HALO does not simulate beats when audio is inaccessible. Local-file and in-app visualization remain available as alternatives.
-- **Status:** source candidate, not yet tested on a real Galaxy A56. The v0.6.0 release remains the verified downloadable build until v0.7.0 CI and release complete. An in-place Android update from earlier builds may fail if the CI debug signing certificate differs.
+- **Status:** [v0.7.0 debug APK released](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.7.0) following GitHub Actions unit tests, APK build and signature verification. The floating-overlay behavior is **not yet tested on a real Galaxy A56**. An in-place Android update from earlier builds may fail if the CI debug signing certificate differs.
