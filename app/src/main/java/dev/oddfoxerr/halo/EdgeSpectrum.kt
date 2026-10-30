@@ -27,8 +27,8 @@ object EdgeSpectrum {
         if (hzPerBin <= 0f) return result
         val limit = fft.size / 2 - 1
         for (band in 0 until BAND_COUNT) {
-            val lowHz = 38f * Math.pow(160f, band.toDouble() / BAND_COUNT).toFloat()
-            val highHz = 38f * Math.pow(160f, (band + 1).toDouble() / BAND_COUNT).toFloat()
+            val lowHz = 38f * Math.pow(160.0, band.toDouble() / BAND_COUNT).toFloat()
+            val highHz = 38f * Math.pow(160.0, (band + 1).toDouble() / BAND_COUNT).toFloat()
             val start = max(1, (lowHz / hzPerBin).toInt()).coerceAtMost(limit)
             val end = max(start, (highHz / hzPerBin).toInt()).coerceAtMost(limit)
             var sum = 0f
