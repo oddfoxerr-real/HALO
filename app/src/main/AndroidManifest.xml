@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -8,6 +10,7 @@
         </intent>
     </queries>
     <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+        <activity android:name=".ChainsawActivity" android:exported="false" />
         <activity android:name=".PillPreviewActivity" android:exported="false" />
         <activity android:name=".PreviewActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
