@@ -29,16 +29,22 @@ class ChainDynamics {
             input - previous > .009f && sinceBeat > .16f
         average += (input - average) * (1f - exp(-time * 2f))
         previous = input
-        energy += (input - energy) * (1f - exp(-time * 12f))
-        kick *= exp(-time * 7f)
         if (beat) { kick = 1f; sinceBeat = 0f; quiet = 0f }
-        quiet = if (input < .018f) quiet + time else 0f
-        val targetJam = if (quiet > .18f) 1f else 0f
-        jam += (targetJam - jam) * (1f - exp(-time * 10f))
-        val targetSpeed = if (quiet > .4f) 0f else (energy * 5f + kick * 2f).coerceAtMost(3f)
-        speed += (targetSpeed - speed) * (1f - exp(-time * if (beat) 25f else 9f))
-        if (speed < .002f) speed = 0f
-        travel = (travel + speed * rate.coerceIn(.25f, 3f) * time * 180f) % 100000f
+        // Integrate the motor at <=240 Hz independently of the UI/audio polling rate.
+        val steps = kotlin.math.ceil(time * 240f).toInt().coerceAtLeast(1)
+        val tick = time / steps
+        repeat(steps) {
+            energy += (input - energy) * (1f - exp(-tick * 12f))
+            quiet = if (input < .018f) quiet + tick else 0f
+            val targetJam = if (quiet > .18f) 1f else 0f
+            jam += (targetJam - jam) * (1f - exp(-tick * 10f))
+            val targetSpeed = if (quiet > .4f) 0f else (energy * 5f + kick * 2f).coerceAtMost(3f)
+            val oldSpeed = speed
+            speed += (targetSpeed - speed) * (1f - exp(-tick * 12f))
+            if (speed < .002f) speed = 0f
+            travel = (travel + (oldSpeed + speed) * .5f * rate.coerceIn(.25f, 3f) * tick * 180f) % 100000f
+            kick *= exp(-tick * 7f)
+        }
     }
 
     companion object {

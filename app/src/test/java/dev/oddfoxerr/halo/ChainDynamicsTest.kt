@@ -15,14 +15,14 @@ class ChainDynamicsTest {
         val motor = ChainDynamics()
         motor.step(.7f, 1f / 30)
         assertTrue(motor.speed > 0f)
-        assertEquals(1f, motor.kick, 0f)
+        assertTrue(motor.kick > .7f)
         repeat(120) { motor.step(0f, 1f / 30) }
         assertTrue(motor.jam > .99f)
         assertEquals(0f, motor.speed, .002f)
         val stopped = motor.travel
         motor.step(.8f, 1f / 30)
         assertTrue(motor.travel > stopped)
-        assertEquals(1f, motor.kick, 0f)
+        assertTrue(motor.kick > .7f)
     }
     @Test fun sustainedToneDoesNotGenerateRepeatedOnsets() {
         val motor = ChainDynamics()
