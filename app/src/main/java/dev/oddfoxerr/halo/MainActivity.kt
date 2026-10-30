@@ -163,7 +163,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.6", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.8", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -196,7 +196,7 @@ private fun HaloApp(
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                             enabled = value
                             store.masterEnabled = value
-                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }
+                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
                             HaloNotificationListener.requestPillRefresh()
                         }
                     }
@@ -235,10 +235,10 @@ private fun HaloApp(
                     }
                     item {
                         SectionCard {
-                            Text("Chainsaw music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("A steel chain circles the display, clogs in quiet sections, and restarts on bass hits.", color = Muted)
-                            Button(onClick = { context.startActivity(Intent(context, ChainsawActivity::class.java)) },
-                                modifier = Modifier.fillMaxWidth()) { Text("Open music visualizer") }
+                            Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
+                            Button(onClick = { context.startActivity(Intent(context, MusicEdgeActivity::class.java)) },
+                                modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
                         }
                     }
                     item { Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
@@ -328,7 +328,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
+                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
                             Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
