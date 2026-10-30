@@ -73,7 +73,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshPill() {
-        if (ChainsawOverlayService.isRunning || MusicEdgeService.isRunning) { PillHaloOverlay.dismiss(); return }
+        if (ChainsawOverlayService.isRunning || MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { PillHaloOverlay.dismiss(); return }
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
