@@ -45,7 +45,6 @@ class ChainsawView(context: Context) : View(context) {
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
     fun updateSpectrum(fftBands: FloatArray, bass: Float, dtSeconds: Float, sensitivity: Float, speed: Float) {
