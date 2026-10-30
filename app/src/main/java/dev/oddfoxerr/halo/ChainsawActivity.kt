@@ -1,6 +1,7 @@
 package dev.oddfoxerr.halo
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -12,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -47,6 +49,7 @@ class ChainsawActivity : ComponentActivity() {
     private var thickness by mutableFloatStateOf(1f)
     private var glow by mutableFloatStateOf(.6f)
     private var controlsHidden by mutableStateOf(false)
+    private var floatingRunning by mutableStateOf(false)
     private val preferences by lazy { getSharedPreferences("chainsaw_music", MODE_PRIVATE) }
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -56,6 +59,13 @@ class ChainsawActivity : ComponentActivity() {
     }
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { selectedUri = uri; openSong(uri) }
+    }
+    private val overlayPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (Settings.canDrawOverlays(this)) {
+            withPermission { startFloatingEdge() }
+        } else {
+            status = "Display-over-other-apps permission is required for the floating edge."
+        }
     }
     private val frame = object : Runnable {
         override fun run() {
@@ -114,6 +124,20 @@ class ChainsawActivity : ComponentActivity() {
                                 OutlinedButton(onClick = { selectedUri?.let { uri -> withPermission { openSong(uri) } } },
                                     enabled = selectedUri != null, modifier = Modifier.weight(1f)) { Text("Replay file") }
                             }
+                            HorizontalDivider()
+                            Text("Floating edge", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Text("Shows the moving chain above other apps while the phone is unlocked. Requires overlay and audio permissions. Some players and Samsung screens may block visualization.", color = Color.LightGray)
+                            Button(
+                                onClick = { withPermission { startFloatingEdge() } },
+                                enabled = !floatingRunning,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Start floating edge over other apps") }
+                            OutlinedButton(
+                                onClick = { stopService(Intent(this@ChainsawActivity, ChainsawOverlayService::class.java)); floatingRunning = false; status = "Floating edge stopped." },
+                                enabled = floatingRunning,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Stop floating edge") }
+                            Text("Use the Stop edge action in HALO's ongoing notification to stop it without reopening HALO. No microphone input or recording is used.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                             Control("Beat sensitivity", sensitivity, .5f..5f) { sensitivity = it; save() }
                             Control("Chain speed", rate, .25f..3f) { rate = it; save() }
                             Control("Edge size", thickness, .6f..1.6f) { thickness = it; save() }
@@ -147,6 +171,37 @@ class ChainsawActivity : ComponentActivity() {
             status = "Android requires audio permission for its Visualizer API. HALO uses playback data, not the microphone."
             permission.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    private fun startFloatingEdge() {
+        if (!Settings.canDrawOverlays(this)) {
+            status = "Allow HALO to display over other apps, then return here."
+            overlayPermission.launch(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            )
+            return
+        }
+        if (ChainsawOverlayService.isRunning) {
+            floatingRunning = true
+            status = "Floating edge is already running. Use the notification to stop it."
+            return
+        }
+        stop("Starting the floating edge…")
+        try {
+            startForegroundService(
+                Intent(this, ChainsawOverlayService::class.java).setAction(ChainsawOverlayService.ACTION_START)
+            )
+            status = "Floating edge requested. Open your music app; stop it from HALO's notification."
+            floatingRunning = true
+        } catch (_: Exception) {
+            floatingRunning = false
+            status = "Android refused the floating mode. Open HALO in the foreground and try again."
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        floatingRunning = ChainsawOverlayService.isRunning
     }
 
     private fun startDeviceAudio() {

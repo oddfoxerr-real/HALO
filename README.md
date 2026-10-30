@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**v0.6.0 candidate built and tested in GitHub Actions · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
+**v0.7.0 floating-edge candidate · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
 
@@ -128,3 +128,13 @@ lock-screen or always-on-display music overlay**. Existing notification effects 
 Validation: unit tests cover silence, bass restart, re-jamming, sustained tones,
 FFT band selection and frame-rate independence. Physical Samsung playback and
 rendering still require device testing. The prototype APK build passed in [GitHub Actions](https://github.com/oddfoxerr-real/HALO/actions/runs/41081950468). The release workflow runs on main app changes and creates a versioned APK Release only if it does not already exist (avoiding silent replacement of a differently signed debug APK).
+
+
+## v0.7 — Optional floating chainsaw music edge (hardware-testing candidate)
+
+- Home → Chainsaw Music → **Start floating edge over other apps** requests audio/overlay permission on use. The edge uses a dedicated foreground service, so it can remain visible when the user switches to a separate music player.
+- Android requires `RECORD_AUDIO` for its low-quality FFT Visualizer interface, and a microphone-type foreground service for continued while-in-use access. HALO **does not create AudioRecord, use the microphone input, save recordings, use MediaProjection or upload audio**. Android may nevertheless show audio-access/foreground-service indicators.
+- The notification has an explicit **Stop edge** action. HALO does not automatically start the floating mode after reboot. Stopping the service releases the audio effect and removes the window.
+- Floating effects are **hidden on locked, sleeping and AOD screens**. HALO notification and Pill Halo overlays are suppressed while floating mode runs to avoid stacking semi-transparent windows.
+- Output-mix FFT session 0 can be silent, unsupported or restricted for certain players/hardware. HALO does not simulate beats when audio is inaccessible. Local-file and in-app visualization remain available as alternatives.
+- **Status:** source candidate, not yet tested on a real Galaxy A56. The v0.6.0 release remains the verified downloadable build until v0.7.0 CI and release complete. An in-place Android update from earlier builds may fail if the CI debug signing certificate differs.

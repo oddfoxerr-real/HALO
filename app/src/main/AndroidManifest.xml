@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -11,6 +13,7 @@
     </queries>
     <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
         <activity android:name=".ChainsawActivity" android:exported="false" />
+        <service android:name=".ChainsawOverlayService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".PillPreviewActivity" android:exported="false" />
         <activity android:name=".PreviewActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
