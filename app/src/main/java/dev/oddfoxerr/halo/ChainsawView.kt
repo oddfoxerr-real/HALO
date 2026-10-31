@@ -52,6 +52,8 @@ class ChainsawView(context: Context) : View(context) {
     var drawLeft = true
     var drawRight = true
     private var speed = 1f
+    private var response = 1f
+    private var beatBoost = 1.35f
 
     private val density = resources.displayMetrics.density
     private val bounds = RectF()
@@ -79,6 +81,8 @@ class ChainsawView(context: Context) : View(context) {
         brightness = settings.brightness
         spread = settings.spread
         speed = settings.speed
+        response = settings.response
+        beatBoost = settings.beatBoost
         cornerRadius = settings.corner
         leftInset = settings.leftInset
         rightInset = settings.rightInset
@@ -120,9 +124,12 @@ class ChainsawView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
+    fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float,
+        onset: Float = 0f, responseRate: Float = response) {
         speed = rate
-        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
+        response = responseRate
+        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity,
+            (onset * beatBoost).coerceIn(0f, 1f))
         requestFrame()
     }
 
@@ -171,7 +178,7 @@ class ChainsawView(context: Context) : View(context) {
             motion.accept(notificationBands, beat, now, 1f)
         }
 
-        val moving = motion.advance(now, dt, speed)
+        val moving = motion.advance(now, dt, speed, response)
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (geometryKey != key) {
             geometryKey = key
@@ -197,7 +204,7 @@ class ChainsawView(context: Context) : View(context) {
             gpuDidRender = shaderEngine?.render(
                 canvas, width, height, bounds,
                 min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
-                mode, motion.bands, motion.pulse, motion.phase, now / 1000f,
+                mode, motion.bands, motion.pulse, motion.beat, motion.phase, now / 1000f, speed,
                 density * thickness, spread, glow, brightness, edgeColor, accentColor
             ) == true
             canvas.restore()
