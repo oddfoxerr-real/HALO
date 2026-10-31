@@ -174,7 +174,7 @@ class EdgeVisualizerView(context: Context) : View(context) {
             motion.accept(notificationBands, beat, now, 1f)
         }
         val moving = motion.advance(now, dt, speed)
-        val key = "$"+"{width}:$"+"{height}:$"+"{leftInset}:$"+"{rightInset}:$"+"{topInset}:$"+"{bottomInset}:$"+"{cornerRadius}:$"+"{drawTop}:$"+"{drawBottom}:$"+"{drawLeft}:$"+"{drawRight}"
+        val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (key != geometryKey) {
             geometryKey = key
             bounds.set(leftInset * density, topInset * density,
