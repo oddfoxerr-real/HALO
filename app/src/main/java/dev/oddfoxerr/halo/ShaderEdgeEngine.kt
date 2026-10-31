@@ -231,7 +231,7 @@ half4 main(float2 p) {
     float body=0.0, bloom=0.0, sparkle=0.0;
     float offset=0.0;
     float base=max(1.0,thickness);
-    float count=max(12.0,round(56.0*density));
+    float count=max(12.0,floor(56.0*density+0.5));
     float dotRadius=clamp((1.7+3.4*e+2.5*beat)*dotSize*base,1.3,22.0);
     if (design==0) { // Liquid silk: domain-warped coherent fabric, not strokes
         float n=noise3(float3(u*9.0,d*.03,t*.22));
@@ -253,7 +253,7 @@ half4 main(float2 p) {
         bloom=gaussian(length(float2(arc,d-rowPosition)),radiusLocal*2.5)*(.14+.18*glow);
         sparkle=body*max(0.0,e)*.30;
     } else if(design==2) { // Constellations: irregular star nodes connected optically
-        float cells=max(22.0,round(42.0*density));
+        float cells=max(22.0,floor(42.0*density+0.5));
         float cell=floor(u*cells);
         float centerU=(cell+.5)/cells;
         float arc=repeatDistance((u-centerU)*cells)*edge/cells;
@@ -266,7 +266,7 @@ half4 main(float2 p) {
         bloom=gaussian(distance,r*5.0)*.28;
         sparkle=body*.65;
     } else if(design==3) { // Fireflies: drifting randomly offset micro-lights
-        float cells=max(20.0,round(52.0*density));
+        float cells=max(20.0,floor(52.0*density+0.5));
         float su=fract(u-t*.020);
         float cell=floor(su*cells);
         float arc=repeatDistance(su*cells)*edge/cells;
@@ -306,7 +306,7 @@ half4 main(float2 p) {
         bloom=gaussian(d-curtain,w*3.0)*.30;
         sparkle=pow(max(0.0,m),4.0)*.19;
     } else if(design==7) { // Spectral glass: tightly clipped audio columns
-        float cells=max(32.0,round(84.0*density));
+        float cells=max(32.0,floor(84.0*density+0.5));
         float local=repeatDistance(u*cells);
         float separation=1.0-smoothstep(.30,.47,local);
         float height=(5.0+e*65.0+beat*8.0)*base*spread;
@@ -331,7 +331,7 @@ half4 main(float2 p) {
         bloom=envelope*ions*.21;
         sparkle=pow(ions,3.0)*.35;
     } else if(design==10) { // Shards: faceted angular energy geometry
-        float cells=max(20.0,round(34.0*density));
+        float cells=max(20.0,floor(34.0*density+0.5));
         float cell=floor(u*cells);
         float local=fract(u*cells);
         float skew=hash21(float2(cell,8.0));
@@ -341,7 +341,7 @@ half4 main(float2 p) {
         bloom=gaussian(faceted,7.0*base)*.20;
         sparkle=body*.48;
     } else { // Orbit beads: concentric rotating dot trains
-        float cells=max(18.0,round(36.0*density));
+        float cells=max(18.0,floor(36.0*density+0.5));
         float mover=fract(u-t*.075);
         float cell=floor(mover*cells);
         float local=repeatDistance(mover*cells)*edge/cells;
