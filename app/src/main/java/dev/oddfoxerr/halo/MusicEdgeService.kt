@@ -125,9 +125,9 @@ class MusicEdgeService : Service() {
                 if (sample.bands.any { it > .008f }) lastAudible = sample.at
                 view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
             }
-            val notification = now < yieldUntil || HaloOverlay.isAnimating() || NotificationEdgeOverlay.isAnimating
+            val notification = now < yieldUntil || NotificationEdgeOverlay.isAnimating
             if (yielding && !notification) {
-                HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss(); yielding = false
+                NotificationEdgeOverlay.dismiss(); yielding = false
             }
             val reason = MusicVisibility.reason(awake, !keyguard.isKeyguardLocked, quiet, notification,
                 sessionAllowed, lastCapture != 0L && now - lastCapture < 700L,
@@ -203,7 +203,7 @@ class MusicEdgeService : Service() {
                 } catch (_: RuntimeException) { main.post { fail("Android could not open device audio · try another player and restart") } }
             }
             worker.post(mediaPoll)
-            HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
+            NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
             main.post(tick)
         } catch (_: Exception) { fail("Android could not start music lighting · check permissions") }
         return START_NOT_STICKY
