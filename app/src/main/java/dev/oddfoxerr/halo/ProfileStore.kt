@@ -76,7 +76,7 @@ class ProfileStore(context: Context) {
     fun readForPackage(packageName: String): CharacterProfile {
         val rule = readRule(packageName)
         val base = read(rule.character)
-        return base.copy(color = rule.colorOverride ?: base.color, enabled = rule.enabled && base.enabled)
+        return base.copy(color = rule.colorOverride ?: base.color, enabled = rule.enabled)
     }
 
     fun notificationModeFor(packageName: String): NotificationEdgeMode =
@@ -157,6 +157,11 @@ class ProfileStore(context: Context) {
             .putFloat("notch.height", s.heightDp)
             .putFloat("notch.gap", s.gapDp).apply()
     }
+
+    /** Shared edge notification timing is independent of the removed character animations. */
+    var notificationDurationMs: Long
+        get() = prefs.getLong("edge_notification_duration", 4200L).coerceIn(800L, 10000L)
+        set(value) { prefs.edit().putLong("edge_notification_duration", value.coerceIn(800L, 10000L)).apply() }
 
     /** Global notification placement: character, full perimeter, or both. */
     var notificationEdgeMode: NotificationEdgeMode
