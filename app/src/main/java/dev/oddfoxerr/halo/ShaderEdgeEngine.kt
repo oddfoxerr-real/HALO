@@ -6,108 +6,72 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlin.math.max
 
-/**
- * Native AGSL (GPU) design engine. Unlike the previous Canvas pipeline, light and geometry
- * are generated together in one procedural field with transparent pixels inside the display.
- * Built from scratch using public Android RuntimeShader APIs, not copied shaders/assets.
- */
+/** A single opaque-free AGSL pipeline; there is no legacy Canvas animation fallback. */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal class ShaderEdgeEngine {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
-    private var shader: RuntimeShader? = null
-    private var failed = false
-
-    /** Compile on the Android framework in instrumentation tests, not JVM stubs. */
+    private var runtime: RuntimeShader? = null
+    private var failure: String? = null
+    val status: String get() = when {
+        failure != null -> "GPU shader unavailable: ${failure}"
+        runtime != null -> "AGSL GPU active"
+        else -> "GPU initialising"
+    }
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
 
     fun render(
-        canvas: Canvas,
-        width: Int,
-        height: Int,
-        bounds: RectF,
-        radius: Float,
-        mode: EdgeMode,
-        bands: FloatArray,
-        bass: Float,
-        phase: Float,
-        seconds: Float,
-        thickness: Float,
-        spread: Float,
-        glow: Float,
-        brightness: Float,
-        primary: Int,
-        secondary: Int
+        canvas: Canvas, width: Int, height: Int, bounds: RectF,
+        radius: Float, mode: EdgeMode, gradient: EdgeGradient,
+        bands: FloatArray, bass: Float, phase: Float, seconds: Float,
+        thickness: Float, spread: Float, glow: Float, brightness: Float,
+        dotDensity: Float, dotSize: Float, primary: Int, secondary: Int
     ): Boolean {
-        if (failed || width <= 0 || height <= 0) return false
-        try {
-            val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
-            runtime.setFloatUniform("resolution", width.toFloat(), height.toFloat())
-            runtime.setFloatUniform("frame", bounds.left, bounds.top, bounds.right, bounds.bottom)
-            runtime.setFloatUniform("radius", radius)
-            runtime.setFloatUniform("seconds", seconds)
-            runtime.setFloatUniform("phase", phase)
-            runtime.setFloatUniform("bass", bass.coerceIn(0f, 1f))
-            runtime.setFloatUniform("thickness", thickness)
-            runtime.setFloatUniform("spread", spread)
-            runtime.setFloatUniform("glow", glow)
-            runtime.setFloatUniform("brightness", brightness)
-            runtime.setIntUniform("design", mode.ordinal)
+        if (failure != null || width <= 0 || height <= 0 || !canvas.isHardwareAccelerated) return false
+        return try {
+            val shader = runtime ?: RuntimeShader(SOURCE).also { runtime = it }
+            shader.setFloatUniform("resolution", width.toFloat(), height.toFloat())
+            shader.setFloatUniform("frame", bounds.left, bounds.top, bounds.right, bounds.bottom)
+            shader.setFloatUniform("radius", radius)
+            shader.setFloatUniform("seconds", seconds % 3600f)
+            shader.setFloatUniform("phase", phase)
+            shader.setFloatUniform("bass", bass.coerceIn(0f, 1f))
+            shader.setFloatUniform("thickness", thickness.coerceAtLeast(.5f))
+            shader.setFloatUniform("spread", spread.coerceIn(.3f, 2.8f))
+            shader.setFloatUniform("glow", glow.coerceIn(0f, 1f))
+            shader.setFloatUniform("brightness", brightness.coerceIn(.2f, 1f))
+            shader.setFloatUniform("density", dotDensity.coerceIn(.4f, 2.5f))
+            shader.setFloatUniform("dotSize", dotSize.coerceIn(.4f, 2.4f))
+            shader.setIntUniform("design", mode.ordinal)
+            shader.setIntUniform("gradientMode", gradient.ordinal)
             val frequencies = FloatArray(4)
             for (i in bands.indices) {
-                val index = (i * 4 / max(1, bands.size)).coerceIn(0, 3)
-                frequencies[index] = max(frequencies[index], bands[i].coerceIn(0f, 1f))
+                val bin = (i * 4 / max(1, bands.size)).coerceIn(0, 3)
+                frequencies[bin] = max(frequencies[bin], bands[i].coerceIn(0f, 1f))
             }
-            runtime.setFloatUniform("audio", frequencies)
-            runtime.setFloatUniform("first", Color.red(primary) / 255f,
+            shader.setFloatUniform("audio", frequencies)
+            shader.setFloatUniform("first", Color.red(primary) / 255f,
                 Color.green(primary) / 255f, Color.blue(primary) / 255f)
-            runtime.setFloatUniform("second", Color.red(secondary) / 255f,
+            shader.setFloatUniform("second", Color.red(secondary) / 255f,
                 Color.green(secondary) / 255f, Color.blue(secondary) / 255f)
-            paint.shader = runtime
+            paint.shader = shader
             paint.alpha = 255
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
-            return true
-        } catch (_: RuntimeException) {
-            // Shader compile errors or incompatible GPU drivers use the existing native fallback.
-            failed = true
+            true
+        } catch (exception: RuntimeException) {
+            failure = exception.message?.take(180) ?: exception.javaClass.simpleName
+            Log.e("HALO", "AGSL edge shader failed; legacy drawing will not be shown", exception)
             paint.shader = null
-            return false
+            false
         }
     }
 
     private companion object {
         private val SOURCE = """
-            uniform float2 resolution;
-            uniform float4 frame;
-            uniform float radius;
-            uniform float seconds;
-            uniform float phase;
-            uniform float bass;
-            uniform float4 audio;
-            uniform float thickness;
-            uniform float spread;
-            uniform float glow;
-            uniform float brightness;
-            uniform float3 first;
-            uniform float3 second;
-            uniform int design;
-
-            float hash(float2 p) {
-                return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
-            }
-
-            float noise(float2 p) {
-                float2 i = floor(p);
-                float2 f = fract(p);
-                float2 u = f*f*(3.0-2.0*f);
-                float a=hash(i), b=hash(i+float2(1,0));
-                float c=hash(i+float2(0,1)), d=hash(i+float2(1,1));
-                return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
-            }
-
             // 3D simplex noise adapted from Daniel Sandner's Audio Shader Studio
             // shaders/geometric-patterns/fluidic-1.glsl (MIT, Copyright 2025 Daniel Sandner).
             // See THIRD_PARTY_NOTICES.md for the license and upstream URL.
@@ -162,102 +126,238 @@ internal class ShaderEdgeEngine {
             }
             
             
-            float roundedDistance(float2 p) {
-                float2 center = 0.5 * (frame.xy + frame.zw);
-                float2 extent = max((frame.zw - frame.xy)*0.5 - radius, float2(1.0));
-                float2 q = abs(p-center) - extent;
-                return length(max(q, float2(0.0))) + min(max(q.x,q.y),0.0) - radius;
-            }
 
-            float harmonic(float x) {
-                float4 a = audio;
-                float low = mix(a.x,a.y,smoothstep(0.0,0.5,x));
-                float high = mix(a.z,a.w,smoothstep(0.5,1.0,x));
-                return mix(low,high,smoothstep(0.20,0.80,x));
-            }
+uniform float2 resolution;
+uniform float4 frame;
+uniform float radius;
+uniform float seconds;
+uniform float phase;
+uniform float bass;
+uniform float4 audio;
+uniform float thickness;
+uniform float spread;
+uniform float glow;
+uniform float brightness;
+uniform float3 first;
+uniform float3 second;
+uniform float density;
+uniform float dotSize;
+uniform int design;
+uniform int gradientMode;
+const float TAU = 6.28318530718;
+const float HALF_PI = 1.57079632679;
 
-            half4 main(float2 px) {
-                float2 uv = px / max(resolution, float2(1.0));
-                float2 center = 0.5*(frame.xy+frame.zw);
-                float2 normalized = (px-center)/max((frame.zw-frame.xy)*0.5,float2(1.0));
-                float perimeterPos = fract(atan(normalized.y,normalized.x)/6.2831853 + 0.5);
-                float d = roundedDistance(px);
-                // Cull transparent interior before expensive noise work.
-                if (abs(d) > max(42.0, 110.0 * spread * thickness)) return half4(0.0);
-                float beat = clamp(bass,0.0,1.0);
-                float movement = seconds * 0.20 + phase * 1.4;
-                float energy = harmonic(perimeterPos);
-                float swirl = noise(float2(perimeterPos*14.0-seconds*.55,seconds*.24));
-                float detail = noise(float2(perimeterPos*43.0+seconds*.20,seconds*.40));
-                float grain = swirl*0.76+detail*0.24;
-                float front = 1.8 * thickness;
-                float size = (5.0 + 12.0*energy + 7.0*beat) * spread * thickness;
-
-                // Distinct motion systems, not a uniform stroke with different names.
-                if (design == 0) { // Silk - smooth folded satin wave
-                    float3 flow = float3(perimeterPos*7.0, d*.022, seconds*.21);
-                    float turbulence = noise3(flow);
-                    size *= .7 + .65 * grain + .35 * turbulence;
-                    d += (turbulence*.55 + sin(perimeterPos*33.0-seconds*1.8)*.45)
-                        * energy * 7.5 * spread;
-                } else if (design == 1) { // Spectrum - smoothly sampled spectral columns
-                    size *= .20 + 1.20 * energy;
-                    d += sin(perimeterPos*95.0)*energy*2.6;
-                } else if (design == 2 || design == 6) { // Orbit / Comet - travelling energy
-                    float delta = abs(fract(perimeterPos - movement + 0.5)-0.5);
-                    size *= .08 + 2.6 * exp(-delta*delta*220.0) * (.45+beat);
-                } else if (design == 3) { // Pulse - expanding interference
-                    d += sin(d*.16 - seconds*7.0)*beat*6.0;
-                    size *= .45 + 1.25*beat;
-                } else if (design == 4) { // Chain - forged rhythmic teeth
-                    size *= .5 + .5 * smoothstep(.35,.8,sin(perimeterPos*230.0-seconds*9.0));
-                } else if (design == 5) { // Aurora - cloth-like drifting spectral curtains
-                    float3 flow = float3(perimeterPos*10.0,d*.025,seconds*.18);
-                    float coarse = noise3(flow);
-                    float detailNoise = noise3(flow*2.3 + float3(3.2, .8, 1.5));
-                    float folded = coarse*.72 + detailNoise*.28;
-                    size *= .83 + .52*grain + .9*folded;
-                    d += folded*size*.48;
-                } else if (design == 7) { // Twin streams
-                    float path1=exp(-pow(abs(fract(perimeterPos-movement+0.5)-0.5)*17.0,2.0));
-                    float path2=exp(-pow(abs(fract(perimeterPos+movement+0.5)-0.5)*17.0,2.0));
-                    size *= .08 + (path1+path2)*1.9;
-                } else if (design == 8) { // Sparks - scattered electrical crackles
-                    size *= .10 + pow(detail,7.0)*3.5*max(energy,beat);
-                } else if (design == 9) { // Pixels - discrete fluorescent mosaic
-                    size *= .18+floor(energy*8.0)*.14;
-                } else if (design == 10) { // Neon circuit
-                    size *= .44+step(.70,noise(float2(perimeterPos*34.0,seconds*.18)))*1.1;
-                } else if (design == 11) { // Rainfall
-                    size *= .3 + pow(grain,3.0)*1.6;
-                    d += sin(perimeterPos*83.0-seconds*7.0)*energy*5.0;
-                } else if (design == 12) { // Helix
-                    d += sin(perimeterPos*70.0-seconds*4.0)*size*.42;
-                    size *= .55+energy*.5;
-                } else if (design == 13) { // Bloom
-                    size *= .24+beat*1.9;
-                    d += sin(perimeterPos*32.0-seconds*2.0)*energy*7.0;
-                } else { // Prism - refractive facets
-                    size *= .43 + abs(sin(perimeterPos*38.0-seconds*.8))*.8;
-                }
-
-                // Procedural volume and specular caustics:
-                // transparent interior, flowing colored body, sharp white refraction.
-                float mask = exp(-pow(max(abs(d)-front,0.0)/max(1.0,size),2.0)*2.6);
-                float core = exp(-pow(d/max(1.0,front),2.0)*2.5);
-                float halo = exp(-pow(d/max(2.0,size*2.8),2.0)*2.2)*(.05+.19*glow);
-                float refraction = pow(max(0.0,sin(perimeterPos*37.0 + movement*5.0 + grain*2.1)),14.0);
-                float highlight = core*(.24+.49*energy+.18*refraction);
-                float chroma = fract(perimeterPos*1.9-seconds*.05+grain*.2);
-                float3 color = mix(first,second,smoothstep(.12,.88,chroma));
-                color += first * exp(-pow((d+size*.20)/max(1.0,size*.45),2.0))*.19;
-                color *= .95 + .05 * sin(uv.y * 8.0 + seconds * .45);
-                color = mix(color,float3(1.0),clamp(highlight,0.0,.55));
-                float alpha = clamp((mask*.52 + core*.48 + halo)*brightness,0.0,.94);
-                // Only the nearby edge is illuminated; screen center stays transparent.
-                alpha *= 1.0 - smoothstep(size*2.5+9.0,size*4.5+22.0,abs(d));
-                return half4(half3(color)*half(alpha), half(alpha));
-            }
+float hash21(float2 p) {
+    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+float roundedDistance(float2 p) {
+    float2 center = .5 * (frame.xy + frame.zw);
+    float2 extent = max((frame.zw - frame.xy) * .5 - radius, float2(1.0));
+    float2 q = abs(p-center) - extent;
+    return length(max(q, float2(0.0))) + min(max(q.x,q.y),0.0) - radius;
+}
+// Arc-length parameterization of the real rounded rectangle. Unlike atan(center),
+// this places dots at uniform distances along straight sides and around corners;
+// gradients return to the same color at u=0/1, so there is no hard seam.
+float edgePosition(float2 p) {
+    float L=frame.x, T=frame.y, R=frame.z, B=frame.w;
+    float r=max(1.0,min(radius,min((R-L)*.5,(B-T)*.5)));
+    float h=max(0.0,R-L-2.0*r), v=max(0.0,B-T-2.0*r);
+    float a=HALF_PI*r, perimeter=max(1.0,2.0*(h+v)+4.0*a);
+    float s=0.0;
+    if (p.x>=R-r && p.y<=T+r) {
+        float angle=atan(p.y-(T+r),p.x-(R-r));
+        s=h+(angle+HALF_PI)*r;
+    } else if (p.x>=R-r && p.y>=B-r) {
+        float angle=atan(p.y-(B-r),p.x-(R-r));
+        s=h+a+v+angle*r;
+    } else if (p.x<=L+r && p.y>=B-r) {
+        float angle=atan(p.y-(B-r),p.x-(L+r));
+        s=2.0*h+2.0*a+v+(angle-HALF_PI)*r;
+    } else if (p.x<=L+r && p.y<=T+r) {
+        float angle=atan(p.y-(T+r),p.x-(L+r));
+        s=2.0*h+3.0*a+2.0*v+(angle+3.14159265)*r;
+    } else {
+        float dt=abs(p.y-T), dr=abs(p.x-R);
+        float db=abs(p.y-B), dl=abs(p.x-L);
+        if (dt<=dr && dt<=db && dt<=dl) s=clamp(p.x-(L+r),0.0,h);
+        else if (dr<=db && dr<=dl) s=h+a+clamp(p.y-(T+r),0.0,v);
+        else if (db<=dl) s=h+a+v+a+clamp((R-r)-p.x,0.0,h);
+        else s=2.0*h+3.0*a+v+clamp((B-r)-p.y,0.0,v);
+    }
+    return fract(s/perimeter);
+}
+float edgeLength() {
+    float r=max(1.0,min(radius,min((frame.z-frame.x)*.5,(frame.w-frame.y)*.5)));
+    return max(1.0,2.0*((frame.z-frame.x-2.0*r)+(frame.w-frame.y-2.0*r))+TAU*r);
+}
+float band(float u) {
+    float v=fract(u);
+    float lo=mix(audio.x,audio.y,smoothstep(0.0,.50,v));
+    float hi=mix(audio.z,audio.w,smoothstep(.50,1.0,v));
+    return clamp(mix(lo,hi,smoothstep(.17,.83,v)),0.0,1.0);
+}
+float repeatDistance(float x) { return abs(fract(x+.5)-.5); }
+float circleMask(float x,float y,float size) {
+    return 1.0-smoothstep(max(.2,size-1.2),size+1.2,length(float2(x,y)));
+}
+float gaussian(float x,float sigma) {
+    float n=x/max(1.0,sigma);
+    return exp(-n*n*1.6);
+}
+float3 palette(float u,float t) {
+    float mixPosition=.5-.5*cos(TAU*u);
+    if(gradientMode==1) mixPosition=.5-.5*cos(TAU*(u-t*.065));
+    if(gradientMode==2) mixPosition=0.0;
+    float3 color=mix(first,second,mixPosition);
+    if(gradientMode==3) {
+        float3 chroma=.5+.5*cos(TAU*(u+t*.045)+float3(0.0,2.0943951,4.1887902));
+        color=mix(color,chroma,.82);
+    }
+    return color;
+}
+half4 main(float2 p) {
+    float d=roundedDistance(p);
+    float maxExtent=clamp(35.0*thickness*spread+65.0,80.0,230.0);
+    if(abs(d)>maxExtent) return half4(0.0);
+    float u=edgePosition(p);
+    float edge=edgeLength();
+    float e=clamp(band(u),0.0,1.0);
+    float beat=clamp(bass,0.0,1.0);
+    float t=seconds;
+    float body=0.0, bloom=0.0, sparkle=0.0;
+    float offset=0.0;
+    float base=max(1.0,thickness);
+    float count=max(12.0,round(56.0*density));
+    float dotRadius=clamp((1.7+3.4*e+2.5*beat)*dotSize*base,1.3,22.0);
+    if (design==0) { // Liquid silk: domain-warped coherent fabric, not strokes
+        float n=noise3(float3(u*9.0,d*.03,t*.22));
+        float fold=noise3(float3(u*19.0,d*.055+3.0,t*.29));
+        float center=(n*.7+fold*.3)*(8.0+17.0*e)*spread;
+        float w=(4.0+13.0*e+4.0*beat)*base*spread;
+        body=gaussian(d-center,w);
+        bloom=gaussian(d-center,w*3.5)*.23;
+        sparkle=pow(max(0.0,fold),5.0)*e*.47;
+    } else if(design==1) { // Dots: rows of independently pulsing circular lights
+        float cell=floor(u*count+.5);
+        float arc=repeatDistance(u*count)*edge/count;
+        float row=floor(clamp(-d/(9.0*base)+.5,0.0,2.0));
+        float rowPosition=-row*8.5*base;
+        float light=hash21(float2(cell,row));
+        float radiusLocal=dotRadius*(.58+.42*light);
+        float pulse=.68+.32*sin(t*3.1+cell*.44+row);
+        body=circleMask(arc,d-rowPosition,radiusLocal)*pulse;
+        bloom=gaussian(length(float2(arc,d-rowPosition)),radiusLocal*2.5)*(.14+.18*glow);
+        sparkle=body*max(0.0,e)*.30;
+    } else if(design==2) { // Constellations: irregular star nodes connected optically
+        float cells=max(22.0,round(42.0*density));
+        float cell=floor(u*cells);
+        float centerU=(cell+.5)/cells;
+        float arc=repeatDistance((u-centerU)*cells)*edge/cells;
+        float star=hash21(float2(cell,3.1));
+        float radial=(star-.5)*26.0*base;
+        float distance=length(float2(arc,d-radial));
+        float r=(1.4+star*3.0+e*2.8)*base*dotSize;
+        float twinkle=.62+.38*sin(t*(1.3+star*3.3)+star*8.0);
+        body=circleMask(arc,d-radial,r)*twinkle;
+        bloom=gaussian(distance,r*5.0)*.28;
+        sparkle=body*.65;
+    } else if(design==3) { // Fireflies: drifting randomly offset micro-lights
+        float cells=max(20.0,round(52.0*density));
+        float su=fract(u-t*.020);
+        float cell=floor(su*cells);
+        float arc=repeatDistance(su*cells)*edge/cells;
+        float r1=hash21(float2(cell,2.0));
+        float r2=hash21(float2(cell,7.0));
+        float radial=(r1-.5)*43.0*base+sin(t*(.8+r2)+cell)*6.0*base;
+        float dis=length(float2(arc,d-radial));
+        float size=(1.3+r2*3.7+beat*2.8)*base*dotSize;
+        body=circleMask(arc,d-radial,size);
+        bloom=gaussian(dis,size*4.8)*(.13+.19*glow);
+        sparkle=body*(.3+.7*r2);
+    } else if(design==4) { // Meteor trails: three directional energy streaks
+        float trail=0.0;
+        for(int i=0;i<3;i++) {
+            float center=fract(t*(.12+.025*float(i))+float(i)/3.0);
+            float behind=fract(center-u+1.0);
+            float head=exp(-pow(repeatDistance(u-center)*edge/(20.0*base),2.0));
+            float tail=exp(-behind*(13.0+4.0*beat));
+            trail=max(trail,head+tail*.60);
+        }
+        body=gaussian(d,4.0*base+6.0*e)*trail;
+        bloom=gaussian(d,24.0*base)*trail*.20;
+        sparkle=trail*.38;
+    } else if(design==5) { // Ribbons: two counter-flowing layers
+        float a=noise3(float3(u*7.0,d*.025,t*.22));
+        float b=noise3(float3(u*7.0+4.0,d*.025,-t*.18));
+        float r1=(a*14.0-9.0)*base, r2=(b*15.0+10.0)*base;
+        body=max(gaussian(d-r1,(2.9+e*8.0)*base),gaussian(d-r2,(2.0+e*5.0)*base)*.65);
+        bloom=max(gaussian(d-r1,27.0*base),gaussian(d-r2,25.0*base))*.15;
+        sparkle=pow(max(0.0,a+b),4.0)*.27*e;
+    } else if(design==6) { // Aurora: wide turbulence curtains with internal texture
+        float n=noise3(float3(u*9.0,d*.025,t*.14));
+        float m=noise3(float3(u*20.0+3.0,d*.045,t*.30));
+        float curtain=(n*.72+m*.28)*(12.0+21.0*e)*spread;
+        float w=(7.0+19.0*e+7.0*beat)*base*spread;
+        body=gaussian(d-curtain,w)*(.65+.25*m);
+        bloom=gaussian(d-curtain,w*3.0)*.30;
+        sparkle=pow(max(0.0,m),4.0)*.19;
+    } else if(design==7) { // Spectral glass: tightly clipped audio columns
+        float cells=max(32.0,round(84.0*density));
+        float local=repeatDistance(u*cells);
+        float separation=1.0-smoothstep(.30,.47,local);
+        float height=(5.0+e*65.0+beat*8.0)*base*spread;
+        float column=smoothstep(-height-2.0*base,-height+1.5*base,d)*
+            (1.0-smoothstep(-1.0*base,2.0*base,d));
+        body=column*separation;
+        bloom=gaussian(d+height*.5,height*.65+6.0)*separation*.18;
+        sparkle=body*(.18+.30*e);
+    } else if(design==8) { // Ripples: concentric travelling interference ripples
+        float wave=sin(d/(4.0*base)-t*4.4+e*3.0);
+        float ring=pow(max(0.0,wave),9.0);
+        float envelope=gaussian(d,24.0*base*(.5+spread));
+        body=ring*envelope*(.38+.62*max(e,beat));
+        bloom=envelope*.17;
+        sparkle=ring*.32*e;
+    } else if(design==9) { // Plasma: animated 3D cellular current
+        float n=noise3(float3(u*13.0,d*.075,t*.40));
+        float m=noise3(float3(u*27.0,d*.15,t*.24+6.0));
+        float ions=pow(max(0.0,(n*.72+m*.28)*.5+.5),3.3);
+        float envelope=gaussian(d,23.0*base*spread);
+        body=ions*envelope*(.58+.42*e);
+        bloom=envelope*ions*.21;
+        sparkle=pow(ions,3.0)*.35;
+    } else if(design==10) { // Shards: faceted angular energy geometry
+        float cells=max(20.0,round(34.0*density));
+        float cell=floor(u*cells);
+        float local=fract(u*cells);
+        float skew=hash21(float2(cell,8.0));
+        float spike=(1.0-abs(local*2.0-1.0))*(8.0+18.0*e)*base;
+        float faceted=abs(d+spike-skew*11.0*base);
+        body=(1.0-smoothstep(0.7*base,3.0*base,faceted))*(.4+.6*e);
+        bloom=gaussian(faceted,7.0*base)*.20;
+        sparkle=body*.48;
+    } else { // Orbit beads: concentric rotating dot trains
+        float cells=max(18.0,round(36.0*density));
+        float mover=fract(u-t*.075);
+        float cell=floor(mover*cells);
+        float local=repeatDistance(mover*cells)*edge/cells;
+        float lane=mod(cell,3.0);
+        float radiusLocal=(2.5+beat*3.0+e*2.0)*base*dotSize;
+        float y=(lane-1.0)*10.0*base;
+        float dis=length(float2(local,d-y));
+        body=circleMask(local,d-y,radiusLocal)*(.60+.40*sin(cell*.41+t*2.0));
+        bloom=gaussian(dis,radiusLocal*3.4)*.24;
+        sparkle=body*.42;
+    }
+    float a=clamp((body*.82+bloom*(.5+glow)+sparkle*.10)*brightness,0.0,.91);
+    if (a<.003) return half4(0.0);
+    float3 col=palette(u,t);
+    col=mix(col,float3(1.0),clamp(sparkle*.35+body*.15,0.0,.50));
+    // Premultiplied output is required by RuntimeShader and avoids black halos
+    // around gradient stops in transparent Android overlay windows.
+    return half4(half3(clamp(col,0.0,1.0))*half(a),half(a));
+}
         """.trimIndent()
     }
 }
