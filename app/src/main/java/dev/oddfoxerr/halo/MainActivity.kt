@@ -537,7 +537,7 @@ private fun launchableApps(context: android.content.Context): List<InstalledApp>
 }
 
 @Composable
-private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) -> Unit) {
+private fun AppRulesEditor(store: ProfileStore) {
     val context = LocalContext.current
     val installed = remember { launchableApps(context) }
     var filter by remember { mutableStateOf("") }
@@ -560,33 +560,9 @@ private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) 
                     }
                     OutlinedButton(onClick = { selectedPackage = null }) { Text("Close") }
                 }
-                SwitchRow("Enable HALO for this app", "Trigger its assigned character on new notifications.", current.enabled) { change(current.copy(enabled = it)) }
-                var expanded by remember(current.packageName) { mutableStateOf(false) }
-                Box {
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Character: ${current.character.displayName} ▾") }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        CharacterApp.entries.forEach { app -> DropdownMenuItem(text = { Text(app.displayName) }, onClick = {
-                            change(current.copy(character = app)); expanded = false
-                        }) }
-                    }
-                }
-                Text("Notification effect for this app", style = MaterialTheme.typography.labelLarge)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChip(
-                            selected = current.notificationModeOverride == null,
-                            onClick = { change(current.copy(notificationModeOverride = null)) },
-                            label = { Text("Use default") }
-                        )
-                    }
-                    items(NotificationEdgeMode.entries) { option ->
-                        FilterChip(
-                            selected = current.notificationModeOverride == option,
-                            onClick = { change(current.copy(notificationModeOverride = option)) },
-                            label = { Text(option.title) }
-                        )
-                    }
-                }
+                SwitchRow("Enable edge notifications for this app",
+                    "Use the current Music Studio animation when this app notifies.",
+                    current.enabled) { change(current.copy(enabled = it)) }
                 Text("Per-app color override", style = MaterialTheme.typography.labelLarge)
                 var customHex by remember(current.packageName) {
                     mutableStateOf("#%06X".format((current.colorOverride ?: store.read(current.character).color) and 0xFFFFFF))
@@ -606,7 +582,6 @@ private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) 
                     item { FilterChip(selected = current.colorOverride == null, onClick = { change(current.copy(colorOverride = null)) }, label = { Text("Default") }) }
                     items(Swatches) { color -> Box(Modifier.size(34.dp).background(Color(color), CircleShape).clickable { change(current.copy(colorOverride = color)) }) }
                 }
-                OutlinedButton(onClick = { onCharacterEdit(current.character) }, modifier = Modifier.fillMaxWidth()) { Text("Edit character animation") }
                 OutlinedButton(onClick = {
                     store.clearRule(current.packageName); rule = store.readRule(current.packageName); revision++
                 }, modifier = Modifier.fillMaxWidth()) { Text("Reset app rule") }
@@ -625,7 +600,7 @@ private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) 
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)) {
                             Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(data.character.displayName + if (!data.enabled) " · Off" else "", color = Muted,
+                            Text(if (data.enabled) "Edge notification enabled" else "Notifications off", color = Muted,
                                 style = MaterialTheme.typography.bodySmall)
                         }
                         Text("Edit", color = MaterialTheme.colorScheme.primary)
