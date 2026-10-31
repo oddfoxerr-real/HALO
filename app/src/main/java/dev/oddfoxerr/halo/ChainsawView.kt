@@ -10,6 +10,7 @@ import kotlin.math.*
 /** Shared HALO music renderer. Chainsaw is one design, not the music system itself. */
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
+    private val extraEffects = MusicExtraEffects()
     var thickness = 1f
     var glow = .75f
     var brightness = 1f
@@ -135,6 +136,10 @@ class ChainsawView(context: Context) : View(context) {
                 stroke(canvas, perimeter, (1.7f + motion.pulse * 5f) * unit, (165 + motion.pulse * 90).toInt(), true)
             }
             EdgeMode.CHAIN -> chainsaw(canvas, unit)
+            EdgeMode.AURORA, EdgeMode.COMET, EdgeMode.TWIN, EdgeMode.SPARKS,
+            EdgeMode.PIXELS, EdgeMode.NEON, EdgeMode.RAIN, EdgeMode.HELIX,
+            EdgeMode.BLOOM, EdgeMode.PRISM -> extraEffects.draw(mode, canvas, perimeter, measure,
+                motion, width, height, density, thickness, brightness, glow, edgeColor, accentColor)
         }
         canvas.restore()
         paint.shader = null; paint.alpha = 255
@@ -142,7 +147,7 @@ class ChainsawView(context: Context) : View(context) {
     }
     private fun amplitude(fraction: Float): Float {
         // Mirror the spectrum around the frame; interpolate between bands instead of stair-stepping.
-        val value = abs(sin(fraction * PI * 2)).toFloat() * (motion.bands.size - 1)
+        val value = (((fraction * 2f + motion.phase * .3f) % 1f + 1f) % 1f) * (motion.bands.size - 1)
         val low = value.toInt()
         return motion.bands[low] * (1 - (value - low)) + motion.bands[min(low + 1, motion.bands.lastIndex)] * (value - low)
     }
@@ -150,7 +155,8 @@ class ChainsawView(context: Context) : View(context) {
         val count = 112
         for (i in 0 until count) {
             measure.getPosTan(measure.length * i / count, position, tangent)
-            val offset = (1f + amplitude(i.toFloat() / count) * 19f) * unit
+            val flutter = sin((i.toFloat() / count * 5f + motion.phase * 2f) * (2f * PI)).toFloat()
+            val offset = (2f + amplitude(i.toFloat() / count) * 18f + flutter * (2f + motion.pulse * 6f)) * unit
             coordinates[i * 2] = position[0] - tangent[1] * offset
             coordinates[i * 2 + 1] = position[1] + tangent[0] * offset
         }
@@ -173,7 +179,7 @@ class ChainsawView(context: Context) : View(context) {
             val fraction = i / 120f
             measure.getPosTan(measure.length * fraction, position, tangent)
             val strength = amplitude(fraction)
-            val length = (1.5f + strength * 25f) * unit
+            val length = (2.2f + strength * 25f + motion.pulse * 3.5f) * unit
             paint.alpha = ((130 + strength * 125) * brightness).toInt().coerceIn(0, 255)
             canvas.drawLine(position[0], position[1], position[0] - tangent[1] * length, position[1] + tangent[0] * length, paint)
         }
@@ -193,7 +199,7 @@ class ChainsawView(context: Context) : View(context) {
     }
     private fun chainsaw(canvas: Canvas, unit: Float) {
         val motor = motion.motor
-        stroke(canvas, perimeter, 5f * unit, 185, true)
+        stroke(canvas, perimeter, (3.5f + motor.kick * 1.5f) * unit, 165, true)
         val count = (measure.length / (19f * unit)).toInt().coerceIn(6, 260)
         for (i in 0 until count) {
             measure.getPosTan((i * measure.length / count + motor.travel * density) % measure.length, position, tangent)
