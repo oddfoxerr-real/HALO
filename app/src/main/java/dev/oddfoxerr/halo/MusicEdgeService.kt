@@ -52,7 +52,7 @@ class MusicEdgeService : Service() {
     @Volatile private var enabledCapture = false
     @Volatile private var config = MusicConfiguration()
     private var visualizer: Visualizer? = null // worker-owned
-    private var view: ChainsawView? = null
+    private var view: EdgeVisualizerView? = null
     private var manager: WindowManager? = null
     private var lastCapture = 0L
     private var lastAudible = 0L
@@ -162,7 +162,7 @@ class MusicEdgeService : Service() {
             else startForeground(NOTICE_ID, notification())
             current = this; isRunning = true
             MusicRuntime.publish(true, "Connecting to device audio…")
-            val drawing = ChainsawView(applicationContext).apply { visibility = View.INVISIBLE }
+            val drawing = EdgeVisualizerView(applicationContext).apply { visibility = View.INVISIBLE }
             val wm = getSystemService(WindowManager::class.java)
             val params = WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
