@@ -50,7 +50,7 @@ data class MusicConfiguration(
             return MusicConfiguration(
                 mode = EdgeSpectrum.mode(p.getString("edge_mode", null)),
                 color = p.getInt("edge_color", 0xFF9A7BFF.toInt()), accent = p.getInt("edge_accent", 0xFF52E0CB.toInt()),
-                sensitivity = value("sensitivity", 1.5f, .5f, 5f), thickness = value("thickness", 1f, .6f, 1.6f),
+                sensitivity = value("sensitivity", 1.5f, .5f, 5f), thickness = value("thickness", 1f, .6f, 3f),
                 glow = value("glow", .75f, 0f, 1f), brightness = value("brightness", 1f, .2f, 1f),
                 speed = value("rate", 1f, .25f, 3f),
                 inset = value("edge_inset", 8f, 0f, 100f), corner = value("edge_corner", 32f, 0f, 100f),
