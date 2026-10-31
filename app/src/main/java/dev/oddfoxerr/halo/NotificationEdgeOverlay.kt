@@ -106,7 +106,7 @@ object NotificationEdgeOverlay {
     val isVisible: Boolean get() = border != null
 
     fun show(context: Context, color: Long, duration: Long, persistent: Boolean, store: ProfileStore) {
-        if (!Settings.canDrawOverlays(context) || MusicEdgeService.isRunning || ChainsawOverlayService.isRunning) return
+        if (!Settings.canDrawOverlays(context)) return
         val view = ensure(context) ?: return
         generation++
         val id = generation

@@ -73,7 +73,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshPill() {
-        if (ChainsawOverlayService.isRunning || MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { PillHaloOverlay.dismiss(); return }
+        if (MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { PillHaloOverlay.dismiss(); return }
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
@@ -179,6 +179,7 @@ class HaloNotificationListener : NotificationListenerService() {
             }
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
+                MusicEdgeService.yieldForNotification(profile.durationMs)
                 when (store.notificationModeFor(sbn.packageName)) {
                     NotificationEdgeMode.CHARACTER -> HaloOverlay.showNotification(this, profile, true)
                     NotificationEdgeMode.BORDER -> {
@@ -242,7 +243,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun mayShow(): Boolean {
-        if (MusicEdgeService.isRunning || ChainsawOverlayService.isRunning || !store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
+        if (!store.masterEnabled || store.isQuietNow() || !Settings.canDrawOverlays(this)) return false
         if (store.onlyScreenOn) {
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (!power.isInteractive) return false
@@ -255,6 +256,11 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshIndicator() {
+        if (MusicEdgeService.isRunning) {
+            if (!HaloOverlay.isAnimating()) HaloOverlay.dismiss()
+            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
+            return
+        }
         if (!mayShow()) {
             HaloOverlay.dismiss()
             NotificationEdgeOverlay.dismiss()
