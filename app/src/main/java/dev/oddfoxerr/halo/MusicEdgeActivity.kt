@@ -75,7 +75,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     var revision by remember { mutableIntStateOf(0) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var chooseSources by remember { mutableStateOf(false) }
-    val preview = remember { ChainsawView(context) }
+    val preview = remember { EdgeVisualizerView(context) }
     var rendererStatus by remember { mutableStateOf("Checking GPU renderer") }
     LaunchedEffect(settings, demo, resumed) {
         delay(300L)
