@@ -201,6 +201,16 @@ private fun HaloApp(
                         }
                         item {
                             SectionCard {
+                                Text("Video Ambilight", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Watch YouTube or videos with screen-edge colors matching the actual picture, like TV bias lighting.",
+                                    color = Muted)
+                                OutlinedButton(
+                                    onClick = { context.startActivity(Intent(context, VideoAmbientActivity::class.java)) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Configure Video Ambilight") }
+                            }
+                            SectionCard {
                                 Text("One engine for all effects", style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
                                 Text("Incoming notifications and music use the same GPU-designed edge patterns. No cartoon characters or separate border layer.",
