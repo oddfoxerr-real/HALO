@@ -4,7 +4,11 @@ import java.nio.ByteBuffer
 import kotlin.math.max
 
 /** Four color regions matching a TV bias-light strip: top, right, bottom, left. */
-data class VideoEdgeColors(val top: Int, val right: Int, val bottom: Int, val left: Int) {
+data class VideoEdgeColors(
+    val top: Int, val right: Int, val bottom: Int, val left: Int,
+    /** Clockwise from the upper left: 4 top, 4 right, 4 bottom, 4 left. */
+    val zones: List<Int> = emptyList()
+) {
     companion object {
         val BLACK = VideoEdgeColors(-0x1000000, -0x1000000, -0x1000000, -0x1000000)
     }
@@ -23,11 +27,12 @@ object VideoColorSampler {
         if (width < 16 || height < 16 || pixelStride < 4 || rowStride < width * pixelStride)
             return VideoEdgeColors.BLACK
         val offset = inset.coerceIn(.06f, .25f)
-        fun region(vertical: Boolean, nearStart: Boolean): Int {
+        fun region(vertical: Boolean, nearStart: Boolean, zone: Int = -1): Int {
             var red = 0L; var green = 0L; var blue = 0L; var count = 0L
             // Small inner strips avoid the overlay itself, UI controls and black letterbox bars.
             for (i in 0 until 13) for (j in 0 until 5) {
-                val across = .17f + .66f * (i + .5f) / 13f
+                val across = if (zone < 0) .17f + .66f * (i + .5f) / 13f
+                    else .10f + .80f * ((zone + (i + .5f) / 13f) / 4f)
                 val depth = offset + .085f * (j + .5f) / 5f
                 val x = if (vertical) across else if (nearStart) depth else 1f - depth
                 val y = if (vertical) if (nearStart) depth else 1f - depth else across
@@ -46,11 +51,17 @@ object VideoColorSampler {
             if (count == 0L) return -0x1000000
             return argb((red / count).toInt(), (green / count).toInt(), (blue / count).toInt())
         }
+        val segments = ArrayList<Int>(16)
+        for (zone in 0 until 4) segments.add(region(vertical = true, nearStart = true, zone = zone))
+        for (zone in 0 until 4) segments.add(region(vertical = false, nearStart = false, zone = zone))
+        for (zone in 3 downTo 0) segments.add(region(vertical = true, nearStart = false, zone = zone))
+        for (zone in 3 downTo 0) segments.add(region(vertical = false, nearStart = true, zone = zone))
         return VideoEdgeColors(
             top = region(vertical = true, nearStart = true),
             right = region(vertical = false, nearStart = false),
             bottom = region(vertical = true, nearStart = false),
-            left = region(vertical = false, nearStart = true)
+            left = region(vertical = false, nearStart = true),
+            zones = segments
         )
     }
 
@@ -69,13 +80,16 @@ object VideoColorSampler {
             return argb(c(red(a), red(b)),
                 c(green(a), green(b)), c(blue(a), blue(b)))
         }
+        val blendedZones = if (next.zones.size == 16 && old.zones.size == 16)
+            next.zones.indices.map { one(old.zones[it], next.zones[it]) }
+        else next.zones
         return VideoEdgeColors(
             one(old.top, next.top), one(old.right, next.right),
-            one(old.bottom, next.bottom), one(old.left, next.left))
+            one(old.bottom, next.bottom), one(old.left, next.left), blendedZones)
     }
 
     fun isDark(frame: VideoEdgeColors): Boolean {
-        val colors = intArrayOf(frame.top, frame.bottom, frame.left, frame.right)
-        return colors.all { max(red(it), max(green(it), blue(it))) < 9 }
+        val all = listOf(frame.top, frame.bottom, frame.left, frame.right) + frame.zones
+        return all.all { max(red(it), max(green(it), blue(it))) < 9 }
     }
 }
