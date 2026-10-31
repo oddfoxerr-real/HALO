@@ -1,5 +1,53 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.14.0 — GPU-native animation collection
+
+The old **15 animation catalogue** and its Canvas-based style implementations
+have been removed, not hidden behind glow. Both notifications and music continue
+using the **same edge visualizer**, now called `EdgeVisualizerView`.
+
+### Twelve original GPU animation systems
+
+| Design | Rendering |
+| --- | --- |
+| Liquid Glass | Organic refractive fluid with 3D turbulence |
+| Dot Matrix | Three independently pulsing rows of circular lights |
+| Fireflies | Floating particle fields with layered depth |
+| Meteor Shower | Rapid streaks with dissipating light |
+| Aurora | Noisy drifting spectral curtains |
+| Plasma | Folded turbulence and luminous energy |
+| Prism | Moving crystalline facets |
+| Ripple | Beat-triggered interference waves |
+| Spectrum | Frequency-responsive columns |
+| Comets | Twin travelling luminous cores |
+| Orbitals | Counter-rotating streams |
+| Nebula | Soft, translucent drifting gas |
+
+**Gradient correction:** colors are now blended approximately in *linear light*,
+using smooth periodic colors around the *arc length* of the rounded perimeter.
+The gradient wraps without an abrupt hue seam and avoids harsh white highlights.
+Different GPU geometry generates each effect; none uses the old 2D stroke pipeline.
+
+Dot Matrix and Fireflies have adjustable **dot size** and **dot density**.
+Existing color palettes, brightness, glow, spread, motion speed, four-edge
+calibration, per-app notification rules and notch settings remain.
+
+### Compatibility and testing
+
+- Minimum Android version is **13 (API 33)**. Earlier versions cannot install
+  this update because the legacy Canvas animation pipeline was deliberately
+  removed. Samsung Galaxy A56 on newer Android remains supported.
+- Previous saved animation names migrate to a new design; other settings and
+  notification rules remain unchanged.
+- Unsupported shaders produce an explicit diagnostic, not a hand-drawn fallback.
+- Compilation, JVM regression tests, Android lint and emulator RuntimeShader
+  compilation are checked before release. Physical Galaxy A56 visual quality,
+  capture and edge availability still require testing.
+- No proprietary Muviz Edge assets are included. MIT-licensed noise from Audio
+  Shader Studio remains attributed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+
+
 ## v0.13.1 — Licensed fluid motion and Android GPU testing
 
 Retains the merged v0.13.0 Music/Notification engine, notification rules and
