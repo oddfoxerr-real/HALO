@@ -1,6 +1,6 @@
 # HALO — Samsung Notification Character Studio
 
-**Development: v0.11.0 Animation Studio** — 15 original audio-reactive music designs and nine notification-border effects. This is a developer preview; Samsung One UI hardware validation is still pending. Earlier version sections below are historical.
+**Development: v0.11.0 Animation Studio** — 15 original audio-reactive music designs, nine notification-border effects and seven selectable character entrance motions. This is a developer preview; Samsung One UI hardware validation is still pending. Earlier version sections below are historical.
 
 ## v0.11.0 — Animation Studio
 
