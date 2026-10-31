@@ -179,12 +179,15 @@ class HaloNotificationListener : NotificationListenerService() {
             }
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
-                MusicEdgeService.yieldForNotification(profile.durationMs)
                 PillHaloOverlay.dismiss()
-                // Every app now triggers the same music-edge renderer, without audio permission.
-                // Installed app rules still control whether it triggers and the notification color.
-                NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                    store.notificationBorderPersistent, store)
+                // Reuse the live Music window when available. Otherwise create a temporary
+                // window containing the exact same visualizer; no audio permission required.
+                val handledInMusic = MusicEdgeService.showNotification(
+                    profile.color.toInt(), profile.durationMs)
+                if (!handledInMusic) {
+                    NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
+                        store.notificationBorderPersistent, store)
+                }
             } else refreshIndicatorIfIdle()
         }
     }
