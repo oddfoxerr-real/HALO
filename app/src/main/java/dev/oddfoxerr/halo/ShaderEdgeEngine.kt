@@ -25,7 +25,7 @@ internal class ShaderEdgeEngine {
 
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
-        thickness: Float, spread: Float, glow: Float, brightness: Float,
+        thickness: Float, spread: Float, glow: Float, brightness: Float, impact: Float,
         primary: Int, secondary: Int): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
@@ -40,6 +40,7 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("spread",spread)
             runtime.setFloatUniform("glow",glow)
             runtime.setFloatUniform("brightness",brightness)
+            runtime.setFloatUniform("impact",impact.coerceIn(.5f,3f))
             runtime.setIntUniform("design",mode.ordinal)
             java.util.Arrays.fill(frequencies,0f)
             for (i in bands.indices) {
@@ -77,6 +78,7 @@ internal class ShaderEdgeEngine {
             uniform float spread;
             uniform float glow;
             uniform float brightness;
+            uniform float impact;
             uniform float3 first;
             uniform float3 second;
             uniform int design;
@@ -222,9 +224,10 @@ internal class ShaderEdgeEngine {
                 float lengthPx=1.0;
                 float u=edgeParameter(px,lengthPx);
                 float energy=clamp(harmonic(u),0.0,1.0);
-                float kick=clamp(bass,0.0,1.0);
+                float kick=clamp(bass*impact,0.0,1.0);
+                energy=clamp(energy*(.67+.25*impact)+kick*.28,0.0,1.0);
                 float time=seconds*.85 + phase*.25;
-                float volume=(.70+.52*energy+.36*kick)*max(spread,.25);
+                float volume=(.58+.76*energy+.72*kick)*max(spread,.25);
                 float core=0.0, aura=0.0, sparkle=0.0;
                 float travel=time*.45;
                 float local=0.0;
@@ -328,7 +331,7 @@ internal class ShaderEdgeEngine {
                 float3 rgb=mix(base,float3(1.0),whiteSpark);
                 // Glow is an integral part of the material instead of a second Canvas layer.
                 float a=clamp((core*.77 + aura*(.10+.35*glow)+whiteSpark*.28)
-                    *brightness*(.82+.18*energy),0.0,.96);
+                    *brightness*(.60+.65*energy+.32*kick),0.0,.96);
                 a*=1.0-smoothstep(40.0*max(spread,.3),92.0*max(spread,.3),abs(d));
                 // RuntimeShader colors are premultiplied, preserving correct edge blending.
                 return half4(half3(rgb*a),half(a));
