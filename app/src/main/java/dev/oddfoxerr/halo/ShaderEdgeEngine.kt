@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlin.math.max
 
@@ -19,6 +20,7 @@ internal class ShaderEdgeEngine {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
     private var shader: RuntimeShader? = null
     private var failed = false
+    val hasFailed: Boolean get() = failed
 
     /** Compile on the Android framework in instrumentation tests, not JVM stubs. */
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
@@ -74,8 +76,9 @@ internal class ShaderEdgeEngine {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
             return true
-        } catch (_: RuntimeException) {
-            // Shader compile errors or incompatible GPU drivers use the existing native fallback.
+        } catch (failure: RuntimeException) {
+            Log.e("HALO/AGSL", "GPU visualizer runtime error", failure)
+            // Never silently show obsolete Canvas animations when shader compilation fails.
             failed = true
             paint.shader = null
             return false
@@ -269,7 +272,7 @@ internal class ShaderEdgeEngine {
                         bright=max(bright,gaussian(dotDist,radiusPx*.50)*lit);
                     }
                 } else if (design == 2) { // Fireflies: layered drifting particle field
-                    float cells=76.0;
+                    float cells=round(76.0*dotDensity);
                     float z=u*cells-time*.41;
                     float id=floor(z);
                     float offset=(fract(z)-.5)*perimeter/cells;
@@ -278,9 +281,9 @@ internal class ShaderEdgeEngine {
                     float y=d-floatY;
                     float rad=(2.5+4.0*hash(float2(id,6.5)))*dotSize*thickness;
                     float particle=gaussian(length(float2(offset,y)),rad);
-                    float z2=u*47.0+time*.26;
+                    float z2=u*round(47.0*dotDensity)+time*.26;
                     float id2=floor(z2);
-                    float x2=(fract(z2)-.5)*perimeter/47.0;
+                    float x2=(fract(z2)-.5)*perimeter/max(1.0,round(47.0*dotDensity));
                     float y2=d-(hash(float2(id2,17.0))-.5)*33.0;
                     amount=particle*(.45+.55*activity)+
                         gaussian(length(float2(x2,y2)),3.2*dotSize*thickness)*.7*activity;
@@ -326,7 +329,7 @@ internal class ShaderEdgeEngine {
                     float bandShape=energy*23.0*spread*thickness+3.0*thickness;
                     float x=(cell-.5)*perimeter/columns;
                     float rectangle=step(abs(x),perimeter/(columns*2.0)*.72);
-                    float bar=smoothstep(bandShape+2.0,bandShape-1.0,abs(d));
+                    float bar=1.0-smoothstep(bandShape-1.0,bandShape+2.0,abs(d));
                     amount=bar*rectangle*(.28+.72*energy);
                     bright=amount*.38;
                 } else if (design == 9) { // Comets: two bright heads and decay trails
