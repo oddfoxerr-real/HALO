@@ -86,7 +86,7 @@ Ideas researched from [aodNotify on Google Play](https://play.google.com/store/a
 
 ### Verification still needed
 
-- Android lint on SDK 36 (CI compile and unit tests already passed).
+- Android unit tests, lint, APK assembly and signing passed for the Music studio continuation in [this CI run](https://github.com/oddfoxerr-real/HALO/actions/runs/41236195628). The remaining checks require a device.
 - Test the overlay's touch pass-through and screen cutout handling on the Samsung A56.
 - Confirm notification arrival, dismissal, background execution and battery saver behavior on One UI.
 - Check performance and notification-rank handling across Samsung notification channels.
