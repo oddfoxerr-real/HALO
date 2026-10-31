@@ -11,16 +11,26 @@ import kotlin.math.*
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
     var thickness = 1f
-    var glow = .65f
+    var glow = .75f
+    var brightness = 1f
     var mode = EdgeMode.WAVE
     var edgeColor = 0xFF9A7BFF.toInt()
     var accentColor = 0xFF52E0CB.toInt()
     var edgeInset = 8f
     var cornerRadius = 32f
+    var leftInset = 4f
+    var rightInset = 4f
+    var topInset = 4f
+    var bottomInset = 4f
+    var drawTop = true
+    var drawBottom = true
+    var drawLeft = true
+    var drawRight = true
     private var speed = 1f
     private val density = resources.displayMetrics.density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val perimeter = Path()
+    private val activeSides = Path()
     private val wave = Path()
     private val segment = Path()
     private val tooth = Path()
@@ -47,8 +57,12 @@ class ChainsawView(context: Context) : View(context) {
 
     fun configure(settings: MusicConfiguration) {
         mode = settings.mode; edgeColor = settings.color; accentColor = settings.accent
-        thickness = settings.thickness; glow = settings.glow; speed = settings.speed
+        thickness = settings.thickness; glow = settings.glow; brightness = settings.brightness; speed = settings.speed
         edgeInset = settings.inset; cornerRadius = settings.corner
+        leftInset = settings.leftInset; rightInset = settings.rightInset
+        topInset = settings.topInset; bottomInset = settings.bottomInset
+        drawTop = settings.drawTop; drawBottom = settings.drawBottom
+        drawLeft = settings.drawLeft; drawRight = settings.drawRight
         invalidate()
     }
     fun clearSignal() { motion.clear(); stopFrames(); invalidate() }
@@ -85,32 +99,44 @@ class ChainsawView(context: Context) : View(context) {
         lastFrame = now
         val moving = motion.advance(now, dt, speed)
         val unit = density * thickness
-        val key = "$width:$height:$edgeInset:$cornerRadius:$thickness"
+        val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (key != geometryKey) {
             geometryKey = key
-            val pad = max(edgeInset * density, 4f * unit)
-            bounds.set(pad, pad, width - pad, height - pad)
+            // Four independent edges, not one uniformly shrunken rectangle.
+            bounds.set(leftInset * density, topInset * density,
+                width - rightInset * density, height - bottomInset * density)
             if (bounds.width() <= 0 || bounds.height() <= 0) return
             perimeter.reset()
             val radius = min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f)
             perimeter.addRoundRect(bounds, radius, radius, Path.Direction.CW)
             measure.setPath(perimeter, true)
+            activeSides.reset()
+            // Keep enough space for the longest inward spectrum bar and its glow.
+            val reach = (cornerRadius + 34f * thickness) * density
+            if (drawTop) activeSides.addRect(0f, 0f, width.toFloat(), bounds.top + reach, Path.Direction.CW)
+            if (drawBottom) activeSides.addRect(0f, bounds.bottom - reach, width.toFloat(), height.toFloat(), Path.Direction.CW)
+            if (drawLeft) activeSides.addRect(0f, 0f, bounds.left + reach, height.toFloat(), Path.Direction.CW)
+            if (drawRight) activeSides.addRect(bounds.right - reach, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
         }
         val colors = "$width:$height:$edgeColor:$accentColor"
         if (colors != shaderKey) {
             shaderKey = colors
             gradient = SweepGradient(width / 2f, height / 2f, intArrayOf(edgeColor, accentColor, edgeColor, accentColor, edgeColor), null)
         }
-        if (measure.length <= 0f) return
+        if (measure.length <= 0f || (!drawTop && !drawBottom && !drawLeft && !drawRight)) return
+        // Crop the shared perimeter renderer to the user's selected physical edges.
+        canvas.save()
+        canvas.clipPath(activeSides)
         when (mode) {
             EdgeMode.WAVE -> silk(canvas, unit)
             EdgeMode.BARS -> spectrum(canvas, unit)
             EdgeMode.TRAIL -> orbit(canvas, unit)
             EdgeMode.PULSE -> {
-                stroke(canvas, perimeter, (1.5f + motion.pulse * 5f) * unit, (38 + motion.pulse * 215).toInt(), true)
+                stroke(canvas, perimeter, (1.7f + motion.pulse * 5f) * unit, (165 + motion.pulse * 90).toInt(), true)
             }
             EdgeMode.CHAIN -> chainsaw(canvas, unit)
         }
+        canvas.restore()
         paint.shader = null; paint.alpha = 255
         if (moving) requestFrame()
     }
@@ -138,22 +164,22 @@ class ChainsawView(context: Context) : View(context) {
                 (coordinates[i * 2 + 1] + coordinates[next * 2 + 1]) / 2)
         }
         wave.close()
-        stroke(canvas, wave, 2.2f * unit, (55 + motion.bands.maxOrNull()!! * 200).toInt(), true)
+        stroke(canvas, wave, 2.7f * unit, (170 + motion.bands.maxOrNull()!! * 85).toInt(), true)
     }
     private fun spectrum(canvas: Canvas, unit: Float) {
-        stroke(canvas, perimeter, unit, 26)
+        stroke(canvas, perimeter, 1.8f * unit, 155)
         paint.style = Paint.Style.STROKE; paint.shader = gradient; paint.strokeWidth = 2.6f * unit
         for (i in 0 until 120) {
             val fraction = i / 120f
             measure.getPosTan(measure.length * fraction, position, tangent)
             val strength = amplitude(fraction)
             val length = (1.5f + strength * 25f) * unit
-            paint.alpha = (35 + strength * 220).toInt()
+            paint.alpha = ((130 + strength * 125) * brightness).toInt().coerceIn(0, 255)
             canvas.drawLine(position[0], position[1], position[0] - tangent[1] * length, position[1] + tangent[0] * length, paint)
         }
     }
     private fun orbit(canvas: Canvas, unit: Float) {
-        stroke(canvas, perimeter, unit, 25)
+        stroke(canvas, perimeter, 1.7f * unit, 145)
         val length = measure.length
         for (head in 0..1) for (part in 0 until 20) {
             val start = ((motion.phase + head * .5f - part * .008f + 1f) % 1f) * length
@@ -162,12 +188,12 @@ class ChainsawView(context: Context) : View(context) {
             measure.getSegment(start, min(end, length), segment, true)
             if (end > length) measure.getSegment(0f, end - length, segment, true)
             stroke(canvas, segment, (2.2f + motion.pulse * 3) * unit,
-                ((1f - part / 20f) * (55 + motion.pulse * 200)).toInt())
+                ((1f - part / 20f) * (175 + motion.pulse * 80)).toInt())
         }
     }
     private fun chainsaw(canvas: Canvas, unit: Float) {
         val motor = motion.motor
-        stroke(canvas, perimeter, 5f * unit, 70, true)
+        stroke(canvas, perimeter, 5f * unit, 185, true)
         val count = (measure.length / (19f * unit)).toInt().coerceIn(6, 260)
         for (i in 0 until count) {
             measure.getPosTan((i * measure.length / count + motor.travel * density) % measure.length, position, tangent)
@@ -195,10 +221,12 @@ class ChainsawView(context: Context) : View(context) {
         if (halo && glow > 0f) {
             for (layer in 3 downTo 1) {
                 paint.strokeWidth = width + layer * density * 3f
-                paint.alpha = (alpha * glow * .18f / layer).toInt().coerceIn(0, 255)
+                paint.alpha = (alpha * glow * brightness * .40f / layer).toInt().coerceIn(0, 255)
                 canvas.drawPath(path, paint)
             }
         }
-        paint.strokeWidth = width; paint.alpha = alpha.coerceIn(0, 255); canvas.drawPath(path, paint)
+        paint.strokeWidth = width
+        paint.alpha = (alpha * brightness).toInt().coerceIn(0, 255)
+        canvas.drawPath(path, paint)
     }
 }
