@@ -16,6 +16,16 @@ class ShaderEdgeCompileTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val shader = ShaderEdgeEngine().compileForTest()
             assertNotNull(shader)
+            val video = ShaderEdgeEngine().compileVideoForTest()
+            video.setFloatUniform("frame", 8f, 28f, 1072f, 2372f)
+            video.setFloatUniform("width", 35f)
+            video.setFloatUniform("softness", .8f)
+            video.setFloatUniform("brightness", 1f)
+            video.setFloatUniform("topColor", 1f, 0f, 0f)
+            video.setFloatUniform("rightColor", 0f, 1f, 0f)
+            video.setFloatUniform("bottomColor", 0f, 0f, 1f)
+            video.setFloatUniform("leftColor", 1f, 1f, 0f)
+            assertNotNull(video)
         }
     }
 }
