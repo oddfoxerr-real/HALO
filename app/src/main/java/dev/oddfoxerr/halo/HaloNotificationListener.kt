@@ -180,21 +180,11 @@ class HaloNotificationListener : NotificationListenerService() {
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
                 MusicEdgeService.yieldForNotification(profile.durationMs)
-                when (store.notificationModeFor(sbn.packageName)) {
-                    NotificationEdgeMode.CHARACTER -> HaloOverlay.showNotification(this, profile, true)
-                    NotificationEdgeMode.BORDER -> {
-                        HaloOverlay.dismiss()
-                        PillHaloOverlay.dismiss()
-                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                            store.notificationBorderPersistent, store)
-                    }
-                    NotificationEdgeMode.BOTH -> {
-                        PillHaloOverlay.dismiss()
-                        HaloOverlay.showNotification(this, profile, true)
-                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                            store.notificationBorderPersistent, store)
-                    }
-                }
+                PillHaloOverlay.dismiss()
+                // Every notification uses the Music Studio effect. Characters and the
+                // legacy notification-only border renderer are no longer dispatched.
+                NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
+                    store.notificationBorderPersistent && profile.persistent, store)
             } else refreshIndicatorIfIdle()
         }
     }
@@ -252,35 +242,31 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshIndicatorIfIdle() {
-        if (!HaloOverlay.isAnimating()) refreshIndicator()
+        if (!NotificationEdgeOverlay.isAnimating) refreshIndicator()
     }
 
     private fun refreshIndicator() {
-        if (MusicEdgeService.isRunning) {
-            if (!HaloOverlay.isAnimating()) HaloOverlay.dismiss()
-            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
-            return
-        }
+        // The music foreground service temporarily yields while a notification
+        // arrives. Retained notifications never start a competing audio capture.
+        HaloOverlay.dismiss()
         if (!mayShow()) {
-            HaloOverlay.dismiss()
             NotificationEdgeOverlay.dismiss()
             return
         }
-        val mode = tracker.newestIndicatorPackages().firstOrNull()?.let(store::notificationModeFor)
-            ?: store.notificationEdgeMode
-        if (mode == NotificationEdgeMode.BORDER) HaloOverlay.dismiss()
-        if (mode == NotificationEdgeMode.CHARACTER || !store.notificationBorderPersistent) {
-            if (mode == NotificationEdgeMode.CHARACTER) NotificationEdgeOverlay.dismiss()
-        } else {
-            val borderProfile = tracker.newestIndicatorPackages().asSequence()
-                .map(store::readForPackage).firstOrNull { it.enabled }
-            if (borderProfile == null) NotificationEdgeOverlay.dismiss()
-            else NotificationEdgeOverlay.showStatic(this, borderProfile.color, store)
+        if (MusicEdgeService.isRunning) {
+            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
+            return
         }
-        if (mode == NotificationEdgeMode.BORDER) return
-        val profile = tracker.newestIndicatorPackages().asSequence()
-            .map(store::readForPackage).firstOrNull { it.enabled && it.persistent }
-        if (profile == null) HaloOverlay.dismiss() else HaloOverlay.showIndicator(this, profile)
+        val retained = if (store.notificationBorderPersistent) {
+            tracker.newestIndicatorPackages().asSequence()
+                .map(store::readForPackage)
+                .firstOrNull { it.enabled && it.persistent }
+        } else null
+        if (retained == null) {
+            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
+        } else if (!NotificationEdgeOverlay.isAnimating) {
+            NotificationEdgeOverlay.showStatic(this, retained.color, store)
+        }
     }
 
     private fun scheduleQuietCheck() {
