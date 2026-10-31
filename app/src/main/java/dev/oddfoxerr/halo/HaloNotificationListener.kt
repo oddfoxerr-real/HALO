@@ -73,7 +73,7 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshPill() {
-        if (MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { PillHaloOverlay.dismiss(); return }
+        if (MusicEdgeService.isRunning || NotificationEdgeOverlay.isVisible) { Pillreturn }
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val unlocked = power.isInteractive && !keyguard.isKeyguardLocked && Settings.canDrawOverlays(this)
@@ -106,7 +106,7 @@ class HaloNotificationListener : NotificationListenerService() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+                Intent.ACTION_SCREEN_OFF -> { PillNotificationEdgeOverlay.dismiss() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
                     refreshIndicator()
                     refreshPill()
@@ -206,8 +206,7 @@ class HaloNotificationListener : NotificationListenerService() {
             stopMediaObservation()
             main.removeCallbacks(quietCheck)
             NotificationActivityState.disconnected()
-            HaloOverlay.dismiss()
-            NotificationEdgeOverlay.dismiss()
+                NotificationEdgeOverlay.dismiss()
         }
         super.onListenerDisconnected()
     }
@@ -217,7 +216,6 @@ class HaloNotificationListener : NotificationListenerService() {
         instance = null
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) { }
-        HaloOverlay.dismiss()
         NotificationEdgeOverlay.dismiss()
         super.onDestroy()
     }
@@ -248,7 +246,6 @@ class HaloNotificationListener : NotificationListenerService() {
     private fun refreshIndicator() {
         // The music foreground service temporarily yields while a notification
         // arrives. Retained notifications never start a competing audio capture.
-        HaloOverlay.dismiss()
         if (!mayShow()) {
             NotificationEdgeOverlay.dismiss()
             return
