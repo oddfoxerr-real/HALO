@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings") }
+private enum class HaloTab(val label: String) { HOME("Home"), MUSIC("Visuals"), APPS("Apps"), SETTINGS("Settings") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,21 +139,8 @@ private fun HaloApp(
 ) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
-    var selected by remember { mutableStateOf(CharacterApp.DISCORD) }
-    var currentProfile by remember { mutableStateOf(store.read(selected)) }
     var enabled by remember { mutableStateOf(store.masterEnabled) }
-
-    fun edit(profile: CharacterProfile) {
-        currentProfile = profile
-        store.write(profile)
-    }
-    fun preview(app: CharacterApp) {
-        context.startActivity(Intent(context, PreviewActivity::class.java).putExtra("app", app.name))
-    }
-    LaunchedEffect(selected, revision) {
-        currentProfile = store.read(selected)
-        enabled = store.masterEnabled
-    }
+    LaunchedEffect(revision) { enabled = store.masterEnabled }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -162,10 +149,10 @@ private fun HaloApp(
                 title = {
                     Column {
                         Text("HALO", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineMedium)
-                        Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        Text("EDGE VISUALIZER", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.10", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.13", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -174,7 +161,6 @@ private fun HaloApp(
                 HaloTab.entries.forEach { item ->
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
-                        HaloTab.STUDIO -> Icons.Default.AutoAwesome
                         HaloTab.MUSIC -> Icons.Default.MusicNote
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
@@ -223,20 +209,14 @@ private fun HaloApp(
                     }
                     item {
                         SectionCard {
-                            Text("Live character preview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("See how each animation looks on your real display.", color = Muted)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(CharacterApp.entries) { app -> FilterChip(
-                                    selected = selected == app,
-                                    onClick = { selected = app }, label = { Text(app.displayName) }
-                                ) }
-                            }
-                            MiniPreview(currentProfile)
-                            Button(onClick = { preview(selected) }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Visibility, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Preview on phone")
-                            }
+                            Text("Notification visualizer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Notifications run the same GPU-driven effects as music, with the selected animation and per-app colors.", color = Muted)
+                            Button(onClick = {
+                                if (overlayEnabled) NotificationEdgeOverlay.show(
+                                    context, MusicConfiguration.read(context).color.toLong() and 0xFFFFFFFFL,
+                                    4200L, false, store
+                                ) else requestOverlay()
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Preview notification edge") }
                         }
                     }
                     item {
@@ -262,33 +242,12 @@ private fun HaloApp(
                         }
                     }
                 }
-                HaloTab.STUDIO -> {
-                    item {
-                        Text("Character studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("An original cartoon effect for every app. These profiles are applied to real notifications.", color = Muted)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(CharacterApp.entries) { app -> FilterChip(
-                                selected = selected == app, onClick = { selected = app }, label = { Text(app.displayName) }
-                            ) }
-                        }
-                    }
-                    item { MiniPreview(currentProfile) }
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { preview(selected) }, modifier = Modifier.weight(1f)) { Text("Full phone preview") }
-                            OutlinedButton(onClick = {
-                                if (overlayEnabled) HaloOverlay.showNotification(context, currentProfile, false) else requestOverlay()
-                            }, modifier = Modifier.weight(1f)) { Text("Test overlay") }
-                        }
-                    }
-                    item { SectionCard { ProfileEditor(currentProfile, ::edit) } }
-                }
                 HaloTab.APPS -> {
                     item {
                         Text("App rules", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Choose installed apps, assign a character, and decide which ones trigger HALO.", color = Muted)
+                        Text("Decide which apps trigger the shared edge visualizer and customize their colors.", color = Muted)
                     }
-                    item { AppRulesEditor(store, onCharacterEdit = { app -> selected = app; tab = HaloTab.STUDIO }) }
+                    item { AppRulesEditor(store) }
                 }
                 HaloTab.SETTINGS -> {
                     item {
@@ -300,79 +259,26 @@ private fun HaloApp(
                     item { SectionCard { QuietHoursEditor(store) } }
                     item {
                         SectionCard {
-                            Text("Notification edge lighting", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Light all four sides of the display, keep the app character, or combine both. Each installed app can override this setting.", color = Muted)
-                            var mode by remember { mutableStateOf(store.notificationEdgeMode) }
-                            Text("Default notification style", style = MaterialTheme.typography.labelLarge)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(NotificationEdgeMode.entries) { option ->
-                                    FilterChip(
-                                        selected = mode == option,
-                                        onClick = {
-                                            mode = option
-                                            store.notificationEdgeMode = option
-                                            HaloOverlay.dismiss()
-                                            NotificationEdgeOverlay.dismiss()
-                                            HaloNotificationListener.requestPillRefresh()
-                                        },
-                                        label = { Text(option.title) }
-                                    )
-                                }
-                            }
-                            Text("Border animation", style = MaterialTheme.typography.labelLarge)
-                            var borderStyle by remember { mutableStateOf(store.notificationEdgeStyle) }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(NotificationEdgeStyle.entries) { option ->
-                                    FilterChip(
-                                        selected = borderStyle == option,
-                                        onClick = { borderStyle = option; store.notificationEdgeStyle = option },
-                                        label = { Text(option.title) }
-                                    )
-                                }
-                            }
+                            Text("Notification visualizer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Notifications use the selected Music Studio animation and its edge placement. App rules can override the highlight color.", color = Muted)
+                            OutlinedButton(onClick = { tab = HaloTab.MUSIC },
+                                modifier = Modifier.fillMaxWidth()) { Text("Choose animation in Visuals") }
                             var persistent by remember { mutableStateOf(store.notificationBorderPersistent) }
-                            SwitchRow("Keep border until dismissal",
-                                "Otherwise the effect fades after the app's configured duration.",
-                                persistent) { persistent = it; store.notificationBorderPersistent = it }
-                            var borderThickness by remember { mutableStateOf(store.notificationBorderThickness) }
-                            SettingSlider("Border thickness", "%.1f dp".format(borderThickness),
-                                borderThickness, 1f..8f) {
-                                borderThickness = it; store.notificationBorderThickness = it
+                            SwitchRow("Keep animation while unread",
+                                "Retain a quieter animated edge until the notification is dismissed.",
+                                persistent) {
+                                persistent = it; store.notificationBorderPersistent = it
                             }
-                            var borderGlow by remember { mutableStateOf(store.notificationBorderGlow) }
-                            SettingSlider("Border glow", "${(borderGlow * 100).toInt()}%",
+                            var borderGlow by remember { mutableFloatStateOf(store.notificationBorderGlow) }
+                            SettingSlider("Notification glow", "${(borderGlow * 100).toInt()}%",
                                 borderGlow, 0f..1f) {
                                 borderGlow = it; store.notificationBorderGlow = it
                             }
-                            Text("Border size and position", style = MaterialTheme.typography.titleSmall)
-                            Text("Adjust each side separately to change width, height and alignment. Negative values push outward, but Android may clip protected system UI.", color = Muted,
-                                style = MaterialTheme.typography.bodySmall)
-                            var borderTop by remember { mutableFloatStateOf(store.notificationBorderTop) }
-                            var borderBottom by remember { mutableFloatStateOf(store.notificationBorderBottom) }
-                            var borderLeft by remember { mutableFloatStateOf(store.notificationBorderLeft) }
-                            var borderRight by remember { mutableFloatStateOf(store.notificationBorderRight) }
-                            var borderCorner by remember { mutableFloatStateOf(store.notificationBorderCorner) }
-                            SettingSlider("Top position", "${borderTop.toInt()} dp", borderTop, -24f..120f) {
-                                borderTop = it; store.notificationBorderTop = it
+                            var borderThickness by remember { mutableFloatStateOf(store.notificationBorderThickness) }
+                            SettingSlider("Notification intensity", "%.1f×".format(borderThickness),
+                                borderThickness, 1f..8f) {
+                                borderThickness = it; store.notificationBorderThickness = it
                             }
-                            SettingSlider("Bottom position", "${borderBottom.toInt()} dp", borderBottom, -24f..120f) {
-                                borderBottom = it; store.notificationBorderBottom = it
-                            }
-                            SettingSlider("Left position", "${borderLeft.toInt()} dp", borderLeft, -24f..120f) {
-                                borderLeft = it; store.notificationBorderLeft = it
-                            }
-                            SettingSlider("Right position", "${borderRight.toInt()} dp", borderRight, -24f..120f) {
-                                borderRight = it; store.notificationBorderRight = it
-                            }
-                            SettingSlider("Corner radius", "${borderCorner.toInt()} dp", borderCorner, 0f..100f) {
-                                borderCorner = it; store.notificationBorderCorner = it
-                            }
-                            OutlinedButton(onClick = {
-                                borderTop = 6f; borderBottom = 6f; borderLeft = 6f; borderRight = 6f; borderCorner = 35f
-                                store.notificationBorderTop = 6f; store.notificationBorderBottom = 6f
-                                store.notificationBorderLeft = 6f; store.notificationBorderRight = 6f
-                                store.notificationBorderCorner = 35f
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Reset border calibration") }
                             Text("Camera cutout / notch effect", style = MaterialTheme.typography.titleSmall)
                             var notchSelection by remember { mutableStateOf(store.notchSettings().mode) }
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -388,9 +294,10 @@ private fun HaloApp(
                             Text("Uses the same camera halo as Music. Detailed camera width, height, offset and gap controls are under Music → Tune.",
                                 color = Muted, style = MaterialTheme.typography.bodySmall)
                             Button(onClick = {
-                                if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
+                                if (overlayEnabled) NotificationEdgeOverlay.show(context,
+                                    MusicConfiguration.read(context).color.toLong() and 0xFFFFFFFFL,
                                     4200L, false, store) else requestOverlay()
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Test full-screen border") }
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Test notification animation") }
                             Text("The border follows your screen, not the protected bounds of Samsung's actual heads-up notification cards.", color = Muted,
                                 style = MaterialTheme.typography.bodySmall)
                         }
