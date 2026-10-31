@@ -123,9 +123,9 @@ class ChainsawView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
+    fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float, onset: Float = 0f) {
         speed = rate
-        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
+        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity, onset)
         requestFrame()
     }
 
