@@ -1,6 +1,17 @@
 # HALO — Samsung Notification Character Studio
 
-**Development: v0.10.0 Music studio** — see [HANDOFF.md](HANDOFF.md) for the current branch, implemented changes and device checks. The v0.9 release details below are historical.
+**Development: v0.11.0 Animation Studio** — 15 original audio-reactive music designs, nine notification-border effects and seven selectable character entrance motions. This is a developer preview; Samsung One UI hardware validation is still pending. Earlier version sections below are historical.
+
+## v0.11.0 — Animation Studio
+
+- **Music (15):** Silk, Spectrum, Orbit, Pulse, Chainsaw, Aurora, Comet, Twin Streams, Sparks, Pixel Rush, Neon Circuit, Rainfall, Helix, Bloom, and Prism.
+- **Notification borders (9):** Pulse, Outline Sweep, Soft Glow, Comet Trail, Chasing Dashes, Electric Sparks, Ripple, Aurora, and Beacon.
+- **Character motions (7):** Original, Swoop, Orbit, Spring, Glitch, Float, and Blast. Stored per-character profile and adjustable in the live character preview.
+- **Refined existing effects:** spectrum smoothing, Silk motion, Chainsaw energy, and continuously animated retained notification borders.
+- **Performance:** bounded Canvas draw counts, cached geometry and shaders where applicable, no bitmaps or WebViews, and the existing frame-pacing/audio-signal lifecycle.
+- **Customization:** existing palettes, independent four-side offsets and visibility, brightness, glow, thickness and playback rules remain available. Every music effect can be previewed using the built-in demo signal.
+- **Limitations:** Audio visualization varies by player and Android permissions. Overlays cannot guarantee drawing over Samsung-protected status icons, native AOD, or lock screen. Device testing is required before a stable release.
+
 
 
 **v0.9.0 clean-room Muviz feature study · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**

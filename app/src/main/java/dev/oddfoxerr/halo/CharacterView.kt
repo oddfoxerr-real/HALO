@@ -168,6 +168,37 @@ class CharacterView(context: Context, private val overlay: Boolean = false) : Vi
         val cy = y + bounce + fall * r * .6f
         canvas.save()
         canvas.translate(cx, cy)
+        // Motion is independent of artwork; legacy character expressions still play underneath.
+        val arrival = 1f - ease(.12f, .43f, t)
+        when (profile.motion) {
+            CharacterMotion.ORIGINAL -> Unit
+            CharacterMotion.SWOOP -> {
+                canvas.translate(r * .70f * arrival, -r * 1.15f * arrival)
+                canvas.rotate(55f * arrival)
+            }
+            CharacterMotion.ORBIT -> {
+                val theta = t * 2f * PI.toFloat()
+                canvas.translate(cos(theta) * r * .55f * e, sin(theta) * r * .55f * e)
+                canvas.rotate(t * 230f * e)
+            }
+            CharacterMotion.SPRING -> {
+                val rebound = sin(t * 37f) * exp(-t * 6f) * .38f
+                canvas.scale(1f + rebound, 1f - rebound * .55f)
+            }
+            CharacterMotion.GLITCH -> {
+                val frame = (t * 34f).toInt()
+                val jitter = if (frame % 5 == 0) 1f else if (frame % 3 == 0) -.65f else 0f
+                canvas.translate(jitter * r * .28f * e, -jitter * r * .16f * e)
+            }
+            CharacterMotion.FLOAT -> {
+                canvas.translate(0f, sin(t * 13f) * r * .24f * e)
+                canvas.rotate(sin(t * 7f) * 9f * e)
+            }
+            CharacterMotion.BLAST -> {
+                canvas.translate(r * 1.5f * arrival, 0f)
+                canvas.scale(1f + arrival * .75f, 1f - arrival * .35f)
+            }
+        }
         val shrink = (.18f + .82f * e) * (1f - fall * .63f)
         val squashX = shrink * (1f + .08f * sin(t * 35f))
         val squashY = shrink * (1f - .08f * sin(t * 35f))

@@ -27,6 +27,7 @@ class NotificationBorderView(context: Context) : View(context) {
     private val border = Path()
     private val segment = Path()
     private val measure = PathMeasure()
+    private val extraEffects = NotificationExtraEffects()
     private val rect = RectF()
     var tint: Int = Color.rgb(170, 91, 255)
     var thicknessDp: Float = 3f
@@ -90,9 +91,11 @@ class NotificationBorderView(context: Context) : View(context) {
         val t = if (repeating) (elapsed % duration).toFloat() / duration
             else if (animated) (elapsed.toFloat() / duration).coerceIn(0f, 1f) else 1f
         val strength = if (!animated) 0f else when (style) {
-            NotificationEdgeStyle.PULSE -> .60f + .40f * sin(t * 8f * Math.PI.toFloat()).let { kotlin.math.abs(it) }
-            NotificationEdgeStyle.TRACE -> .8f
-            NotificationEdgeStyle.GLOW -> (1f - t * .70f)
+            NotificationEdgeStyle.PULSE -> .70f + .30f * sin(t * 8f * Math.PI.toFloat()).let { kotlin.math.abs(it) }
+            NotificationEdgeStyle.TRACE -> .85f
+            NotificationEdgeStyle.GLOW -> if (repeating) .65f + .35f * kotlin.math.abs(sin(t * Math.PI.toFloat() * 2f)) else 1f - t * .55f
+            NotificationEdgeStyle.COMET, NotificationEdgeStyle.DASH, NotificationEdgeStyle.SPARK,
+            NotificationEdgeStyle.RIPPLE, NotificationEdgeStyle.AURORA, NotificationEdgeStyle.BEACON -> .68f
         }
         paint.color = tint
         paint.alpha = ((125f + 100f * glow) * strength).toInt().coerceIn(0, 255)
@@ -103,8 +106,8 @@ class NotificationBorderView(context: Context) : View(context) {
         paint.strokeWidth = thicknessDp * density
         canvas.drawPath(border, paint)
 
+        measure.setPath(border, true)
         if (animated && style == NotificationEdgeStyle.TRACE) {
-            measure.setPath(border, true)
             val length = measure.length
             val start = (length * t * 1.4f) % length
             val end = start + length * .19f
@@ -112,9 +115,12 @@ class NotificationBorderView(context: Context) : View(context) {
             measure.getSegment(start, end.coerceAtMost(length), segment, true)
             if (end > length) measure.getSegment(0f, end - length, segment, true)
             paint.color = Color.WHITE
-            paint.alpha = ((1f - t) * 210f).toInt().coerceIn(0, 255)
+            paint.alpha = (if (repeating) 210f else (1f - t) * 210f).toInt().coerceIn(0, 255)
             paint.strokeWidth = (thicknessDp + 1.5f) * density
             canvas.drawPath(segment, paint)
+        }
+        if (animated && style != NotificationEdgeStyle.PULSE && style != NotificationEdgeStyle.TRACE && style != NotificationEdgeStyle.GLOW) {
+            extraEffects.draw(style, canvas, measure, elapsed, density, tint, thicknessDp, glow)
         }
         if (animated && (repeating || elapsed < duration) && isAttachedToWindow) postInvalidateDelayed(33L)
         else if (!repeating && animated) animated = false

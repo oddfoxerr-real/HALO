@@ -499,6 +499,14 @@ private fun ProfileEditor(profile: CharacterProfile, onUpdate: (CharacterProfile
     var hex by remember(profile.app) { mutableStateOf("#%06X".format(profile.color and 0xFFFFFF)) }
     Text("${profile.app.displayName} appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     SwitchRow("Enable character", "Disable just this character profile.", profile.enabled) { onUpdate(profile.copy(enabled = it)) }
+    Text("Entrance motion", style = MaterialTheme.typography.labelLarge)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(CharacterMotion.entries) { motion ->
+            FilterChip(selected = profile.motion == motion,
+                onClick = { onUpdate(profile.copy(motion = motion)) },
+                label = { Text(motion.title) })
+        }
+    }
     SwitchRow("Unread notification dot", "Retain a small indicator until dismissal.", profile.persistent) { onUpdate(profile.copy(persistent = it)) }
     Text("Lighting color", color = Muted)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

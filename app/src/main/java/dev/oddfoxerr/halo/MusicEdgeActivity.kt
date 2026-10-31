@@ -169,7 +169,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         when (panel) {
             MusicPanel.DESIGNS -> {
-                Text("Edge collection", style = MaterialTheme.typography.titleMedium)
+                Text("15 audio-reactive designs", style = MaterialTheme.typography.titleMedium)
+                Text("Five refined classics and ten new original effects. Tap a style to play its live preview.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 EdgeMode.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         pair.forEach { mode ->
@@ -275,6 +277,27 @@ private fun DesignTile(mode: EdgeMode, selected: Boolean, first: Int, second: In
                         val x = size.width * i / 13
                         drawLine(Color.LightGray, Offset(x - 3.dp.toPx(), size.height - 2.dp.toPx()), Offset(x, size.height - 9.dp.toPx()), 2.dp.toPx())
                     }
+                    EdgeMode.COMET, EdgeMode.TWIN, EdgeMode.NEON, EdgeMode.PRISM -> {
+                        for (i in 0..3) {
+                            val x = size.width * i / 4f
+                            drawLine(brush, Offset(x, size.height * .45f),
+                                Offset((x + size.width * .15f).coerceAtMost(size.width), size.height * .45f),
+                                (2f + i % 2 * 2f).dp.toPx(), alpha = 1f - i * .17f)
+                        }
+                    }
+                    EdgeMode.PIXELS, EdgeMode.SPARKS, EdgeMode.RAIN -> for (i in 0..19) {
+                        val x = (i + 1) * size.width / 22f
+                        val y = size.height / 2f + (kotlin.math.sin(i * 1.7) * size.height * .22).toFloat()
+                        if (mode == EdgeMode.RAIN) drawLine(brush, Offset(x, y), Offset(x, y + (i % 4 + 2).dp.toPx()), 2.dp.toPx())
+                        else drawCircle(brush, (if (mode == EdgeMode.PIXELS) 2.3f else 1.3f).dp.toPx(), Offset(x, y))
+                    }
+                    EdgeMode.AURORA, EdgeMode.HELIX -> for (i in 0..18) {
+                        val x = size.width * i / 18f
+                        val y = size.height * (.5f + .17f * kotlin.math.sin(i * .62 + if (mode == EdgeMode.HELIX) 2.1 else 0.0).toFloat())
+                        drawCircle(brush, 1.7.dp.toPx(), Offset(x, y))
+                    }
+                    EdgeMode.BLOOM -> for (i in 1..4) drawCircle(brush, (i * 5).dp.toPx(),
+                        Offset(size.width / 2f, size.height / 2f), style = Stroke(1.6.dp.toPx()))
                     EdgeMode.WAVE, EdgeMode.PULSE -> drawRoundRect(brush, Offset(5.dp.toPx(), 5.dp.toPx()),
                         androidx.compose.ui.geometry.Size(size.width - 10.dp.toPx(), size.height - 10.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx()))
                 }
