@@ -8,10 +8,10 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "dev.oddfoxerr.halo"
-        minSdk = 29
+        minSdk = 33
         targetSdk = 36
-        versionCode = 16
-        versionName = "0.13.1"
+        versionCode = 17
+        versionName = "0.14.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
