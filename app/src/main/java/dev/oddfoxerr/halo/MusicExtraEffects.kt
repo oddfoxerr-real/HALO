@@ -133,7 +133,7 @@ internal class MusicExtraEffects {
                 val u = i / 112f
                 at(u)
                 val loud = signal(u + motion.phase * .3f + layer * .16f)
-                val wave = sin((u * 6f + motion.phase * 2.3f + layer * .31f) * (2 * PI)).toFloat()
+                val wave = sin((u * 6f + motion.phase * 2.3f + layer * .31f) * (2f * PI.toFloat())).toFloat()
                 val reach = (4f + loud * 17f + wave * (3f + motion.pulse * 9f) + layer * 3f) * unit
                 val x = position[0] - tangent[1] * reach
                 val y = position[1] + tangent[0] * reach
@@ -178,7 +178,7 @@ internal class MusicExtraEffects {
             val anchor = wrap(i * .6180339f + motion.phase * (.1f + i % 3 * .15f))
             at(anchor)
             val strength = signal(i / 68f + motion.phase * .2f)
-            val flash = max(0f, sin((i * 1.61f + motion.phase * 12f) * (2 * PI)).toFloat())
+            val flash = max(0f, sin((i * 1.61f + motion.phase * 12f) * (2f * PI.toFloat())).toFloat())
             val magnitude = (strength * .80f + motion.pulse * .20f) * (.35f + flash * .65f)
             if (magnitude < .025f) continue
             val offset = (2f + 24f * magnitude) * unit
@@ -249,8 +249,8 @@ internal class MusicExtraEffects {
                 val fraction = i / 128f
                 at(fraction)
                 val loud = signal(fraction + motion.phase * .2f)
-                val wave = sin((fraction * 16f + motion.phase * 3.5f) * (2 * PI) +
-                    strand * PI).toFloat()
+                val wave = sin((fraction * 16f + motion.phase * 3.5f) * (2f * PI.toFloat()) +
+                    strand * PI.toFloat()).toFloat()
                 val reach = (8f + wave * (5f + loud * 13f)) * unit
                 val x = position[0] - tangent[1] * reach
                 val y = position[1] + tangent[0] * reach
