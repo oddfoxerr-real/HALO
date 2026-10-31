@@ -23,7 +23,7 @@ class EdgeSpectrumTest {
     @Test fun invalidInputIsSafe() {
         assertTrue(EdgeSpectrum.fromFft(ByteArray(0), 48000000).all { it == 0f })
         assertTrue(EdgeSpectrum.fromFft(ByteArray(1024), 0).all { it == 0f })
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode("unrecognized"))
+        assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode("unrecognized"))
         assertEquals(NotificationEdgeMode.CHARACTER, EdgeSpectrum.notificationMode(null))
     }
 }

@@ -162,9 +162,6 @@ class ProfileStore(context: Context) {
     var notificationEdgeMode: NotificationEdgeMode
         get() = EdgeSpectrum.notificationMode(prefs.getString("notification_edge_mode", "CHARACTER"))
         set(value) { prefs.edit().putString("notification_edge_mode", value.name).apply() }
-    var notificationEdgeStyle: NotificationEdgeStyle
-        get() = EdgeSpectrum.notificationStyle(prefs.getString("notification_edge_style", "PULSE"))
-        set(value) { prefs.edit().putString("notification_edge_style", value.name).apply() }
     var notificationBorderPersistent: Boolean
         get() = prefs.getBoolean("notification_border_persistent", false)
         set(value) { prefs.edit().putBoolean("notification_border_persistent", value).apply() }

@@ -4,21 +4,24 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
+/** GPU-only designs. No legacy line/Canvas animation modes remain selectable. */
 enum class EdgeMode(val title: String) {
-    WAVE("Silk"), BARS("Spectrum"), TRAIL("Orbit"), PULSE("Pulse"), CHAIN("Chainsaw"),
-    AURORA("Aurora"), COMET("Comet"), TWIN("Twin streams"), SPARKS("Sparks"),
-    PIXELS("Pixel rush"), NEON("Neon circuit"), RAIN("Rainfall"), HELIX("Helix"),
-    BLOOM("Bloom"), PRISM("Prism")
+    DOTS("Luminous Dots"),
+    CONSTELLATION("Constellation"),
+    FIREFLIES("Fireflies"),
+    METEOR("Meteor Shower"),
+    LIQUID("Liquid Glass"),
+    AURORA("Aurora Flow"),
+    PRISM("Chromatic Prism"),
+    RIBBON("Silk Ribbons"),
+    BLOOM("Pulse Bloom"),
+    NEON("Neon Current"),
+    PIXEL("Pixel Matrix"),
+    HALO("Halo Rings")
 }
 
 enum class NotificationEdgeMode(val title: String) {
     CHARACTER("Character"), BORDER("Full border"), BOTH("Both")
-}
-
-enum class NotificationEdgeStyle(val title: String) {
-    PULSE("Pulse"), TRACE("Outline sweep"), GLOW("Soft glow"),
-    COMET("Comet trail"), DASH("Chasing dashes"), SPARK("Electric sparks"),
-    RIPPLE("Ripple"), AURORA("Aurora"), BEACON("Beacon")
 }
 
 object EdgeSpectrum {
@@ -50,12 +53,25 @@ object EdgeSpectrum {
     fun bass(bands: FloatArray): Float =
         if (bands.size < 4) 0f else (bands[0] + bands[1] + bands[2] + bands[3]) / 4f
 
+    /**
+     * Existing v0.13 installs keep an appropriate GPU design after the old
+     * animation enum disappears. Never route users into removed Canvas code.
+     */
     fun mode(value: String?): EdgeMode =
-        EdgeMode.entries.firstOrNull { it.name == value } ?: EdgeMode.WAVE
+        EdgeMode.entries.firstOrNull { it.name == value } ?: when (value) {
+            "WAVE", "HELIX" -> EdgeMode.RIBBON
+            "BARS", "PIXELS" -> EdgeMode.PIXEL
+            "TRAIL", "COMET", "TWIN" -> EdgeMode.METEOR
+            "PULSE" -> EdgeMode.BLOOM
+            "CHAIN", "SPARKS" -> EdgeMode.FIREFLIES
+            "RAIN" -> EdgeMode.CONSTELLATION
+            "AURORA" -> EdgeMode.AURORA
+            "NEON" -> EdgeMode.NEON
+            "PRISM" -> EdgeMode.PRISM
+            else -> EdgeMode.DOTS
+        }
 
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
 
-    fun notificationStyle(value: String?): NotificationEdgeStyle =
-        NotificationEdgeStyle.entries.firstOrNull { it.name == value } ?: NotificationEdgeStyle.PULSE
 }

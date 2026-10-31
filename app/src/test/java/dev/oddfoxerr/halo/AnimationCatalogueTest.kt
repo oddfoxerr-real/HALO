@@ -5,33 +5,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnimationCatalogueTest {
-    @Test fun musicCatalogueHasDistinctStableModes() {
-        assertEquals(15, EdgeMode.entries.size)
-        assertEquals(15, EdgeMode.entries.map { it.title }.distinct().size)
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode(null))
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode("unknown"))
+    @Test fun onlyNewGpuModesAreSelectable() {
+        assertEquals(12, EdgeMode.entries.size)
+        assertEquals(12, EdgeMode.entries.map { it.title }.distinct().size)
+        assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode(null))
+        assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode("unknown"))
         for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
+        assertTrue(EdgeMode.entries.none { it.name in
+            setOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN", "SPARKS", "PIXELS") })
     }
 
-    @Test fun notificationCatalogueHasDistinctStableStyles() {
-        assertEquals(9, NotificationEdgeStyle.entries.size)
-        assertEquals(9, NotificationEdgeStyle.entries.map { it.title }.distinct().size)
-        assertEquals(NotificationEdgeStyle.PULSE, EdgeSpectrum.notificationStyle(null))
-        for (style in NotificationEdgeStyle.entries)
-            assertEquals(style, EdgeSpectrum.notificationStyle(style.name))
-    }
-
-    @Test fun characterMotionPresetsAreUniqueAndRetainOriginalDefault() {
-        assertEquals(7, CharacterMotion.entries.size)
-        assertEquals(7, CharacterMotion.entries.map { it.title }.distinct().size)
-        assertEquals(CharacterMotion.ORIGINAL, CharacterProfile(CharacterApp.DISCORD).motion)
-        assertTrue(CharacterMotion.entries.any { it.name == "GLITCH" })
-    }
-
-    @Test fun oldStyleIdentifiersRemainBackwardCompatible() {
-        for (name in listOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN"))
-            assertTrue(EdgeMode.entries.any { it.name == name })
-        for (name in listOf("PULSE", "TRACE", "GLOW"))
-            assertTrue(NotificationEdgeStyle.entries.any { it.name == name })
+    @Test fun oldSavedModesMigrateWithoutSelectingOldRenderers() {
+        val expected = mapOf(
+            "WAVE" to EdgeMode.RIBBON,
+            "BARS" to EdgeMode.PIXEL,
+            "TRAIL" to EdgeMode.METEOR,
+            "PULSE" to EdgeMode.BLOOM,
+            "CHAIN" to EdgeMode.FIREFLIES,
+            "SPARKS" to EdgeMode.FIREFLIES,
+            "PIXELS" to EdgeMode.PIXEL,
+            "RAIN" to EdgeMode.CONSTELLATION,
+            "AURORA" to EdgeMode.AURORA,
+            "NEON" to EdgeMode.NEON,
+            "PRISM" to EdgeMode.PRISM,
+            "COMET" to EdgeMode.METEOR,
+            "TWIN" to EdgeMode.METEOR,
+            "HELIX" to EdgeMode.RIBBON
+        )
+        for ((old, replacement) in expected) {
+            assertEquals("Migration for $old", replacement, EdgeSpectrum.mode(old))
+        }
     }
 }
