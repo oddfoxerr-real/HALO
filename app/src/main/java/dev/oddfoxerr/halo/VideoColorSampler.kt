@@ -1,15 +1,12 @@
 package dev.oddfoxerr.halo
 
-import android.graphics.Color
 import java.nio.ByteBuffer
-import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /** Four color regions matching a TV bias-light strip: top, right, bottom, left. */
 data class VideoEdgeColors(val top: Int, val right: Int, val bottom: Int, val left: Int) {
     companion object {
-        val BLACK = VideoEdgeColors(Color.BLACK, Color.BLACK, Color.BLACK, Color.BLACK)
+        val BLACK = VideoEdgeColors(-0x1000000, -0x1000000, -0x1000000, -0x1000000)
     }
 }
 
@@ -46,8 +43,8 @@ object VideoColorSampler {
                 blue += (data.get(ix + 2).toInt() and 255)
                 count++
             }
-            if (count == 0L) return Color.BLACK
-            return Color.rgb((red / count).toInt(), (green / count).toInt(), (blue / count).toInt())
+            if (count == 0L) return -0x1000000
+            return argb((red / count).toInt(), (green / count).toInt(), (blue / count).toInt())
         }
         return VideoEdgeColors(
             top = region(vertical = true, nearStart = true),
@@ -57,14 +54,20 @@ object VideoColorSampler {
         )
     }
 
-    /** Fast asymmetric smoothing: scene changes arrive immediately, subtle fluctuations remain stable. */
+    private fun argb(r: Int, g: Int, b: Int) =
+        -0x1000000 or (r shl 16) or (g shl 8) or b
+    private fun red(v: Int) = (v ushr 16) and 255
+    private fun green(v: Int) = (v ushr 8) and 255
+    private fun blue(v: Int) = v and 255
+
+    /** Fast smoothing: scene changes arrive immediately, subtle fluctuations remain stable. */
     fun smooth(old: VideoEdgeColors, next: VideoEdgeColors, response: Float): VideoEdgeColors {
         val factor = response.coerceIn(.08f, 1f)
         fun one(a: Int, b: Int): Int {
             fun c(value: Int, nextValue: Int) =
                 (value + (nextValue - value) * factor).toInt().coerceIn(0, 255)
-            return Color.rgb(c(Color.red(a), Color.red(b)),
-                c(Color.green(a), Color.green(b)), c(Color.blue(a), Color.blue(b)))
+            return argb(c(red(a), red(b)),
+                c(green(a), green(b)), c(blue(a), blue(b)))
         }
         return VideoEdgeColors(
             one(old.top, next.top), one(old.right, next.right),
@@ -73,6 +76,6 @@ object VideoColorSampler {
 
     fun isDark(frame: VideoEdgeColors): Boolean {
         val colors = intArrayOf(frame.top, frame.bottom, frame.left, frame.right)
-        return colors.all { max(Color.red(it), max(Color.green(it), Color.blue(it))) < 9 }
+        return colors.all { max(red(it), max(green(it), blue(it))) < 9 }
     }
 }
