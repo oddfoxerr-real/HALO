@@ -54,6 +54,7 @@ internal class ShaderEdgeEngine {
     private var disabled = false
 
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
+    internal fun compileVideoForTest(): RuntimeShader = RuntimeShader(VIDEO_SOURCE)
 
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
