@@ -28,12 +28,17 @@ class MusicEdgeService : Service() {
         private const val NOTICE_ID = 709
         @Volatile var isRunning = false; private set
         private var current: MusicEdgeService? = null
-        fun yieldForNotification(duration: Long) {
-            current?.let {
-                it.yieldUntil = SystemClock.elapsedRealtime() + duration.coerceIn(800L, 10000L) + 200L
-                it.yielding = true
-                it.view?.visibility = View.INVISIBLE
-            }
+        /** Play the notification in the SAME music overlay window when music is active. */
+        fun showNotification(color: Int, duration: Long): Boolean {
+            val service = current ?: return false
+            val drawing = service.view ?: return false
+            val validDuration = duration.coerceIn(800L, 10_000L)
+            service.yieldUntil = SystemClock.elapsedRealtime() + validDuration + 100L
+            service.yielding = true
+            drawing.configure(service.config)
+            drawing.playNotification(color, validDuration, false)
+            drawing.visibility = View.VISIBLE
+            return true
         }
     }
     private data class AudioFrame(val bands: FloatArray, val bass: Float, val at: Long)
@@ -109,21 +114,26 @@ class MusicEdgeService : Service() {
             val awake = power.isInteractive && !keyguard.isKeyguardLocked
             val shouldCapture = awake && !quiet && sessionAllowed
             setCapture(shouldCapture)
+            val showingInMusicWindow = yielding && now < yieldUntil
             pending.getAndSet(null)?.let { sample ->
                 lastCapture = sample.at
                 if (sample.bands.any { it > .008f }) lastAudible = sample.at
-                view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
+                if (!showingInMusicWindow) {
+                    view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
+                }
             }
-            val notification = now < yieldUntil || HaloOverlay.isAnimating() || NotificationEdgeOverlay.isAnimating
+            val notification = showingInMusicWindow || NotificationEdgeOverlay.isAnimating
             if (yielding && !notification) {
-                HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss(); yielding = false
+                view?.stopNotification()
+                NotificationEdgeOverlay.dismiss()
+                yielding = false
             }
             val reason = MusicVisibility.reason(awake, !keyguard.isKeyguardLocked, quiet, notification,
                 sessionAllowed, lastCapture != 0L && now - lastCapture < 700L,
                 lastAudible != 0L && now - lastAudible < 900L)
             view?.apply {
-                edgeColor = info.color ?: settings.color
-                visibility = if (reason == null) View.VISIBLE else View.INVISIBLE
+                if (!showingInMusicWindow) edgeColor = info.color ?: settings.color
+                visibility = if (showingInMusicWindow || reason == null) View.VISIBLE else View.INVISIBLE
             }
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
@@ -189,7 +199,7 @@ class MusicEdgeService : Service() {
                 } catch (_: RuntimeException) { main.post { fail("Android could not open device audio · try another player and restart") } }
             }
             worker.post(mediaPoll)
-            HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
+            NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
             main.post(tick)
         } catch (_: Exception) { fail("Android could not start music lighting · check permissions") }
         return START_NOT_STICKY

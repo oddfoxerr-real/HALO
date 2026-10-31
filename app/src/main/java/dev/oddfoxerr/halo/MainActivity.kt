@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val store = remember { ProfileStore(this) }
+            val store = remember { ProfileStore(this).also { it.pillEnabled = false } }
             var dynamic by remember { mutableStateOf(store.dynamicColors) }
             val scheme = if (dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicDarkColorScheme(this) else darkColorScheme(
                 primary = Lavender, onPrimary = Color(0xFF241537), background = AMOLED,
@@ -123,7 +123,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings") }
+private enum class HaloTab(val label: String) {
+    HOME("Home"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,21 +141,7 @@ private fun HaloApp(
 ) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
-    var selected by remember { mutableStateOf(CharacterApp.DISCORD) }
-    var currentProfile by remember { mutableStateOf(store.read(selected)) }
-    var enabled by remember { mutableStateOf(store.masterEnabled) }
-
-    fun edit(profile: CharacterProfile) {
-        currentProfile = profile
-        store.write(profile)
-    }
-    fun preview(app: CharacterApp) {
-        context.startActivity(Intent(context, PreviewActivity::class.java).putExtra("app", app.name))
-    }
-    LaunchedEffect(selected, revision) {
-        currentProfile = store.read(selected)
-        enabled = store.masterEnabled
-    }
+    var enabled by remember(revision) { mutableStateOf(store.masterEnabled) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -162,10 +150,11 @@ private fun HaloApp(
                 title = {
                     Column {
                         Text("HALO", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineMedium)
-                        Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.10", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.13.0", modifier = Modifier.padding(end = 18.dp),
+                    color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -174,270 +163,174 @@ private fun HaloApp(
                 HaloTab.entries.forEach { item ->
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
-                        HaloTab.STUDIO -> Icons.Default.AutoAwesome
                         HaloTab.MUSIC -> Icons.Default.MusicNote
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
                     }
                     NavigationBarItem(
-                        selected = tab == item, onClick = { tab = item },
+                        selected = tab == item,
+                        onClick = { tab = item },
                         icon = { Icon(image, contentDescription = null) },
                         label = { Text(item.label) }
                     )
                 }
             }
         }
-    ) { contentPadding ->
+    ) { padding ->
         if (tab == HaloTab.MUSIC) {
-            MusicStudio(Modifier.fillMaxSize().padding(contentPadding))
-        } else LazyColumn(
-            Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            item { Spacer(Modifier.height(3.dp)) }
-            when (tab) {
-                HaloTab.MUSIC -> Unit
-                HaloTab.HOME -> {
-                    item {
-                        StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
-                            enabled = value
-                            store.masterEnabled = value
-                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
-                            HaloNotificationListener.requestPillRefresh()
-                        }
-                    }
-                    item {
-                        Text("Your notifications", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            MetricCard("Active", "${NotificationActivityState.activeCount}", Modifier.weight(1f))
-                            MetricCard("Listener", if (NotificationActivityState.listenerConnected) "Live" else "Offline", Modifier.weight(1f))
-                        }
-                    }
-                    if (!listenerEnabled || !overlayEnabled) item {
-                        SectionCard {
-                            Text("Complete setup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Grant both system permissions for lighting outside HALO.", color = Muted)
-                            if (!listenerEnabled) Button(onClick = requestListener, modifier = Modifier.fillMaxWidth()) { Text("Enable notification access") }
-                            if (!overlayEnabled) OutlinedButton(onClick = requestOverlay, modifier = Modifier.fillMaxWidth()) { Text("Allow screen overlay") }
-                        }
-                    }
-                    item {
-                        SectionCard {
-                            Text("Live character preview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("See how each animation looks on your real display.", color = Muted)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(CharacterApp.entries) { app -> FilterChip(
-                                    selected = selected == app,
-                                    onClick = { selected = app }, label = { Text(app.displayName) }
-                                ) }
-                            }
-                            MiniPreview(currentProfile)
-                            Button(onClick = { preview(selected) }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Visibility, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Preview on phone")
-                            }
-                        }
-                    }
-                    item {
-                        SectionCard {
-                            Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
-                            Button(onClick = { tab = HaloTab.MUSIC },
-                                modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
-                        }
-                    }
-                    item { Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-                    if (NotificationActivityState.recent.isEmpty()) item {
-                        SectionCard { Text("No notification events yet. New notifications will appear here after access is granted.", color = Muted) }
-                    } else items(NotificationActivityState.recent.take(8)) { event ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            ColorDot(store.readForPackage(event.packageName).color)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(applicationLabel(context, event.packageName), fontWeight = FontWeight.SemiBold)
-                                Text(if (event.type == EventType.RECEIVED) "Notification received" else "Notification dismissed", color = Muted)
-                            }
-                            Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(event.timestamp)), color = Muted, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-                HaloTab.STUDIO -> {
-                    item {
-                        Text("Character studio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("An original cartoon effect for every app. These profiles are applied to real notifications.", color = Muted)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(CharacterApp.entries) { app -> FilterChip(
-                                selected = selected == app, onClick = { selected = app }, label = { Text(app.displayName) }
-                            ) }
-                        }
-                    }
-                    item { MiniPreview(currentProfile) }
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { preview(selected) }, modifier = Modifier.weight(1f)) { Text("Full phone preview") }
-                            OutlinedButton(onClick = {
-                                if (overlayEnabled) HaloOverlay.showNotification(context, currentProfile, false) else requestOverlay()
-                            }, modifier = Modifier.weight(1f)) { Text("Test overlay") }
-                        }
-                    }
-                    item { SectionCard { ProfileEditor(currentProfile, ::edit) } }
-                }
-                HaloTab.APPS -> {
-                    item {
-                        Text("App rules", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Choose installed apps, assign a character, and decide which ones trigger HALO.", color = Muted)
-                    }
-                    item { AppRulesEditor(store, onCharacterEdit = { app -> selected = app; tab = HaloTab.STUDIO }) }
-                }
-                HaloTab.SETTINGS -> {
-                    item {
-                        Text("Settings & permissions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Manage notification filtering, quiet hours, and appearance.", color = Muted)
-                    }
-                    item { PermissionSection("Notification access", listenerEnabled, requestListener) }
-                    item { PermissionSection("Display over apps", overlayEnabled, requestOverlay) }
-                    item { SectionCard { QuietHoursEditor(store) } }
-                    item {
-                        SectionCard {
-                            Text("Notification edge lighting", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Light all four sides of the display, keep the app character, or combine both. Each installed app can override this setting.", color = Muted)
-                            var mode by remember { mutableStateOf(store.notificationEdgeMode) }
-                            Text("Default notification style", style = MaterialTheme.typography.labelLarge)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(NotificationEdgeMode.entries) { option ->
-                                    FilterChip(
-                                        selected = mode == option,
-                                        onClick = {
-                                            mode = option
-                                            store.notificationEdgeMode = option
-                                            HaloOverlay.dismiss()
-                                            NotificationEdgeOverlay.dismiss()
-                                            HaloNotificationListener.requestPillRefresh()
-                                        },
-                                        label = { Text(option.title) }
-                                    )
+            MusicStudio(Modifier.fillMaxSize().padding(padding))
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item { Spacer(Modifier.height(4.dp)) }
+                when (tab) {
+                    HaloTab.MUSIC -> Unit
+                    HaloTab.HOME -> {
+                        item {
+                            StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
+                                enabled = value
+                                store.masterEnabled = value
+                                if (!value) {
+                                    NotificationEdgeOverlay.dismiss()
+                                    PillHaloOverlay.dismiss()
                                 }
-                            }
-                            Text("Border animation", style = MaterialTheme.typography.labelLarge)
-                            var borderStyle by remember { mutableStateOf(store.notificationEdgeStyle) }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(NotificationEdgeStyle.entries) { option ->
-                                    FilterChip(
-                                        selected = borderStyle == option,
-                                        onClick = { borderStyle = option; store.notificationEdgeStyle = option },
-                                        label = { Text(option.title) }
-                                    )
-                                }
-                            }
-                            var persistent by remember { mutableStateOf(store.notificationBorderPersistent) }
-                            SwitchRow("Keep border until dismissal",
-                                "Otherwise the effect fades after the app's configured duration.",
-                                persistent) { persistent = it; store.notificationBorderPersistent = it }
-                            var borderThickness by remember { mutableStateOf(store.notificationBorderThickness) }
-                            SettingSlider("Border thickness", "%.1f dp".format(borderThickness),
-                                borderThickness, 1f..8f) {
-                                borderThickness = it; store.notificationBorderThickness = it
-                            }
-                            var borderGlow by remember { mutableStateOf(store.notificationBorderGlow) }
-                            SettingSlider("Border glow", "${(borderGlow * 100).toInt()}%",
-                                borderGlow, 0f..1f) {
-                                borderGlow = it; store.notificationBorderGlow = it
-                            }
-                            Text("Border size and position", style = MaterialTheme.typography.titleSmall)
-                            Text("Adjust each side separately to change width, height and alignment. Negative values push outward, but Android may clip protected system UI.", color = Muted,
-                                style = MaterialTheme.typography.bodySmall)
-                            var borderTop by remember { mutableFloatStateOf(store.notificationBorderTop) }
-                            var borderBottom by remember { mutableFloatStateOf(store.notificationBorderBottom) }
-                            var borderLeft by remember { mutableFloatStateOf(store.notificationBorderLeft) }
-                            var borderRight by remember { mutableFloatStateOf(store.notificationBorderRight) }
-                            var borderCorner by remember { mutableFloatStateOf(store.notificationBorderCorner) }
-                            SettingSlider("Top position", "${borderTop.toInt()} dp", borderTop, -24f..120f) {
-                                borderTop = it; store.notificationBorderTop = it
-                            }
-                            SettingSlider("Bottom position", "${borderBottom.toInt()} dp", borderBottom, -24f..120f) {
-                                borderBottom = it; store.notificationBorderBottom = it
-                            }
-                            SettingSlider("Left position", "${borderLeft.toInt()} dp", borderLeft, -24f..120f) {
-                                borderLeft = it; store.notificationBorderLeft = it
-                            }
-                            SettingSlider("Right position", "${borderRight.toInt()} dp", borderRight, -24f..120f) {
-                                borderRight = it; store.notificationBorderRight = it
-                            }
-                            SettingSlider("Corner radius", "${borderCorner.toInt()} dp", borderCorner, 0f..100f) {
-                                borderCorner = it; store.notificationBorderCorner = it
-                            }
-                            OutlinedButton(onClick = {
-                                borderTop = 6f; borderBottom = 6f; borderLeft = 6f; borderRight = 6f; borderCorner = 35f
-                                store.notificationBorderTop = 6f; store.notificationBorderBottom = 6f
-                                store.notificationBorderLeft = 6f; store.notificationBorderRight = 6f
-                                store.notificationBorderCorner = 35f
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Reset border calibration") }
-                            Text("Camera cutout / notch effect", style = MaterialTheme.typography.titleSmall)
-                            var notchSelection by remember { mutableStateOf(store.notchSettings().mode) }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(NotchMode.entries) { option ->
-                                    FilterChip(selected = notchSelection == option,
-                                        onClick = {
-                                            notchSelection = option
-                                            store.saveNotch(store.notchSettings().copy(mode = option))
-                                            HaloNotificationListener.requestPillRefresh()
-                                        }, label = { Text(option.title) })
-                                }
-                            }
-                            Text("Uses the same camera halo as Music. Detailed camera width, height, offset and gap controls are under Music → Tune.",
-                                color = Muted, style = MaterialTheme.typography.bodySmall)
-                            Button(onClick = {
-                                if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
-                                    4200L, false, store) else requestOverlay()
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Test full-screen border") }
-                            Text("The border follows your screen, not the protected bounds of Samsung's actual heads-up notification cards.", color = Muted,
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    item {
-                        SectionCard {
-                            Text("Pill Halo · Samsung-style", fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium)
-                            Text("An optional media-reactive outline on unlocked screens. Samsung's protected Now Bar itself cannot be recolored.",
-                                color = Muted)
-                            var pill by remember { mutableStateOf(store.pillEnabled) }
-                            SwitchRow("Show media pill", "Only while an Android media session is playing.", pill) {
-                                pill = it; store.pillEnabled = it
                                 HaloNotificationListener.requestPillRefresh()
                             }
-                            Button(onClick = {
-                                context.startActivity(Intent(context, PillPreviewActivity::class.java))
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Calibrate on phone") }
+                        }
+                        item {
+                            SectionCard {
+                                Text("One engine for all effects", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Incoming notifications and music use the same GPU-designed edge patterns. No cartoon characters or separate border layer.",
+                                    color = Muted)
+                                Button(onClick = { tab = HaloTab.MUSIC },
+                                    modifier = Modifier.fillMaxWidth()) { Text("Open Edge Studio") }
+                            }
+                        }
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                MetricCard("Notifications", "${NotificationActivityState.activeCount}", Modifier.weight(1f))
+                                MetricCard("Listener", if (NotificationActivityState.listenerConnected) "Live" else "Offline",
+                                    Modifier.weight(1f))
+                            }
+                        }
+                        if (!listenerEnabled || !overlayEnabled) {
+                            item {
+                                SectionCard {
+                                    Text("Complete setup", fontWeight = FontWeight.Bold)
+                                    if (!listenerEnabled) Button(onClick = requestListener,
+                                        modifier = Modifier.fillMaxWidth()) { Text("Enable notification access") }
+                                    if (!overlayEnabled) OutlinedButton(onClick = requestOverlay,
+                                        modifier = Modifier.fillMaxWidth()) { Text("Allow screen overlay") }
+                                }
+                            }
+                        }
+                        item { Text("Recent activity", style = MaterialTheme.typography.titleLarge) }
+                        if (NotificationActivityState.recent.isEmpty()) {
+                            item { SectionCard { Text("No notification events yet.", color = Muted) } }
+                        } else {
+                            items(NotificationActivityState.recent.take(8)) { event ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    ColorDot(store.readForPackage(event.packageName).color)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(applicationLabel(context, event.packageName),
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text(if (event.type == EventType.RECEIVED) "Notification received"
+                                            else "Notification dismissed", color = Muted)
+                                    }
+                                    Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(event.timestamp)),
+                                        color = Muted, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         }
                     }
-                    item {
-                        SectionCard {
-                            Text("Notification behavior", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            var silent by remember { mutableStateOf(store.showSilent) }
-                            var screen by remember { mutableStateOf(store.onlyScreenOn) }
-                            SwitchRow("Include silent notifications", "Normally HALO only reacts to alerting notifications.", silent) {
-                                silent = it; store.showSilent = it
-                            }
-                            HorizontalDivider()
-                            SwitchRow("Screen-on effects only", "Safer for battery and Samsung lock-screen restrictions.", screen) {
-                                screen = it; store.onlyScreenOn = it
-                            }
-                            HorizontalDivider()
-                            SwitchRow("Wallpaper-based Material 3 color", "Keep the AMOLED dark layout, use Samsung's dynamic colors.", dynamicColors, onDynamicColorsChange)
+                    HaloTab.APPS -> {
+                        item {
+                            Text("Notification app rules", style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold)
+                            Text("Use the global Music design for every notification. Choose which apps can trigger it and override their colors.",
+                                color = Muted)
                         }
+                        item { AppRulesEditor(store) }
                     }
-                    item {
-                        SectionCard {
-                            Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
-                            Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    HaloTab.SETTINGS -> {
+                        item {
+                            Text("Settings & permissions", style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold)
+                        }
+                        item { PermissionSection("Notification access", listenerEnabled, requestListener) }
+                        item { PermissionSection("Display over apps", overlayEnabled, requestOverlay) }
+                        item { SectionCard { QuietHoursEditor(store) } }
+                        item {
+                            SectionCard {
+                                Text("Unified notification lighting", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Every notification plays your selected Music design and uses its brightness, spread, glow, edge calibration and camera-cutout settings.",
+                                    color = Muted)
+                                var persistent by remember { mutableStateOf(store.notificationBorderPersistent) }
+                                SwitchRow("Keep active notification lighting", "Continue gentle motion until the notification is dismissed.",
+                                    persistent) {
+                                    persistent = it
+                                    store.notificationBorderPersistent = it
+                                }
+                                var noticeDuration by remember { mutableFloatStateOf(store.notificationDurationMs.toFloat()) }
+                                SettingSlider("Animation duration", "%.1f seconds".format(noticeDuration / 1000f),
+                                    noticeDuration, 800f..10_000f) {
+                                    noticeDuration = it
+                                    store.notificationDurationMs = it.toLong()
+                                }
+                                Button(onClick = {
+                                    if (overlayEnabled) {
+                                        val config = MusicConfiguration.read(context)
+                                        NotificationEdgeOverlay.show(context, config.color.toLong(),
+                                            store.notificationDurationMs, false, store)
+                                    } else requestOverlay()
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Test selected Music edge effect") }
+                                OutlinedButton(onClick = { tab = HaloTab.MUSIC },
+                                    modifier = Modifier.fillMaxWidth()) { Text("Customize effects in Music") }
+                            }
+                        }
+                        item {
+                            SectionCard {
+                                Text("Notification behavior", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                var silent by remember { mutableStateOf(store.showSilent) }
+                                var screen by remember { mutableStateOf(store.onlyScreenOn) }
+                                SwitchRow("Include silent notifications",
+                                    "Normally only alerting notifications trigger an effect.", silent) {
+                                    silent = it
+                                    store.showSilent = it
+                                }
+                                SwitchRow("Screen-on only",
+                                    "Suppress lighting while Android reports that the screen is off.", screen) {
+                                    screen = it
+                                    store.onlyScreenOn = it
+                                }
+                                SwitchRow("Material 3 system colors", "Use Samsung wallpaper-derived colors in the UI.",
+                                    dynamicColors, onDynamicColorsChange)
+                                OutlinedButton(onClick = {
+                                    NotificationEdgeOverlay.dismiss()
+                                    PillHaloOverlay.dismiss()
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Clear overlay effects") }
+                            }
+                        }
+                        item {
+                            SectionCard {
+                                Text("Permissions & privacy", style = MaterialTheme.typography.titleMedium)
+                                Text("Notification events use local app identity and color. No notification message bodies are stored. Music capture remains optional and separate.",
+                                    color = Muted)
+                                Text("Android may restrict drawing over secure screens, Samsung's status bar, and AOD.",
+                                    color = Muted)
+                            }
                         }
                     }
                 }
+                item { Spacer(Modifier.height(16.dp)) }
             }
-            item { Spacer(Modifier.height(20.dp)) }
         }
     }
 }
@@ -482,22 +375,6 @@ private fun ColorDot(value: Long, size: Int = 37) {
 }
 
 @Composable
-private fun MiniPreview(profile: CharacterProfile) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(205.dp).height(340.dp).background(Color.Black, RoundedCornerShape(27.dp))) {
-            key(profile.app) {
-                AndroidView(factory = { CharacterView(it).apply { configureLoop(profile) } },
-                    update = { it.configureLoop(profile) }, modifier = Modifier.fillMaxSize())
-            }
-            Column(Modifier.align(Alignment.TopCenter).padding(top = 29.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("HALO", color = Color(0xFFDDD8EB), style = MaterialTheme.typography.headlineSmall)
-                Text(profile.app.displayName, color = Muted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -506,50 +383,6 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggl
         }
         Switch(checked = checked, onCheckedChange = onToggle)
     }
-}
-
-@Composable
-private fun ProfileEditor(profile: CharacterProfile, onUpdate: (CharacterProfile) -> Unit) {
-    var hex by remember(profile.app) { mutableStateOf("#%06X".format(profile.color and 0xFFFFFF)) }
-    Text("${profile.app.displayName} appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    SwitchRow("Enable character", "Disable just this character profile.", profile.enabled) { onUpdate(profile.copy(enabled = it)) }
-    Text("Entrance motion", style = MaterialTheme.typography.labelLarge)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(CharacterMotion.entries) { motion ->
-            FilterChip(selected = profile.motion == motion,
-                onClick = { onUpdate(profile.copy(motion = motion)) },
-                label = { Text(motion.title) })
-        }
-    }
-    SwitchRow("Unread notification dot", "Retain a small indicator until dismissal.", profile.persistent) { onUpdate(profile.copy(persistent = it)) }
-    Text("Lighting color", color = Muted)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(Swatches) { color ->
-            Box(Modifier.size(38.dp).background(Color(color), CircleShape).clickable {
-                hex = "#%06X".format(color and 0xFFFFFF)
-                onUpdate(profile.copy(color = color))
-            }, contentAlignment = Alignment.Center) {
-                if (profile.color == color) Text("✓", color = Color.Black)
-            }
-        }
-    }
-    OutlinedTextField(
-        value = hex, onValueChange = { value ->
-            hex = value.take(7)
-            if (Regex("^#[0-9A-Fa-f]{6}$").matches(hex)) onUpdate(profile.copy(color = hex.drop(1).toLong(16) or 0xFF000000L))
-        }, singleLine = true, label = { Text("Custom HEX") }, modifier = Modifier.fillMaxWidth()
-    )
-    Text("Entry edge", color = Muted)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        EdgeSide.entries.forEach { side -> FilterChip(
-            selected = profile.side == side, onClick = { onUpdate(profile.copy(side = side)) }, label = { Text(side.name.lowercase().replaceFirstChar { it.uppercase() }) }
-        ) }
-    }
-    SettingSlider("Duration", "%.1f seconds".format(profile.durationMs / 1000f), profile.durationMs.toFloat(), 1800f..10000f) { onUpdate(profile.copy(durationMs = it.toLong())) }
-    SettingSlider("Size", "%.2f×".format(profile.scale), profile.scale, .60f..1.60f) { onUpdate(profile.copy(scale = it)) }
-    SettingSlider("Vertical position", "${(profile.anchorY * 100).toInt()}%", profile.anchorY, .20f.. .85f) { onUpdate(profile.copy(anchorY = it)) }
-    SettingSlider("Edge inset", "${profile.edgeInsetDp.toInt()} dp", profile.edgeInsetDp, 0f..32f) { onUpdate(profile.copy(edgeInsetDp = it)) }
-    SettingSlider("Glow", "${(profile.glow * 100).toInt()}%", profile.glow, 0f..1f) { onUpdate(profile.copy(glow = it)) }
 }
 
 @Composable
@@ -582,7 +415,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
     Text("Quiet hours", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     SwitchRow("Enable quiet hours", "Suppress effects during your sleep schedule.", enabled) {
         enabled = it; store.quietEnabled = it
-        if (it && store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+        if (it && store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
         HaloNotificationListener.requestPillRefresh()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -596,7 +429,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
         valid = a != null && b != null
         if (valid) {
             store.quietStart = a!!; store.quietEnd = b!!
-            if (store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+            if (store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
             HaloNotificationListener.requestPillRefresh()
         }
     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
@@ -630,102 +463,96 @@ private fun launchableApps(context: android.content.Context): List<InstalledApp>
 }
 
 @Composable
-private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) -> Unit) {
+private fun AppRulesEditor(store: ProfileStore) {
     val context = LocalContext.current
     val installed = remember { launchableApps(context) }
     var filter by remember { mutableStateOf("") }
     var selectedPackage by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var rule by remember(selectedPackage, revision) { mutableStateOf(selectedPackage?.let(store::readRule)) }
-    fun change(value: ApplicationRule) { store.writeRule(value); rule = value; revision++ }
+
+    fun update(value: ApplicationRule) {
+        store.writeRule(value)
+        rule = value
+        revision++
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(value = filter, onValueChange = { filter = it }, label = { Text("Search installed apps") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        val visible = installed.filter { filter.isBlank() || it.label.contains(filter, true) || it.packageName.contains(filter, true) }
-        if (selectedPackage != null && rule != null) {
-            val current = rule!!
+        OutlinedTextField(value = filter, onValueChange = { filter = it },
+            label = { Text("Search installed apps") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        val visible = installed.filter { filter.isBlank() ||
+            it.label.contains(filter, true) || it.packageName.contains(filter, true) }
+        rule?.let { current ->
             SectionCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(applicationLabel(context, current.packageName), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(current.packageName, style = MaterialTheme.typography.labelSmall, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(applicationLabel(context, current.packageName),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(current.packageName, style = MaterialTheme.typography.labelSmall,
+                            color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(onClick = { selectedPackage = null }) { Text("Close") }
                 }
-                SwitchRow("Enable HALO for this app", "Trigger its assigned character on new notifications.", current.enabled) { change(current.copy(enabled = it)) }
-                var expanded by remember(current.packageName) { mutableStateOf(false) }
-                Box {
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Character: ${current.character.displayName} ▾") }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        CharacterApp.entries.forEach { app -> DropdownMenuItem(text = { Text(app.displayName) }, onClick = {
-                            change(current.copy(character = app)); expanded = false
-                        }) }
-                    }
+                SwitchRow("Enable notification lighting", "Trigger the Music edge design when this app sends a notification.",
+                    current.enabled) { update(current.copy(enabled = it)) }
+                val fallbackColor = CharacterApp.fromPackage(current.packageName).initialColor
+                var customHex by remember(current.packageName) {
+                    mutableStateOf("#%06X".format((current.colorOverride ?: fallbackColor) and 0xFFFFFF))
                 }
-                Text("Notification effect for this app", style = MaterialTheme.typography.labelLarge)
+                Text("Notification accent color", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(value = customHex, onValueChange = { typed ->
+                    customHex = typed.take(7)
+                    if (Regex("^#[0-9A-Fa-f]{6}$").matches(customHex)) {
+                        update(current.copy(colorOverride =
+                            customHex.substring(1).toLong(16) or 0xFF000000L))
+                    }
+                }, label = { Text("HEX color") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        FilterChip(
-                            selected = current.notificationModeOverride == null,
-                            onClick = { change(current.copy(notificationModeOverride = null)) },
-                            label = { Text("Use default") }
-                        )
+                        FilterChip(selected = current.colorOverride == null,
+                            onClick = { update(current.copy(colorOverride = null)) },
+                            label = { Text("Auto") })
                     }
-                    items(NotificationEdgeMode.entries) { option ->
-                        FilterChip(
-                            selected = current.notificationModeOverride == option,
-                            onClick = { change(current.copy(notificationModeOverride = option)) },
-                            label = { Text(option.title) }
-                        )
+                    items(Swatches) { color ->
+                        Box(Modifier.size(36.dp).background(Color(color), CircleShape)
+                            .clickable { update(current.copy(colorOverride = color)) })
                     }
                 }
-                Text("Per-app color override", style = MaterialTheme.typography.labelLarge)
-                var customHex by remember(current.packageName) {
-                    mutableStateOf("#%06X".format((current.colorOverride ?: store.read(current.character).color) and 0xFFFFFF))
-                }
-                OutlinedTextField(
-                    value = customHex,
-                    onValueChange = { value ->
-                        customHex = value.take(7)
-                        if (Regex("^#[0-9a-fA-F]{6}$").matches(customHex)) {
-                            change(current.copy(colorOverride = customHex.drop(1).toLong(16) or 0xFF000000L))
-                        }
-                    },
-                    label = { Text("Custom per-app HEX color") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    item { FilterChip(selected = current.colorOverride == null, onClick = { change(current.copy(colorOverride = null)) }, label = { Text("Default") }) }
-                    items(Swatches) { color -> Box(Modifier.size(34.dp).background(Color(color), CircleShape).clickable { change(current.copy(colorOverride = color)) }) }
-                }
-                OutlinedButton(onClick = { onCharacterEdit(current.character) }, modifier = Modifier.fillMaxWidth()) { Text("Edit character animation") }
+                Text("The animation style, timing, and geometry are shared with your Music Studio settings.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
                 OutlinedButton(onClick = {
-                    store.clearRule(current.packageName); rule = store.readRule(current.packageName); revision++
+                    store.clearRule(current.packageName)
+                    rule = store.readRule(current.packageName)
+                    revision++
                 }, modifier = Modifier.fillMaxWidth()) { Text("Reset app rule") }
             }
         }
-        Text("${visible.size} apps available", style = MaterialTheme.typography.labelMedium, color = Muted)
-        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+        Text("${visible.size} installed apps", style = MaterialTheme.typography.labelMedium,
+            color = Muted)
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(visible, key = { it.packageName }) { app ->
                 val data = store.readRule(app.packageName)
-                Card(modifier = Modifier.fillMaxWidth().clickable { selectedPackage = app.packageName },
+                Card(modifier = Modifier.fillMaxWidth()
+                    .clickable { selectedPackage = app.packageName },
                     shape = RoundedCornerShape(19.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ColorDot(data.colorOverride ?: store.read(data.character).color)
-                        Spacer(Modifier.width(11.dp))
+                        ColorDot(data.colorOverride ?: CharacterApp.fromPackage(data.packageName).initialColor)
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(data.character.displayName + if (!data.enabled) " · Off" else "", color = Muted,
-                                style = MaterialTheme.typography.bodySmall)
+                            Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                            Text(if (data.enabled) "Uses Music edge" else "Disabled",
+                                color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                         Text("Edit", color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
         }
-        Text("Apps not shown here still use the Other apps fallback character. HALO never needs access to your contacts or message contents.", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text("Only app names and notification metadata are used. HALO does not read or save message text.",
+            color = Muted, style = MaterialTheme.typography.bodySmall)
     }
 }

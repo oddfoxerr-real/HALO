@@ -1,4 +1,32 @@
-# HALO — Samsung Notification Character Studio
+# HALO — Unified GPU Edge Effects
+
+**Development preview v0.13.0:** Incoming notifications and music now use the **same
+procedural GPU visualizer**. Notification character overlays and the separate
+notification-border renderer have been removed. The four main tabs are Home,
+Music, Apps and Settings.
+
+## v0.13.0 — Shader architecture and notification unification
+
+- Android 13+ uses **AGSL RuntimeShader** to calculate visual geometry, opacity,
+  fluid variation, moving highlights and refraction-like color in a single shader.
+  This replaces the prior approach of drawing 2D shapes and adding another glow layer.
+- Original HALO effects remain selectable with redesigned shader-native motion on
+  supported devices. Older Android versions and shader initialization failures use
+  a legacy Canvas fallback, not a new overlay layer.
+- Notifications trigger that same Music Studio effect, with per-app enabled/disabled
+  rules and optional color overrides. No notification character, mode switcher or
+  separate notification animation settings are active. Notification playback does
+  **not** request microphone or music capture permissions.
+- Music priority automatically yields to incoming notifications and returns afterward.
+  Notification persistence remains optional. Notch/camera support, sides, insets,
+  glow, spread, palettes and other calibration use Music Studio settings.
+- See [ANIMATION_REFERENCES.md](ANIMATION_REFERENCES.md) for open-source shader
+  references, licences, and what is or is not bundled.
+- **Device validation pending:** A successful Kotlin build does not demonstrate that
+  an AGSL shader compiles or looks correct on an actual Samsung GPU. Protected system
+  bars and AOD may continue to clip third-party drawing.
+
+# HALO — Historical implementation notes
 
 **Development: v0.12.0 Light-field Preview** — Music and notification glow refinement, camera cutout calibration, and the 31 earlier animation selections. Galaxy A56 device validation is pending.
 

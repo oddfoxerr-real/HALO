@@ -106,7 +106,7 @@ class HaloNotificationListener : NotificationListenerService() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+                Intent.ACTION_SCREEN_OFF -> { PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
                     refreshIndicator()
                     refreshPill()
@@ -179,21 +179,14 @@ class HaloNotificationListener : NotificationListenerService() {
             }
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
-                MusicEdgeService.yieldForNotification(profile.durationMs)
-                when (store.notificationModeFor(sbn.packageName)) {
-                    NotificationEdgeMode.CHARACTER -> HaloOverlay.showNotification(this, profile, true)
-                    NotificationEdgeMode.BORDER -> {
-                        HaloOverlay.dismiss()
-                        PillHaloOverlay.dismiss()
-                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                            store.notificationBorderPersistent, store)
-                    }
-                    NotificationEdgeMode.BOTH -> {
-                        PillHaloOverlay.dismiss()
-                        HaloOverlay.showNotification(this, profile, true)
-                        NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                            store.notificationBorderPersistent, store)
-                    }
+                PillHaloOverlay.dismiss()
+                // Reuse the live Music window when available. Otherwise create a temporary
+                // window containing the exact same visualizer; no audio permission required.
+                val handledInMusic = MusicEdgeService.showNotification(
+                    profile.color.toInt(), store.notificationDurationMs)
+                if (!handledInMusic) {
+                    NotificationEdgeOverlay.show(this, profile.color, store.notificationDurationMs,
+                        store.notificationBorderPersistent, store)
                 }
             } else refreshIndicatorIfIdle()
         }
@@ -216,7 +209,6 @@ class HaloNotificationListener : NotificationListenerService() {
             stopMediaObservation()
             main.removeCallbacks(quietCheck)
             NotificationActivityState.disconnected()
-            HaloOverlay.dismiss()
             NotificationEdgeOverlay.dismiss()
         }
         super.onListenerDisconnected()
@@ -227,7 +219,6 @@ class HaloNotificationListener : NotificationListenerService() {
         instance = null
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) { }
-        HaloOverlay.dismiss()
         NotificationEdgeOverlay.dismiss()
         super.onDestroy()
     }
@@ -252,35 +243,28 @@ class HaloNotificationListener : NotificationListenerService() {
     }
 
     private fun refreshIndicatorIfIdle() {
-        if (!HaloOverlay.isAnimating()) refreshIndicator()
+        if (!NotificationEdgeOverlay.isAnimating) refreshIndicator()
     }
 
     private fun refreshIndicator() {
-        if (MusicEdgeService.isRunning) {
-            if (!HaloOverlay.isAnimating()) HaloOverlay.dismiss()
-            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
-            return
-        }
         if (!mayShow()) {
-            HaloOverlay.dismiss()
             NotificationEdgeOverlay.dismiss()
             return
         }
-        val mode = tracker.newestIndicatorPackages().firstOrNull()?.let(store::notificationModeFor)
-            ?: store.notificationEdgeMode
-        if (mode == NotificationEdgeMode.BORDER) HaloOverlay.dismiss()
-        if (mode == NotificationEdgeMode.CHARACTER || !store.notificationBorderPersistent) {
-            if (mode == NotificationEdgeMode.CHARACTER) NotificationEdgeOverlay.dismiss()
-        } else {
-            val borderProfile = tracker.newestIndicatorPackages().asSequence()
-                .map(store::readForPackage).firstOrNull { it.enabled }
-            if (borderProfile == null) NotificationEdgeOverlay.dismiss()
-            else NotificationEdgeOverlay.showStatic(this, borderProfile.color, store)
+        if (MusicEdgeService.isRunning) {
+            // A temporary notification takes priority, then the music edge resumes.
+            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
+            return
         }
-        if (mode == NotificationEdgeMode.BORDER) return
+        if (NotificationEdgeOverlay.isAnimating) return
+        if (!store.notificationBorderPersistent) {
+            NotificationEdgeOverlay.dismiss()
+            return
+        }
         val profile = tracker.newestIndicatorPackages().asSequence()
-            .map(store::readForPackage).firstOrNull { it.enabled && it.persistent }
-        if (profile == null) HaloOverlay.dismiss() else HaloOverlay.showIndicator(this, profile)
+            .map(store::readForPackage).firstOrNull { it.enabled }
+        if (profile == null) NotificationEdgeOverlay.dismiss()
+        else NotificationEdgeOverlay.showStatic(this, profile.color, store)
     }
 
     private fun scheduleQuietCheck() {
