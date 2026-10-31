@@ -4,11 +4,20 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
-enum class EdgeMode(val title: String) {
-    WAVE("Silk"), BARS("Spectrum"), TRAIL("Orbit"), PULSE("Pulse"), CHAIN("Chainsaw"),
-    AURORA("Aurora"), COMET("Comet"), TWIN("Twin streams"), SPARKS("Sparks"),
-    PIXELS("Pixel rush"), NEON("Neon circuit"), RAIN("Rainfall"), HELIX("Helix"),
-    BLOOM("Bloom"), PRISM("Prism")
+/** GPU-only effects: original Canvas styles have been retired. */
+enum class EdgeMode(val title: String, val description: String) {
+    LIQUID("Liquid glass", "Refractive fluid waves"),
+    DOTS("Dot matrix", "Three lanes of responsive light dots"),
+    FIREFLIES("Fireflies", "Floating particles and depth"),
+    METEORS("Meteor shower", "Fast moving light trails"),
+    AURORA("Aurora", "Organic spectral curtains"),
+    PLASMA("Plasma", "Turbulent energy and color"),
+    PRISM("Prism", "Crystalline spectral facets"),
+    RIPPLE("Ripple", "Concentric beat shockwaves"),
+    SPECTRUM("Spectrum", "Frequency-shaped light peaks"),
+    COMETS("Comets", "Focused light heads and long tails"),
+    ORBITALS("Orbitals", "Counter-rotating energy streams"),
+    NEBULA("Nebula", "Soft drifting clouds")
 }
 
 enum class NotificationEdgeMode(val title: String) {
@@ -50,8 +59,18 @@ object EdgeSpectrum {
     fun bass(bands: FloatArray): Float =
         if (bands.size < 4) 0f else (bands[0] + bands[1] + bands[2] + bands[3]) / 4f
 
-    fun mode(value: String?): EdgeMode =
-        EdgeMode.entries.firstOrNull { it.name == value } ?: EdgeMode.WAVE
+    /** Migrate old persisted selections without retaining their animation implementations. */
+    fun mode(value: String?): EdgeMode = when (value) {
+        "WAVE", "HELIX" -> EdgeMode.LIQUID
+        "BARS" -> EdgeMode.SPECTRUM
+        "TRAIL", "TWIN" -> EdgeMode.ORBITALS
+        "PULSE", "BLOOM" -> EdgeMode.RIPPLE
+        "CHAIN", "SPARKS", "PIXELS" -> EdgeMode.DOTS
+        "COMET" -> EdgeMode.COMETS
+        "NEON" -> EdgeMode.PLASMA
+        "RAIN" -> EdgeMode.METEORS
+        else -> EdgeMode.entries.firstOrNull { it.name == value } ?: EdgeMode.LIQUID
+    }
 
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
