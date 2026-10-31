@@ -183,9 +183,9 @@ class HaloNotificationListener : NotificationListenerService() {
                 // Reuse the live Music window when available. Otherwise create a temporary
                 // window containing the exact same visualizer; no audio permission required.
                 val handledInMusic = MusicEdgeService.showNotification(
-                    profile.color.toInt(), profile.durationMs)
+                    profile.color.toInt(), store.notificationDurationMs)
                 if (!handledInMusic) {
-                    NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
+                    NotificationEdgeOverlay.show(this, profile.color, store.notificationDurationMs,
                         store.notificationBorderPersistent, store)
                 }
             } else refreshIndicatorIfIdle()
