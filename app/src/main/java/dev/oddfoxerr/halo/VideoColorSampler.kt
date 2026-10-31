@@ -34,43 +34,52 @@ internal object VideoColorSampler {
             var distance = zone * perimeter / ZONES
             val x: Float
             val y: Float
-            when {
-                distance < horizontal -> {
-                    x = left + r + distance
-                    y = top
-                }
-                (distance.also { distance -= horizontal }) < arc -> {
+            if (distance < horizontal) {
+                x = left + r + distance
+                y = top
+            } else {
+                distance -= horizontal
+                if (distance < arc) {
                     val angle = -PI.toFloat() / 2f + distance / r
                     x = right - r + cos(angle) * r
                     y = top + r + sin(angle) * r
-                }
-                (distance.also { distance -= arc }) < vertical -> {
-                    x = right
-                    y = top + r + distance
-                }
-                (distance.also { distance -= vertical }) < arc -> {
-                    val angle = distance / r
-                    x = right - r + cos(angle) * r
-                    y = bottom - r + sin(angle) * r
-                }
-                (distance.also { distance -= arc }) < horizontal -> {
-                    x = right - r - distance
-                    y = bottom
-                }
-                (distance.also { distance -= horizontal }) < arc -> {
-                    val angle = PI.toFloat() / 2f + distance / r
-                    x = left + r + cos(angle) * r
-                    y = bottom - r + sin(angle) * r
-                }
-                (distance.also { distance -= arc }) < vertical -> {
-                    x = left
-                    y = bottom - r - distance
-                }
-                else -> {
-                    distance -= vertical
-                    val angle = PI.toFloat() + distance / r
-                    x = left + r + cos(angle) * r
-                    y = top + r + sin(angle) * r
+                } else {
+                    distance -= arc
+                    if (distance < vertical) {
+                        x = right
+                        y = top + r + distance
+                    } else {
+                        distance -= vertical
+                        if (distance < arc) {
+                            val angle = distance / r
+                            x = right - r + cos(angle) * r
+                            y = bottom - r + sin(angle) * r
+                        } else {
+                            distance -= arc
+                            if (distance < horizontal) {
+                                x = right - r - distance
+                                y = bottom
+                            } else {
+                                distance -= horizontal
+                                if (distance < arc) {
+                                    val angle = PI.toFloat() / 2f + distance / r
+                                    x = left + r + cos(angle) * r
+                                    y = bottom - r + sin(angle) * r
+                                } else {
+                                    distance -= arc
+                                    if (distance < vertical) {
+                                        x = left
+                                        y = bottom - r - distance
+                                    } else {
+                                        distance -= vertical
+                                        val angle = PI.toFloat() + distance / r
+                                        x = left + r + cos(angle) * r
+                                        y = top + r + sin(angle) * r
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             var red = 0
