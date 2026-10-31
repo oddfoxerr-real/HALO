@@ -36,8 +36,8 @@ data class NotchSettings(
 internal object NotchGeometry {
     fun manual(width: Int, density: Float, input: NotchSettings): RectF {
         val s = input.normalized()
-        val w = s.widthDp * density
-        val h = if (s.mode == NotchMode.CIRCLE) w else s.heightDp * density
+        val w = (s.widthDp + 2f * s.gapDp) * density
+        val h = if (s.mode == NotchMode.CIRCLE) w else (s.heightDp + 2f * s.gapDp) * density
         val cx = width / 2f + s.xOffsetDp * density
         val cy = s.topDp * density
         return RectF(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
