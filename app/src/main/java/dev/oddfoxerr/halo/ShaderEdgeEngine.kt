@@ -39,7 +39,9 @@ internal class ShaderEdgeEngine {
         glow: Float,
         brightness: Float,
         primary: Int,
-        secondary: Int
+        secondary: Int,
+        dotSize: Float,
+        dotDensity: Float
     ): Boolean {
         if (failed || width <= 0 || height <= 0) return false
         try {
@@ -54,6 +56,8 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("spread", spread)
             runtime.setFloatUniform("glow", glow)
             runtime.setFloatUniform("brightness", brightness)
+            runtime.setFloatUniform("dotSize", dotSize.coerceIn(.55f, 2.5f))
+            runtime.setFloatUniform("dotDensity", dotDensity.coerceIn(.6f, 2.0f))
             runtime.setIntUniform("design", mode.ordinal)
             val frequencies = FloatArray(4)
             for (i in bands.indices) {
@@ -91,6 +95,8 @@ internal class ShaderEdgeEngine {
             uniform float spread;
             uniform float glow;
             uniform float brightness;
+            uniform float dotSize;
+            uniform float dotDensity;
             uniform float3 first;
             uniform float3 second;
             uniform int design;
@@ -176,87 +182,194 @@ internal class ShaderEdgeEngine {
                 return mix(low,high,smoothstep(0.20,0.80,x));
             }
 
-            half4 main(float2 px) {
-                float2 uv = px / max(resolution, float2(1.0));
-                float2 center = 0.5*(frame.xy+frame.zw);
-                float2 normalized = (px-center)/max((frame.zw-frame.xy)*0.5,float2(1.0));
-                float perimeterPos = fract(atan(normalized.y,normalized.x)/6.2831853 + 0.5);
-                float d = roundedDistance(px);
-                // Cull transparent interior before expensive noise work.
-                if (abs(d) > max(42.0, 110.0 * spread * thickness)) return half4(0.0);
-                float beat = clamp(bass,0.0,1.0);
-                float movement = seconds * 0.20 + phase * 1.4;
-                float energy = harmonic(perimeterPos);
-                float swirl = noise(float2(perimeterPos*14.0-seconds*.55,seconds*.24));
-                float detail = noise(float2(perimeterPos*43.0+seconds*.20,seconds*.40));
-                float grain = swirl*0.76+detail*0.24;
-                float front = 1.8 * thickness;
-                float size = (5.0 + 12.0*energy + 7.0*beat) * spread * thickness;
+            // Continuous arc-length around a rounded rectangle. Dots and gradients
+            // use the same physical distance at straight edges AND at rounded corners.
+            float perimeterLocation(float2 p) {
+                float r = max(radius, 1.0);
+                float w = max(frame.z - frame.x - 2.0*r, 1.0);
+                float h = max(frame.w - frame.y - 2.0*r, 1.0);
+                float a = 1.570796327 * r;
+                float full = 2.0*w + 2.0*h + 4.0*a;
+                float left = frame.x, top = frame.y;
+                float right = frame.z, bottom = frame.w;
+                float dist;
+                if (p.x > right-r && p.y < top+r) {
+                    float angle = atan(p.y-(top+r),p.x-(right-r));
+                    dist = w + (angle+1.570796327)*r;
+                } else if (p.x > right-r && p.y > bottom-r) {
+                    float angle = atan(p.y-(bottom-r),p.x-(right-r));
+                    dist = w+a+h+angle*r;
+                } else if (p.x < left+r && p.y > bottom-r) {
+                    float angle = atan(p.y-(bottom-r),p.x-(left+r));
+                    dist = w+2.0*a+h+w+(angle-1.570796327)*r;
+                } else if (p.x < left+r && p.y < top+r) {
+                    float angle = atan(p.y-(top+r),p.x-(left+r));
+                    dist = 2.0*w+3.0*a+2.0*h+(angle+3.141592654)*r;
+                } else {
+                    float dt = abs(p.y-top), db = abs(p.y-bottom);
+                    float dr = abs(p.x-right), dl = abs(p.x-left);
+                    float closest = min(min(dt,db),min(dr,dl));
+                    if (dt <= closest) dist = clamp(p.x-left-r,0.0,w);
+                    else if (dr <= closest) dist = w+a+clamp(p.y-top-r,0.0,h);
+                    else if (db <= closest) dist = w+a+h+a+clamp(right-r-p.x,0.0,w);
+                    else dist = 2.0*w+2.0*a+h+a+clamp(bottom-r-p.y,0.0,h);
+                }
+                return fract(dist/full);
+            }
 
-                // Distinct motion systems, not a uniform stroke with different names.
-                if (design == 0) { // Silk - smooth folded satin wave
-                    float3 flow = float3(perimeterPos*7.0, d*.022, seconds*.21);
-                    float turbulence = noise3(flow);
-                    size *= .7 + .65 * grain + .35 * turbulence;
-                    d += (turbulence*.55 + sin(perimeterPos*33.0-seconds*1.8)*.45)
-                        * energy * 7.5 * spread;
-                } else if (design == 1) { // Spectrum - smoothly sampled spectral columns
-                    size *= .20 + 1.20 * energy;
-                    d += sin(perimeterPos*95.0)*energy*2.6;
-                } else if (design == 2 || design == 6) { // Orbit / Comet - travelling energy
-                    float delta = abs(fract(perimeterPos - movement + 0.5)-0.5);
-                    size *= .08 + 2.6 * exp(-delta*delta*220.0) * (.45+beat);
-                } else if (design == 3) { // Pulse - expanding interference
-                    d += sin(d*.16 - seconds*7.0)*beat*6.0;
-                    size *= .45 + 1.25*beat;
-                } else if (design == 4) { // Chain - forged rhythmic teeth
-                    size *= .5 + .5 * smoothstep(.35,.8,sin(perimeterPos*230.0-seconds*9.0));
-                } else if (design == 5) { // Aurora - cloth-like drifting spectral curtains
-                    float3 flow = float3(perimeterPos*10.0,d*.025,seconds*.18);
-                    float coarse = noise3(flow);
-                    float detailNoise = noise3(flow*2.3 + float3(3.2, .8, 1.5));
-                    float folded = coarse*.72 + detailNoise*.28;
-                    size *= .83 + .52*grain + .9*folded;
-                    d += folded*size*.48;
-                } else if (design == 7) { // Twin streams
-                    float path1=exp(-pow(abs(fract(perimeterPos-movement+0.5)-0.5)*17.0,2.0));
-                    float path2=exp(-pow(abs(fract(perimeterPos+movement+0.5)-0.5)*17.0,2.0));
-                    size *= .08 + (path1+path2)*1.9;
-                } else if (design == 8) { // Sparks - scattered electrical crackles
-                    size *= .10 + pow(detail,7.0)*3.5*max(energy,beat);
-                } else if (design == 9) { // Pixels - discrete fluorescent mosaic
-                    size *= .18+floor(energy*8.0)*.14;
-                } else if (design == 10) { // Neon circuit
-                    size *= .44+step(.70,noise(float2(perimeterPos*34.0,seconds*.18)))*1.1;
-                } else if (design == 11) { // Rainfall
-                    size *= .3 + pow(grain,3.0)*1.6;
-                    d += sin(perimeterPos*83.0-seconds*7.0)*energy*5.0;
-                } else if (design == 12) { // Helix
-                    d += sin(perimeterPos*70.0-seconds*4.0)*size*.42;
-                    size *= .55+energy*.5;
-                } else if (design == 13) { // Bloom
-                    size *= .24+beat*1.9;
-                    d += sin(perimeterPos*32.0-seconds*2.0)*energy*7.0;
-                } else { // Prism - refractive facets
-                    size *= .43 + abs(sin(perimeterPos*38.0-seconds*.8))*.8;
+            float wrappedDistance(float a, float b) {
+                return abs(fract(a-b+0.5)-0.5);
+            }
+
+            float gaussian(float d, float width) {
+                float x=d/max(width,0.1);
+                return exp(-x*x);
+            }
+
+            half4 main(float2 px) {
+                float d = roundedDistance(px);
+                // Do not allocate the center of the display to expensive shaders.
+                if (abs(d)>max(62.0, 165.0*thickness*spread)) return half4(0.0);
+                float u = perimeterLocation(px);
+                float perimeter = 2.0*(frame.z-frame.x+frame.w-frame.y-8.0*radius)
+                    + 6.2831853*radius;
+                perimeter = max(perimeter, 1.0);
+                float time=seconds*.55;
+                float low=clamp(audio.x,0.0,1.0);
+                float treble=clamp(audio.w,0.0,1.0);
+                float energy=clamp(harmonic(u),0.0,1.0);
+                float beat=clamp(bass,0.0,1.0);
+                float width=(5.0+12.0*energy+8.0*beat)*max(thickness,0.2)*spread;
+                float activity=.35+.65*max(beat,energy);
+                float amount=0.0;
+                float bright=0.0;
+                float shine=0.0;
+
+                if (design == 0) { // Liquid glass: organic refraction, not a sketched wave
+                    float3 coord=float3(u*9.0,d*.025,time*.3);
+                    float warp=noise3(coord)*.72+noise3(coord*2.1+float3(1.5,3.0,0.0))*.28;
+                    float warpD=d-warp*width*.67;
+                    amount=gaussian(warpD-width*.17,width*.42)*(.50+.5*activity);
+                    bright=gaussian(warpD+width*.12,width*.16)*(.32+.68*energy);
+                    shine=gaussian(warpD-width*.27,width*.09)*.18;
+                } else if (design == 1) { // Dot matrix: three physically separated rows
+                    float columns=max(42.0, round(112.0*dotDensity));
+                    float cycle=u*columns-time*.63;
+                    float cell=floor(cycle);
+                    float dx=(fract(cycle)-.5)*perimeter/columns;
+                    float glimmer=.60+.40*sin(time*1.7+cell*.83);
+                    float strength=.40+.60*energy;
+                    float radiusPx=(1.25+3.3*strength)*dotSize*thickness;
+                    for(int row=0;row<3;row++){
+                        float dy=d-(float(row)-1.0)*(8.5*dotSize*thickness);
+                        float dotDist=length(float2(dx,dy));
+                        float lit=gaussian(max(dotDist-radiusPx,0.0),1.3*thickness)
+                            *(.58+.42*glimmer)*strength;
+                        amount=max(amount,lit);
+                        bright=max(bright,gaussian(dotDist,radiusPx*.50)*lit);
+                    }
+                } else if (design == 2) { // Fireflies: layered drifting particle field
+                    float cells=76.0;
+                    float z=u*cells-time*.41;
+                    float id=floor(z);
+                    float offset=(fract(z)-.5)*perimeter/cells;
+                    float3 seed=float3(id,1.6,3.7);
+                    float floatY=(noise3(seed+float3(0.0,0.0,time*.32)))*22.0;
+                    float y=d-floatY;
+                    float rad=(2.5+4.0*hash(float2(id,6.5)))*dotSize*thickness;
+                    float particle=gaussian(length(float2(offset,y)),rad);
+                    float z2=u*47.0+time*.26;
+                    float id2=floor(z2);
+                    float x2=(fract(z2)-.5)*perimeter/47.0;
+                    float y2=d-(hash(float2(id2,17.0))-.5)*33.0;
+                    amount=particle*(.45+.55*activity)+
+                        gaussian(length(float2(x2,y2)),3.2*dotSize*thickness)*.7*activity;
+                    bright=amount*.65;
+                } else if (design == 3) { // Meteor shower: streaming streaks
+                    float head=fract(time*.19);
+                    float distance=fract(head-u+1.0);
+                    float lane=(.3+.7*hash(float2(floor(u*18.0),3.0)));
+                    float trail=exp(-distance*24.0)*lane;
+                    amount=gaussian(d-4.0*thickness,width*.35)*trail*(.5+.5*activity);
+                    bright=gaussian(distance*perimeter,19.0*thickness)*gaussian(d,6.0*thickness);
+                } else if (design == 4) { // Aurora: volumetric noise curtains
+                    float3 coord=float3(u*10.5,d*.027,time*.22);
+                    float coarse=noise3(coord);
+                    float detailed=noise3(coord*2.0+float3(1.3,6.0,2.6));
+                    float curtain=d-(coarse*.72+detailed*.28)*width*1.15;
+                    float translucent=smoothstep(-.7,.8,coarse*.7+detailed*.3);
+                    amount=gaussian(curtain-width*.18,width*.66)*translucent*(.55+.45*activity);
+                    bright=gaussian(curtain+width*.12,width*.20)*translucent*.52;
+                } else if (design == 5) { // Plasma: turbulently folded energy
+                    float3 field=float3(u*16.0,d*.045,time*.45);
+                    float n1=noise3(field);
+                    float n2=noise3(field*2.3+float3(3.0,1.0,2.0));
+                    float shape=d+(n1*.7+n2*.3)*width*.8;
+                    amount=gaussian(shape,width*.58)*(.57+.43*activity);
+                    bright=gaussian(shape,width*.17)*(.3+.7*low);
+                    shine=gaussian(n2-.5,.21)*amount*.45;
+                } else if (design == 6) { // Prism: sharp moving facets
+                    float facets=fract(u*46.0-time*.16);
+                    float facetEdge=abs(facets-.5)*2.0;
+                    float facetShape=d-(.50-facetEdge)*width*.8;
+                    amount=gaussian(facetShape,width*.24)
+                        *(.3+.7*pow(facetEdge,1.8))*(.4+.6*energy);
+                    bright=gaussian(facetShape,width*.09)*facetEdge;
+                } else if (design == 7) { // Ripple: expanding beat interference
+                    float wave=sin(d*.24-time*5.1)*.5+.5;
+                    float rings=pow(wave,8.0);
+                    amount=gaussian(d,width*1.05)*(.28+.72*rings)*(.48+.52*beat);
+                    bright=gaussian(d,width*.22)*rings*.64;
+                } else if (design == 8) { // Spectrum: peaks follow four FFT bands
+                    float columns=88.0;
+                    float cell=fract(u*columns);
+                    float bandShape=energy*23.0*spread*thickness+3.0*thickness;
+                    float x=(cell-.5)*perimeter/columns;
+                    float rectangle=step(abs(x),perimeter/(columns*2.0)*.72);
+                    float bar=smoothstep(bandShape+2.0,bandShape-1.0,abs(d));
+                    amount=bar*rectangle*(.28+.72*energy);
+                    bright=amount*.38;
+                } else if (design == 9) { // Comets: two bright heads and decay trails
+                    float q1=fract(time*.24-u+1.0);
+                    float q2=fract(-time*.17-u+.55+2.0);
+                    float tail=exp(-q1*19.0)+exp(-q2*25.0);
+                    amount=gaussian(d,width*.24)*tail*(.55+.45*activity);
+                    bright=(gaussian(wrappedDistance(u,fract(time*.24))*perimeter,15.0)
+                        +gaussian(wrappedDistance(u,fract(-time*.17+.55))*perimeter,17.0))
+                        *gaussian(d,5.0*thickness);
+                } else if (design == 10) { // Orbitals: opposing current lines
+                    float head1=wrappedDistance(u,fract(time*.23));
+                    float head2=wrappedDistance(u,fract(.52-time*.19));
+                    float l1=gaussian(head1*perimeter,perimeter*.07);
+                    float l2=gaussian(head2*perimeter,perimeter*.07);
+                    float depth=5.0*thickness*sin(u*32.0-time*2.2);
+                    amount=gaussian(d-depth,width*.28)*max(l1,l2)*(.48+.52*activity);
+                    bright=gaussian(d+depth,width*.16)*(l1+l2)*.32;
+                } else { // Nebula: cloud-like transparent gas
+                    float3 c=float3(u*7.0,d*.022,time*.14);
+                    float n1=noise3(c);
+                    float n2=noise3(c*2.8+float3(4.0,7.0,0.0));
+                    float cloud=smoothstep(-.45,.52,n1*.7+n2*.3);
+                    amount=gaussian(d,width*1.75)*cloud*(.32+.68*activity)*.82;
+                    bright=gaussian(d-width*.27,width*.46)*cloud*.27;
                 }
 
-                // Procedural volume and specular caustics:
-                // transparent interior, flowing colored body, sharp white refraction.
-                float mask = exp(-pow(max(abs(d)-front,0.0)/max(1.0,size),2.0)*2.6);
-                float core = exp(-pow(d/max(1.0,front),2.0)*2.5);
-                float halo = exp(-pow(d/max(2.0,size*2.8),2.0)*2.2)*(.05+.19*glow);
-                float refraction = pow(max(0.0,sin(perimeterPos*37.0 + movement*5.0 + grain*2.1)),14.0);
-                float highlight = core*(.24+.49*energy+.18*refraction);
-                float chroma = fract(perimeterPos*1.9-seconds*.05+grain*.2);
-                float3 color = mix(first,second,smoothstep(.12,.88,chroma));
-                color += first * exp(-pow((d+size*.20)/max(1.0,size*.45),2.0))*.19;
-                color *= .95 + .05 * sin(uv.y * 8.0 + seconds * .45);
-                color = mix(color,float3(1.0),clamp(highlight,0.0,.55));
-                float alpha = clamp((mask*.52 + core*.48 + halo)*brightness,0.0,.94);
-                // Only the nearby edge is illuminated; screen center stays transparent.
-                alpha *= 1.0 - smoothstep(size*2.5+9.0,size*4.5+22.0,abs(d));
-                return half4(half3(color)*half(alpha), half(alpha));
+                // Color is mixed in approximate linear light, with an integer number of
+                // smooth cycles: no hard fract() gradient seam, no muddy midpoint or white wash.
+                float cycle=u*2.0-phase*.07;
+                float blend=.5-.5*cos(cycle*6.2831853);
+                blend=blend*blend*(3.0-2.0*blend);
+                float3 base=sqrt(mix(first*first,second*second,blend));
+                float hueDetail=.14*sin(u*12.5663706-time*.30);
+                base=mix(base,sqrt(mix(first*first,second*second,
+                    clamp(blend+hueDetail,0.0,1.0))),.22);
+                float3 reflected=mix(base,float3(1.0),clamp(bright*.22+shine*.08,0.0,.27));
+                float alpha=clamp(amount+bright*.27+shine*.1,0.0,.91);
+                alpha *= clamp(brightness,0.1,1.0);
+                // Stable translucent diffusion around the true generated geometry.
+                alpha += clamp(glow,0.0,1.0)*.085*gaussian(d,width*1.35)*activity;
+                alpha=clamp(alpha,0.0,.94);
+                return half4(half3(reflected)*half(alpha),half(alpha));
             }
         """.trimIndent()
     }
