@@ -59,6 +59,7 @@ class ChainsawView(context: Context) : View(context) {
     private val sides = Path()
     private var geometryKey = ""
     private var lastFrame = 0L
+    private var visualSeconds = 0f
     private var animationSeconds = 0f
     private val loop = MusicRenderLoop()
     private val choreographer by lazy { Choreographer.getInstance() }
@@ -163,6 +164,7 @@ class ChainsawView(context: Context) : View(context) {
         val now = SystemClock.uptimeMillis()
         val dt = if (lastFrame == 0L) 1f / 60f else ((now - lastFrame) / 1000f).coerceIn(0f, .1f)
         lastFrame = now
+        visualSeconds = (visualSeconds + dt * speed.coerceIn(.25f, 3f)) % 3600f
         val noticePlaying = noticeEndAt > now || (noticePersistent && noticeStartAt > 0L)
         if (noticePlaying) {
             val seconds = (now - noticeStartAt).coerceAtLeast(0L) / 1000f
