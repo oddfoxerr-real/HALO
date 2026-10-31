@@ -1,5 +1,40 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.14.0 — New GPU-only visual library
+
+HALO now requires **Android 13 / API 33 or newer**. The old Canvas animation
+renderer, legacy multi-layer light-field renderer and fifteen older presets
+have been removed from the active codebase. Music and notification events use
+the **same AGSL effect**, with separate audio or notification envelopes.
+
+New GPU animation choices: Liquid silk, Light dots, Constellation, Fireflies,
+Meteor trails, Ribbon flow, Aurora field, Spectral glass, Pulse ripples,
+Plasma tide, Crystal shards, and Orbit beads.
+
+Dots, star clusters, orbit beads, and fireflies have independent **Dot density**
+and **Dot size** sliders. The shader computes spacing using the actual length
+of the rounded screen perimeter so particle speed and dot spacing remain
+consistent on long straight sides and in corners.
+
+**Gradient correction:** Replaced the center-angle-dependent hard-wrap gradient
+with an arc-length-based, seamless, periodic color blend in linear screen
+geometry. Four modes are Smooth (static seamless two-color loop), Flowing
+(animated two-color loop), Single color, and Spectrum (continuous prismatic
+palette). Output is premultiplied-alpha to prevent dark fringes against
+transparent overlays. The selected palette is independent of effect shape.
+
+Legacy saved style identifiers migrate to the closest new GPU design, while
+retaining brightness, sensitivity, notch calibration, per-app color rules,
+timing and overlay permissions. The old animations are *not* rendered if AGSL
+fails; the studio explicitly reports GPU unavailable. This avoids silently
+showing a different design than the user selected. Android 13+ is required.
+
+This is a developer preview. CI checks Kotlin build, JVM tests, signed APK
+and Android-emulator AGSL compilation; real Galaxy A56 / One UI performance
+and visual quality still require on-device verification.
+
+
+
 ## v0.13.1 — Licensed fluid motion and Android GPU testing
 
 Retains the merged v0.13.0 Music/Notification engine, notification rules and
