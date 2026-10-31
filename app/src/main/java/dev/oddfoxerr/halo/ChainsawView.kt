@@ -36,6 +36,7 @@ class ChainsawView(context: Context) : View(context) {
     private var notchSettings = ProfileStore(context).notchSettings()
 
     var thickness = 1f
+    var beatImpact = 1.4f
     var glow = .75f
     var brightness = 1f
     var spread = 1f
@@ -58,6 +59,7 @@ class ChainsawView(context: Context) : View(context) {
     private val sides = Path()
     private var geometryKey = ""
     private var lastFrame = 0L
+    private var animationSeconds = 0f
     private val loop = MusicRenderLoop()
     private val choreographer by lazy { Choreographer.getInstance() }
     private val redraw = object : Choreographer.FrameCallback {
@@ -75,6 +77,7 @@ class ChainsawView(context: Context) : View(context) {
         edgeColor = settings.color
         accentColor = settings.accent
         thickness = settings.thickness
+        beatImpact = settings.beatImpact
         glow = settings.glow
         brightness = settings.brightness
         spread = settings.spread
@@ -171,7 +174,8 @@ class ChainsawView(context: Context) : View(context) {
             motion.accept(notificationBands, beat, now, 1f)
         }
 
-        val moving = motion.advance(now, dt, speed)
+        val moving = motion.advance(now, dt, 1f)
+        if (moving || noticePlaying) animationSeconds = (animationSeconds + dt * speed) % 3600f
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (geometryKey != key) {
             geometryKey = key
@@ -197,8 +201,8 @@ class ChainsawView(context: Context) : View(context) {
             gpuDidRender = shaderEngine?.render(
                 canvas, width, height, bounds,
                 min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
-                mode, motion.bands, motion.pulse, motion.phase, now / 1000f,
-                density * thickness, spread, glow, brightness, edgeColor, accentColor
+                mode, motion.bands, motion.pulse, motion.phase, animationSeconds,
+                density * thickness, spread, glow, brightness, beatImpact, edgeColor, accentColor
             ) == true
             canvas.restore()
         } else {
