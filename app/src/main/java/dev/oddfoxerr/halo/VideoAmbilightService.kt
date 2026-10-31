@@ -83,11 +83,12 @@ class VideoAmbilightService : Service() {
             if (!Settings.canDrawOverlays(this)) statusValue.value = "Allow display over other apps first"
             return START_NOT_STICKY
         }
-        val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
+        val request = intent ?: return START_NOT_STICKY
+        val resultCode = request.getIntExtra(EXTRA_RESULT_CODE, 0)
         @Suppress("DEPRECATION")
         val resultData = if (Build.VERSION.SDK_INT >= 33)
-            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
-        else intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+            request.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+        else request.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         if (resultData == null || resultCode != android.app.Activity.RESULT_OK) {
             statusValue.value = "Screen capture consent was not granted"
             stopSelf()
