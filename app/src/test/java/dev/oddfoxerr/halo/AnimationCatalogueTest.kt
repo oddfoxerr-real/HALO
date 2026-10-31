@@ -5,33 +5,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnimationCatalogueTest {
-    @Test fun musicCatalogueHasDistinctStableModes() {
-        assertEquals(15, EdgeMode.entries.size)
-        assertEquals(15, EdgeMode.entries.map { it.title }.distinct().size)
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode(null))
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode("unknown"))
+    @Test fun gpuCatalogueHasDistinctEffects() {
+        assertEquals(12, EdgeMode.entries.size)
+        assertEquals(12, EdgeMode.entries.map { it.title }.distinct().size)
+        assertTrue(EdgeMode.entries.any { it.name == "DOTS" })
+        assertTrue(EdgeMode.entries.any { it.name == "FIREFLIES" })
+        assertEquals(EdgeMode.LIQUID, EdgeSpectrum.mode(null))
+        assertEquals(EdgeMode.LIQUID, EdgeSpectrum.mode("unknown"))
         for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
     }
 
-    @Test fun notificationCatalogueHasDistinctStableStyles() {
-        assertEquals(9, NotificationEdgeStyle.entries.size)
-        assertEquals(9, NotificationEdgeStyle.entries.map { it.title }.distinct().size)
-        assertEquals(NotificationEdgeStyle.PULSE, EdgeSpectrum.notificationStyle(null))
-        for (style in NotificationEdgeStyle.entries)
-            assertEquals(style, EdgeSpectrum.notificationStyle(style.name))
+    @Test fun legacySelectionsMigrateWithoutLegacyRenderers() {
+        val legacy = mapOf(
+            "WAVE" to EdgeMode.LIQUID,
+            "BARS" to EdgeMode.SPECTRUM,
+            "TRAIL" to EdgeMode.ORBIT,
+            "PULSE" to EdgeMode.RIPPLES,
+            "CHAIN" to EdgeMode.SHARDS,
+            "SPARKS" to EdgeMode.FIREFLIES,
+            "RAIN" to EdgeMode.FIREFLIES,
+            "PIXELS" to EdgeMode.SPECTRUM,
+            "TWIN" to EdgeMode.ORBIT,
+            "COMET" to EdgeMode.COMETS
+        )
+        for ((previous, expected) in legacy) assertEquals(expected, EdgeSpectrum.mode(previous))
     }
 
-    @Test fun characterMotionPresetsAreUniqueAndRetainOriginalDefault() {
-        assertEquals(7, CharacterMotion.entries.size)
-        assertEquals(7, CharacterMotion.entries.map { it.title }.distinct().size)
-        assertEquals(CharacterMotion.ORIGINAL, CharacterProfile(CharacterApp.DISCORD).motion)
-        assertTrue(CharacterMotion.entries.any { it.name == "GLITCH" })
-    }
-
-    @Test fun oldStyleIdentifiersRemainBackwardCompatible() {
-        for (name in listOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN"))
-            assertTrue(EdgeMode.entries.any { it.name == name })
-        for (name in listOf("PULSE", "TRACE", "GLOW"))
-            assertTrue(NotificationEdgeStyle.entries.any { it.name == name })
+    @Test fun gradientCatalogueUsesFourStableChoices() {
+        assertEquals(4, EdgeGradient.entries.size)
+        assertEquals(4, EdgeGradient.entries.map { it.title }.distinct().size)
+        assertEquals(EdgeGradient.SMOOTH, EdgeGradient.entries.first())
     }
 }
