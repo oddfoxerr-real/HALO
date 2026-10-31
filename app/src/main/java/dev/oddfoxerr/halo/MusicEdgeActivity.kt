@@ -137,8 +137,8 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     }
     Column(modifier.background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())
         .padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Music", style = MaterialTheme.typography.headlineLarge)
-        Text("Your soundtrack, around your screen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Edge Visuals", style = MaterialTheme.typography.headlineLarge)
+        Text("One GPU effect for both music and notifications.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -183,8 +183,8 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         when (panel) {
             MusicPanel.DESIGNS -> {
-                Text("15 audio-reactive designs", style = MaterialTheme.typography.titleMedium)
-                Text("Five refined classics and ten new original effects. Tap a style to play its live preview.",
+                Text("12 GPU-native light designs", style = MaterialTheme.typography.titleMedium)
+                Text("No legacy Canvas animations. Tap any design to play its real GPU renderer in the phone preview.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 EdgeMode.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -304,48 +304,42 @@ fun MusicStudio(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun DesignTile(mode: EdgeMode, selected: Boolean, first: Int, second: Int, modifier: Modifier, choose: () -> Unit) {
-    Card(onClick = choose, modifier = modifier.semantics { contentDescription = "${mode.title} design${if (selected) ", selected" else ""}" },
-        colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Canvas(Modifier.fillMaxWidth().height(52.dp)) {
-                val brush = Brush.linearGradient(listOf(Color(first), Color(second)))
-                drawRoundRect(brush, cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(2.dp.toPx()), alpha = .35f)
-                when (mode) {
-                    EdgeMode.BARS -> for (i in 0..14) {
-                        val x = 6.dp.toPx() + (size.width - 12.dp.toPx()) * i / 14
-                        val height = (4 + 18 * abs(sin(i * .7))).toFloat().dp.toPx()
-                        drawLine(brush, Offset(x, size.height - 5.dp.toPx()), Offset(x, size.height - height), 2.dp.toPx())
-                    }
-                    EdgeMode.TRAIL -> drawLine(brush, Offset(size.width * .2f, 0f), Offset(size.width * .8f, 0f), 3.dp.toPx())
-                    EdgeMode.CHAIN -> for (i in 1..12) {
-                        val x = size.width * i / 13
-                        drawLine(Color.LightGray, Offset(x - 3.dp.toPx(), size.height - 2.dp.toPx()), Offset(x, size.height - 9.dp.toPx()), 2.dp.toPx())
-                    }
-                    EdgeMode.COMET, EdgeMode.TWIN, EdgeMode.NEON, EdgeMode.PRISM -> {
-                        for (i in 0..3) {
-                            val x = size.width * i / 4f
-                            drawLine(brush, Offset(x, size.height * .45f),
-                                Offset((x + size.width * .15f).coerceAtMost(size.width), size.height * .45f),
-                                (2f + i % 2 * 2f).dp.toPx(), alpha = 1f - i * .17f)
-                        }
-                    }
-                    EdgeMode.PIXELS, EdgeMode.SPARKS, EdgeMode.RAIN -> for (i in 0..19) {
-                        val x = (i + 1) * size.width / 22f
-                        val y = size.height / 2f + (kotlin.math.sin(i * 1.7) * size.height * .22).toFloat()
-                        if (mode == EdgeMode.RAIN) drawLine(brush, Offset(x, y), Offset(x, y + (i % 4 + 2).dp.toPx()), 2.dp.toPx())
-                        else drawCircle(brush, (if (mode == EdgeMode.PIXELS) 2.3f else 1.3f).dp.toPx(), Offset(x, y))
-                    }
-                    EdgeMode.AURORA, EdgeMode.HELIX -> for (i in 0..18) {
-                        val x = size.width * i / 18f
-                        val y = size.height * (.5f + .17f * kotlin.math.sin(i * .62 + if (mode == EdgeMode.HELIX) 2.1 else 0.0).toFloat())
-                        drawCircle(brush, 1.7.dp.toPx(), Offset(x, y))
-                    }
-                    EdgeMode.BLOOM -> for (i in 1..4) drawCircle(brush, (i * 5).dp.toPx(),
-                        Offset(size.width / 2f, size.height / 2f), style = Stroke(1.6.dp.toPx()))
-                    EdgeMode.WAVE, EdgeMode.PULSE -> drawRoundRect(brush, Offset(5.dp.toPx(), 5.dp.toPx()),
-                        androidx.compose.ui.geometry.Size(size.width - 10.dp.toPx(), size.height - 10.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx()))
-                }
+private fun DesignTile(
+    mode: EdgeMode, selected: Boolean, first: Int, second: Int,
+    modifier: Modifier, choose: () -> Unit
+) {
+    val group = when (mode) {
+        EdgeMode.DOTS, EdgeMode.CONSTELLATION, EdgeMode.FIREFLIES -> "ORBS & DOTS"
+        EdgeMode.METEOR -> "TRAVELLING LIGHT"
+        EdgeMode.LIQUID, EdgeMode.AURORA, EdgeMode.RIBBON -> "FLUID MATERIAL"
+        EdgeMode.PRISM, EdgeMode.NEON -> "OPTICAL LIGHT"
+        EdgeMode.BLOOM, EdgeMode.HALO -> "PULSE & ENERGY"
+        EdgeMode.PIXEL -> "DIGITAL CELLS"
+    }
+    Card(
+        onClick = choose,
+        modifier = modifier.semantics {
+            contentDescription = "${mode.title} GPU animation${if (selected) ", selected" else ""}"
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Box(Modifier.fillMaxWidth().height(68.dp)
+                .background(
+                    Brush.linearGradient(listOf(
+                        Color(first).copy(alpha = .75f),
+                        Color(second).copy(alpha = .78f),
+                        Color(first).copy(alpha = .24f))),
+                    RoundedCornerShape(14.dp)
+                ).padding(9.dp),
+                contentAlignment = Alignment.BottomStart) {
+                Text(if (selected) "LIVE PREVIEW" else group,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall)
             }
             Text(mode.title, style = MaterialTheme.typography.titleSmall)
         }
