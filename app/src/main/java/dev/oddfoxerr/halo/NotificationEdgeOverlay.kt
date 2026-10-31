@@ -119,7 +119,7 @@ class NotificationBorderView(context: Context) : View(context) {
             paint.strokeWidth = (thicknessDp + 1.5f) * density
             canvas.drawPath(segment, paint)
         }
-        if (animated && style !in setOf(NotificationEdgeStyle.PULSE, NotificationEdgeStyle.TRACE, NotificationEdgeStyle.GLOW)) {
+        if (animated && style != NotificationEdgeStyle.PULSE && style != NotificationEdgeStyle.TRACE && style != NotificationEdgeStyle.GLOW) {
             extraEffects.draw(style, canvas, measure, elapsed, density, tint, thicknessDp, glow)
         }
         if (animated && (repeating || elapsed < duration) && isAttachedToWindow) postInvalidateDelayed(33L)
