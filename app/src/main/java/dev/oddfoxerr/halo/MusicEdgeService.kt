@@ -11,6 +11,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.*
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationManagerCompat
@@ -155,8 +156,17 @@ class MusicEdgeService : Service() {
             val wm = getSystemService(WindowManager::class.java)
             val params = WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                PixelFormat.TRANSLUCENT).apply { alpha = .4f }
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                PixelFormat.TRANSLUCENT).apply {
+                gravity = Gravity.TOP or Gravity.START
+                // A non-touchable overlay must remain at or below Android's obscuring-opacity threshold.
+                // Full-strength pixels are rendered by the view, not by stacking nearly invisible alpha.
+                alpha = .78f
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
             wm.addView(drawing, params)
             view = drawing; manager = wm
             refresh()
