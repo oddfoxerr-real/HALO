@@ -13,6 +13,12 @@ class ChainsawView(context: Context) : View(context) {
     private val extraEffects = MusicExtraEffects()
     private val lightField = LightFieldRenderer()
     private val shaderEngine = if (android.os.Build.VERSION.SDK_INT >= 33) ShaderEdgeEngine() else null
+    private var gpuDidRender = false
+    val rendererStatus: String get() = when {
+        android.os.Build.VERSION.SDK_INT < 33 -> "Canvas compatibility (Android version)"
+        gpuDidRender -> "AGSL GPU active"
+        else -> "Canvas fallback / GPU not yet rendered"
+    }
     private val notificationBands = FloatArray(EdgeSpectrum.BAND_COUNT)
     private var noticeStartAt = 0L
     private var noticeEndAt = 0L
@@ -167,6 +173,7 @@ class ChainsawView(context: Context) : View(context) {
                 min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
                 mode, motion.bands, motion.pulse, motion.phase, now / 1000f,
                 density * thickness, spread, glow, brightness, edgeColor, accentColor) == true
+            gpuDidRender = gpuDrawn
             if (!gpuDrawn) {
                 // API 29–32 and incompatible GPU drivers use the old Canvas renderer.
                 lightField.draw(canvas, measure, motion, mode, width, height, density,
