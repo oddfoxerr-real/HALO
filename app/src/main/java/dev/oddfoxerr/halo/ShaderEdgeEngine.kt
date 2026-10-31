@@ -20,6 +20,9 @@ internal class ShaderEdgeEngine {
     private var shader: RuntimeShader? = null
     private var failed = false
 
+    /** Compile on the Android framework in instrumentation tests, not JVM stubs. */
+    internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
+
     fun render(
         canvas: Canvas,
         width: Int,
