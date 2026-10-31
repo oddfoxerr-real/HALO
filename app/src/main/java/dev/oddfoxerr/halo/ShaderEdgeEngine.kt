@@ -209,7 +209,10 @@ float3 palette(float u,float t) {
     float mixPosition=.5-.5*cos(TAU*u);
     if(gradientMode==1) mixPosition=.5-.5*cos(TAU*(u-t*.065));
     if(gradientMode==2) mixPosition=0.0;
-    float3 color=mix(first,second,mixPosition);
+    // Blend in linear light so saturated palettes do not turn muddy midway.
+    float3 firstLinear=pow(clamp(first,0.0,1.0),float3(2.2));
+    float3 secondLinear=pow(clamp(second,0.0,1.0),float3(2.2));
+    float3 color=pow(mix(firstLinear,secondLinear,mixPosition),float3(.45454545));
     if(gradientMode==3) {
         float3 chroma=.5+.5*cos(TAU*(u+t*.045)+float3(0.0,2.0943951,4.1887902));
         color=mix(color,chroma,.82);
