@@ -126,7 +126,7 @@ internal class ShaderEdgeEngine {
                 float perimeterPos = fract(atan(normalized.y,normalized.x)/6.2831853 + 0.5);
                 float d = roundedDistance(px);
                 float beat = clamp(bass,0.0,1.0);
-                float movement = seconds * 0.30;
+                float movement = seconds * 0.20 + phase * 1.4;
                 float energy = harmonic(perimeterPos);
                 float swirl = noise(float2(perimeterPos*14.0-seconds*.55,seconds*.24));
                 float detail = noise(float2(perimeterPos*43.0+seconds*.20,seconds*.40));
@@ -185,6 +185,7 @@ internal class ShaderEdgeEngine {
                 float chroma = fract(perimeterPos*1.9-seconds*.05+grain*.2);
                 float3 color = mix(first,second,smoothstep(.12,.88,chroma));
                 color += first * exp(-pow((d+size*.20)/max(1.0,size*.45),2.0))*.19;
+                color *= .95 + .05 * sin(uv.y * 8.0 + seconds * .45);
                 color = mix(color,float3(1.0),clamp(highlight,0.0,.55));
                 float alpha = clamp((mask*.52 + core*.48 + halo)*brightness,0.0,.94);
                 // Only the nearby edge is illuminated; screen center stays transparent.
