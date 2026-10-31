@@ -10,8 +10,9 @@ android {
         applicationId = "dev.oddfoxerr.halo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.13.0"
+        versionCode = 16
+        versionName = "0.13.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -34,4 +35,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

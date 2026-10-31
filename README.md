@@ -1,5 +1,22 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.13.1 — Licensed fluid motion and Android GPU testing
+
+Retains the merged v0.13.0 Music/Notification engine, notification rules and
+punch-hole calibration. **Silk** and **Aurora** now use 3D simplex noise adapted
+from Daniel Sandner's MIT-licensed Audio Shader Studio, producing organically
+warped flow instead of repetitive sine curves. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licensing and attribution.
+
+The AGSL shader culls pixels far from the edge before evaluating expensive
+procedural noise. The live Music Studio preview reports whether GPU rendering
+was active or the compatibility renderer took over.
+
+An Android emulator instrumentation test compiles the RuntimeShader, unlike
+ordinary Kotlin/JVM tests. This is a developer preview and still requires real
+Galaxy A56 / One UI performance and visual-quality validation.
+
+
 **Development preview v0.13.0:** Incoming notifications and music now use the **same
 procedural GPU visualizer**. Notification character overlays and the separate
 notification-border renderer have been removed. The four main tabs are Home,

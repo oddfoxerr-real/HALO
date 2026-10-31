@@ -20,6 +20,9 @@ internal class ShaderEdgeEngine {
     private var shader: RuntimeShader? = null
     private var failed = false
 
+    /** Compile on the Android framework in instrumentation tests, not JVM stubs. */
+    internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
+
     fun render(
         canvas: Canvas,
         width: Int,
@@ -105,6 +108,60 @@ internal class ShaderEdgeEngine {
                 return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
             }
 
+            // 3D simplex noise adapted from Daniel Sandner's Audio Shader Studio
+            // shaders/geometric-patterns/fluidic-1.glsl (MIT, Copyright 2025 Daniel Sandner).
+            // See THIRD_PARTY_NOTICES.md for the license and upstream URL.
+            float3 mod289_3(float3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            float4 mod289_4(float4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            float4 permute4(float4 x) { return mod289_4(((x * 34.0) + 1.0) * x); }
+            float4 inverseSqrt4(float4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float noise3(float3 v) {
+                float2 C = float2(1.0 / 6.0, 1.0 / 3.0);
+                float4 D = float4(0.0, 0.5, 1.0, 2.0);
+                float3 i = floor(v + dot(v, C.yyy));
+                float3 x0 = v - i + dot(i, C.xxx);
+                float3 g = step(x0.yzx, x0.xyz);
+                float3 l = 1.0 - g;
+                float3 i1 = min(g.xyz, l.zxy);
+                float3 i2 = max(g.xyz, l.zxy);
+                float3 x1 = x0 - i1 + C.xxx;
+                float3 x2 = x0 - i2 + C.yyy;
+                float3 x3 = x0 - D.yyy;
+                i = mod289_3(i);
+                float4 p = permute4(permute4(permute4(
+                    i.z + float4(0.0, i1.z, i2.z, 1.0)) +
+                    i.y + float4(0.0, i1.y, i2.y, 1.0)) +
+                    i.x + float4(0.0, i1.x, i2.x, 1.0));
+                float n_ = .142857142857;
+                float3 ns = n_ * D.wyz - D.xzx;
+                float4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                float4 x_ = floor(j * ns.z);
+                float4 y_ = floor(j - 7.0 * x_);
+                float4 x = x_ * ns.x + ns.yyyy;
+                float4 y = y_ * ns.x + ns.yyyy;
+                float4 h = 1.0 - abs(x) - abs(y);
+                float4 b0 = float4(x.xy, y.xy);
+                float4 b1 = float4(x.zw, y.zw);
+                float4 s0 = floor(b0) * 2.0 + 1.0;
+                float4 s1 = floor(b1) * 2.0 + 1.0;
+                float4 sh = -step(h, float4(0.0));
+                float4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                float4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                float3 p0 = float3(a0.xy, h.x);
+                float3 p1 = float3(a0.zw, h.y);
+                float3 p2 = float3(a1.xy, h.z);
+                float3 p3 = float3(a1.zw, h.w);
+                float4 norm = inverseSqrt4(float4(
+                    dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                float4 m = max(0.6 - float4(
+                    dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+                m *= m;
+                return 42.0 * dot(m * m,
+                    float4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+            }
+            
+            
             float roundedDistance(float2 p) {
                 float2 center = 0.5 * (frame.xy + frame.zw);
                 float2 extent = max((frame.zw - frame.xy)*0.5 - radius, float2(1.0));
@@ -125,6 +182,8 @@ internal class ShaderEdgeEngine {
                 float2 normalized = (px-center)/max((frame.zw-frame.xy)*0.5,float2(1.0));
                 float perimeterPos = fract(atan(normalized.y,normalized.x)/6.2831853 + 0.5);
                 float d = roundedDistance(px);
+                // Cull transparent interior before expensive noise work.
+                if (abs(d) > max(42.0, 110.0 * spread * thickness)) return half4(0.0);
                 float beat = clamp(bass,0.0,1.0);
                 float movement = seconds * 0.20 + phase * 1.4;
                 float energy = harmonic(perimeterPos);
@@ -136,8 +195,11 @@ internal class ShaderEdgeEngine {
 
                 // Distinct motion systems, not a uniform stroke with different names.
                 if (design == 0) { // Silk - smooth folded satin wave
-                    size *= .55 + .65 * grain;
-                    d += sin(perimeterPos*46.0-seconds*3.1)*energy*6.0*spread;
+                    float3 flow = float3(perimeterPos*7.0, d*.022, seconds*.21);
+                    float turbulence = noise3(flow);
+                    size *= .7 + .65 * grain + .35 * turbulence;
+                    d += (turbulence*.55 + sin(perimeterPos*33.0-seconds*1.8)*.45)
+                        * energy * 7.5 * spread;
                 } else if (design == 1) { // Spectrum - smoothly sampled spectral columns
                     size *= .20 + 1.20 * energy;
                     d += sin(perimeterPos*95.0)*energy*2.6;
@@ -150,8 +212,12 @@ internal class ShaderEdgeEngine {
                 } else if (design == 4) { // Chain - forged rhythmic teeth
                     size *= .5 + .5 * smoothstep(.35,.8,sin(perimeterPos*230.0-seconds*9.0));
                 } else if (design == 5) { // Aurora - cloth-like drifting spectral curtains
-                    size *= .6 + grain*1.5;
-                    d += sin(perimeterPos*19.0-seconds*.8)*size*.35;
+                    float3 flow = float3(perimeterPos*10.0,d*.025,seconds*.18);
+                    float coarse = noise3(flow);
+                    float detailNoise = noise3(flow*2.3 + float3(3.2, .8, 1.5));
+                    float folded = coarse*.72 + detailNoise*.28;
+                    size *= .83 + .52*grain + .9*folded;
+                    d += folded*size*.48;
                 } else if (design == 7) { // Twin streams
                     float path1=exp(-pow(abs(fract(perimeterPos-movement+0.5)-0.5)*17.0,2.0));
                     float path2=exp(-pow(abs(fract(perimeterPos+movement+0.5)-0.5)*17.0,2.0));
