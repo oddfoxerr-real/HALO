@@ -152,6 +152,16 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                         Text(runtime.message, style = MaterialTheme.typography.titleSmall)
                         if (runtime.source.isNotBlank()) Text(runtime.source, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (runtime.active) {
+                            LinearProgressIndicator(
+                                progress = { runtime.energy.coerceIn(0f,1f) },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text("FFT frames: ${runtime.frames} · Audio energy ${(runtime.energy*100f).toInt()}%",
+                                style=MaterialTheme.typography.labelSmall,
+                                color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
                 Button(onClick = {
