@@ -373,6 +373,20 @@ private fun HaloApp(
                                 store.notificationBorderLeft = 6f; store.notificationBorderRight = 6f
                                 store.notificationBorderCorner = 35f
                             }, modifier = Modifier.fillMaxWidth()) { Text("Reset border calibration") }
+                            Text("Camera cutout / notch effect", style = MaterialTheme.typography.titleSmall)
+                            var notchSelection by remember { mutableStateOf(store.notchSettings().mode) }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(NotchMode.entries) { option ->
+                                    FilterChip(selected = notchSelection == option,
+                                        onClick = {
+                                            notchSelection = option
+                                            store.saveNotch(store.notchSettings().copy(mode = option))
+                                            HaloNotificationListener.requestPillRefresh()
+                                        }, label = { Text(option.title) })
+                                }
+                            }
+                            Text("Uses the same camera halo as Music. Detailed camera width, height, offset and gap controls are under Music → Tune.",
+                                color = Muted, style = MaterialTheme.typography.bodySmall)
                             Button(onClick = {
                                 if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
                                     4200L, false, store) else requestOverlay()
