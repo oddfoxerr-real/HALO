@@ -1,37 +1,38 @@
 package dev.oddfoxerr.halo
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnimationCatalogueTest {
-    @Test fun musicCatalogueHasDistinctStableModes() {
-        assertEquals(15, EdgeMode.entries.size)
-        assertEquals(15, EdgeMode.entries.map { it.title }.distinct().size)
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode(null))
-        assertEquals(EdgeMode.WAVE, EdgeSpectrum.mode("unknown"))
+    @Test fun gpuEffectsAreUniqueAndIncludeParticles() {
+        assertEquals(12, EdgeMode.entries.size)
+        assertEquals(12, EdgeMode.entries.map { it.title }.distinct().size)
+        assertEquals(12, EdgeMode.entries.map { it.description }.distinct().size)
+        assertTrue(EdgeMode.entries.contains(EdgeMode.DOTS))
+        assertTrue(EdgeMode.entries.contains(EdgeMode.FIREFLIES))
+        assertEquals(EdgeMode.LIQUID, EdgeSpectrum.mode(null))
         for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
     }
 
-    @Test fun notificationCatalogueHasDistinctStableStyles() {
-        assertEquals(9, NotificationEdgeStyle.entries.size)
-        assertEquals(9, NotificationEdgeStyle.entries.map { it.title }.distinct().size)
+    @Test fun removedLegacyAnimationsAreNotSelectable() {
+        for (legacy in listOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN",
+            "TWIN", "SPARKS", "PIXELS", "NEON", "RAIN", "HELIX", "BLOOM")) {
+            assertFalse(EdgeMode.entries.any { it.name == legacy })
+        }
+    }
+
+    @Test fun savedLegacySelectionsMigrateToNewGpuModes() {
+        assertEquals(EdgeMode.LIQUID, EdgeSpectrum.mode("WAVE"))
+        assertEquals(EdgeMode.SPECTRUM, EdgeSpectrum.mode("BARS"))
+        assertEquals(EdgeMode.ORBITALS, EdgeSpectrum.mode("TRAIL"))
+        assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode("CHAIN"))
+        assertEquals(EdgeMode.METEORS, EdgeSpectrum.mode("RAIN"))
+        assertEquals(EdgeMode.COMETS, EdgeSpectrum.mode("COMET"))
+    }
+
+    @Test fun legacyNotificationPreferenceParsingDoesNotControlNewEffects() {
         assertEquals(NotificationEdgeStyle.PULSE, EdgeSpectrum.notificationStyle(null))
-        for (style in NotificationEdgeStyle.entries)
-            assertEquals(style, EdgeSpectrum.notificationStyle(style.name))
-    }
-
-    @Test fun characterMotionPresetsAreUniqueAndRetainOriginalDefault() {
-        assertEquals(7, CharacterMotion.entries.size)
-        assertEquals(7, CharacterMotion.entries.map { it.title }.distinct().size)
-        assertEquals(CharacterMotion.ORIGINAL, CharacterProfile(CharacterApp.DISCORD).motion)
-        assertTrue(CharacterMotion.entries.any { it.name == "GLITCH" })
-    }
-
-    @Test fun oldStyleIdentifiersRemainBackwardCompatible() {
-        for (name in listOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN"))
-            assertTrue(EdgeMode.entries.any { it.name == name })
-        for (name in listOf("PULSE", "TRACE", "GLOW"))
-            assertTrue(NotificationEdgeStyle.entries.any { it.name == name })
     }
 }
