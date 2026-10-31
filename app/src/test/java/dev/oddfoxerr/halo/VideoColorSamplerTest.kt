@@ -25,6 +25,8 @@ class VideoColorSamplerTest {
         }
         bytes.flip()
         val result = VideoColorSampler.sample(bytes, width, height, width * 4, 4)
+        assertEquals(16, result.zones.size)
+        assertTrue(result.zones.distinct().size > 3)
         fun red(c: Int) = c ushr 16 and 255
         fun green(c: Int) = c ushr 8 and 255
         fun blue(c: Int) = c and 255
