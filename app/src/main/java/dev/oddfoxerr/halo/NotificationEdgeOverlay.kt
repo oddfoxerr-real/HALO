@@ -10,14 +10,14 @@ import android.view.Gravity
 import android.view.WindowManager
 
 /**
- * Notifications and music share ChainsawView / ShaderEdgeEngine.
+ * Notifications and music share EdgeVisualizerView / ShaderEdgeEngine.
  * There is deliberately no separate notification Canvas renderer or character window.
  * A notification generates a synthetic audio-energy envelope without RECORD_AUDIO permission.
  */
 object NotificationEdgeOverlay {
     private val handler = Handler(Looper.getMainLooper())
     private var manager: WindowManager? = null
-    private var view: ChainsawView? = null
+    private var view: EdgeVisualizerView? = null
     private var generation = 0L
     private var persistent = false
     val isVisible: Boolean get() = view != null
@@ -48,7 +48,7 @@ object NotificationEdgeOverlay {
         drawing.playNotification(color.toInt(), 3500L, true)
     }
 
-    private fun ensure(context: Context): ChainsawView? {
+    private fun ensure(context: Context): EdgeVisualizerView? {
         view?.let { return it }
         val app = context.applicationContext
         val wm = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -72,7 +72,7 @@ object NotificationEdgeOverlay {
             }
         }
         return try {
-            ChainsawView(app).also {
+            EdgeVisualizerView(app).also {
                 wm.addView(it, params)
                 manager = wm
                 view = it
