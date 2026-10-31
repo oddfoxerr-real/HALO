@@ -2,7 +2,9 @@ package dev.oddfoxerr.halo
 
 import android.content.Context
 import android.graphics.*
+import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import android.view.Choreographer
 import android.view.View
 import kotlin.math.*
@@ -11,7 +13,13 @@ import kotlin.math.*
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
     private val extraEffects = MusicExtraEffects()
-    private val lightField = LightFieldRenderer()
+    // API 33+ uses a mutually exclusive GPU pipeline. Legacy Canvas is a fallback only.
+    private var gpu: GpuEdgeRenderer? = if (Build.VERSION.SDK_INT >= 33) {
+        try { GpuEdgeRenderer() } catch (failure: RuntimeException) {
+            Log.e("HALO", "Could not compile GPU visualizer shader", failure)
+            null
+        }
+    } else null
     private val notchRenderer = NotchLightRenderer()
     private var notchSettings = ProfileStore(context).notchSettings()
     var thickness = 1f
@@ -133,10 +141,24 @@ class ChainsawView(context: Context) : View(context) {
         if (measure.length > 0f && (drawTop || drawBottom || drawLeft || drawRight)) {
             canvas.save()
             canvas.clipPath(activeSides)
-            // Dimensioned, translucent filled volumes under the existing personality details.
-            lightField.draw(canvas, measure, motion, mode, width, height, density,
-                thickness, spread, glow, brightness, edgeColor, accentColor)
-            when (mode) {
+            // A completely different pipeline: on supported GPUs, the shader draws the
+            // actual moving visual geometry. Do NOT overlay the old strokes or lightfield.
+            var gpuDrawn = false
+            val renderer = gpu
+            if (renderer != null && canvas.isHardwareAccelerated) {
+                try {
+                    renderer.draw(canvas, width, height, bounds,
+                        min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
+                        booleanArrayOf(drawTop, drawRight, drawBottom, drawLeft),
+                        motion.bands, motion.pulse, motion.phase, now / 1000f * speed,
+                        mode, density, thickness, spread, glow, brightness, edgeColor, accentColor)
+                    gpuDrawn = true
+                } catch (failure: RuntimeException) {
+                    Log.e("HALO", "GPU visualizer failed; using compatibility renderer", failure)
+                    gpu = null
+                }
+            }
+            if (!gpuDrawn) when (mode) {
             EdgeMode.WAVE -> silk(canvas, unit)
             EdgeMode.BARS -> spectrum(canvas, unit)
             EdgeMode.TRAIL -> orbit(canvas, unit)
