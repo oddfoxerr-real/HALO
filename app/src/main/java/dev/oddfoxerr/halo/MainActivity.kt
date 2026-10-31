@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class HaloTab(val label: String) {
-    HOME("Home"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings")
+    HOME("Home"), MUSIC("Music"), VIDEO("Video"), APPS("Apps"), SETTINGS("Settings")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,7 +154,7 @@ private fun HaloApp(
                         Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.13.0", modifier = Modifier.padding(end = 18.dp),
+                actions = { Text("v0.15.0", modifier = Modifier.padding(end = 18.dp),
                     color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
@@ -164,6 +165,7 @@ private fun HaloApp(
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.MUSIC -> Icons.Default.MusicNote
+                        HaloTab.VIDEO -> Icons.Default.Tv
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
                     }
@@ -179,6 +181,8 @@ private fun HaloApp(
     ) { padding ->
         if (tab == HaloTab.MUSIC) {
             MusicStudio(Modifier.fillMaxSize().padding(padding))
+        } else if (tab == HaloTab.VIDEO) {
+            VideoAmbilightStudio(Modifier.fillMaxSize().padding(padding))
         } else {
             LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -186,7 +190,7 @@ private fun HaloApp(
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
                 when (tab) {
-                    HaloTab.MUSIC -> Unit
+                    HaloTab.MUSIC, HaloTab.VIDEO -> Unit
                     HaloTab.HOME -> {
                         item {
                             StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
@@ -206,7 +210,9 @@ private fun HaloApp(
                                 Text("Incoming notifications and music use the same GPU-designed edge patterns. No cartoon characters or separate border layer.",
                                     color = Muted)
                                 Button(onClick = { tab = HaloTab.MUSIC },
-                                    modifier = Modifier.fillMaxWidth()) { Text("Open Edge Studio") }
+                                    modifier = Modifier.fillMaxWidth()) { Text("Open Music Effects") }
+                                OutlinedButton(onClick = { tab = HaloTab.VIDEO },
+                                    modifier = Modifier.fillMaxWidth()) { Text("Video Ambilight · Match scene colors") }
                             }
                         }
                         item {
