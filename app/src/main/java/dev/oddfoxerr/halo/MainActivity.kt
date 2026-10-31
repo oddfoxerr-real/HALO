@@ -222,7 +222,7 @@ private fun HaloApp(
                     item {
                         SectionCard {
                             Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
+                            Text("One GPU visualizer powers both music playback and notification alerts.", color = Muted)
                             Button(onClick = { tab = HaloTab.MUSIC },
                                 modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
                         }
@@ -268,6 +268,11 @@ private fun HaloApp(
                                 "Retain a quieter animated edge until the notification is dismissed.",
                                 persistent) {
                                 persistent = it; store.notificationBorderPersistent = it
+                            }
+                            var notificationDuration by remember { mutableFloatStateOf(store.notificationDurationMs.toFloat()) }
+                            SettingSlider("Alert duration", "%.1f s".format(notificationDuration / 1000f),
+                                notificationDuration, 800f..10000f) {
+                                notificationDuration = it; store.notificationDurationMs = it.toLong()
                             }
                             var borderGlow by remember { mutableFloatStateOf(store.notificationBorderGlow) }
                             SettingSlider("Notification glow", "${(borderGlow * 100).toInt()}%",
