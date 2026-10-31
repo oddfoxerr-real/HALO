@@ -1,5 +1,36 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.14.0 — GPU-only animation studio
+
+The previous 15-style Canvas/AGSL mixed animation catalogue and legacy Canvas
+animation implementations have been removed. **Twelve new GPU-native designs**
+are selectable in Visuals: Luminous Dots, Constellation, Fireflies, Meteor Shower,
+Liquid Glass, Aurora Flow, Chromatic Prism, Silk Ribbons, Pulse Bloom,
+Neon Current, Pixel Matrix, and Halo Rings.
+
+**Dot/particle geometry** is calculated per fragment from evenly spaced bead
+coordinates along the rounded rectangular perimeter. Dots stay circular around
+corners, and moving light points, fireflies, meteor trails and optical material
+effects are distinct render modes, not background glow layers.
+
+**Gradient correction:** the shader now tracks arc length along straight sides
+and four rounded corner arcs. The two user-selected colors interpolate with a
+cyclic cosine function so the gradient has no discontinuous seam at the top-left
+corner or diagonal stretching based on center-of-screen angle. White core glints
+are independent of the color gradient.
+
+The removed Canvas effects no longer silently appear on AGSL errors. Android 13+
+with a hardware-accelerated display is required for the new visual modes; the
+preview displays GPU status. HALO continues using the same renderer for music
+and notifications, with per-app color overrides, silence rules, edge calibration
+and camera-notch lighting. Existing stored mode names migrate to related GPU
+modes rather than breaking saved preferences.
+
+This is a developer prerelease. Standard Android compilation and emulator shader
+compilation cannot establish visual quality or power use on the Galaxy A56.
+
+
+
 ## v0.13.1 — Licensed fluid motion and Android GPU testing
 
 Retains the merged v0.13.0 Music/Notification engine, notification rules and
@@ -17,7 +48,7 @@ ordinary Kotlin/JVM tests. This is a developer preview and still requires real
 Galaxy A56 / One UI performance and visual-quality validation.
 
 
-**Development preview v0.13.0:** Incoming notifications and music now use the **same
+**Historical development preview v0.13.0:** Incoming notifications and music now use the **same
 procedural GPU visualizer**. Notification character overlays and the separate
 notification-border renderer have been removed. The four main tabs are Home,
 Music, Apps and Settings.
