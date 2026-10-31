@@ -1,3 +1,25 @@
+## v0.12.0 — Light-field visuals and notch support
+
+This preview addresses the flat, drawn-on appearance of earlier HALO styles using an original
+procedural Canvas light-field renderer. **All 15 music designs** now gain smooth FFT-shaped
+translucent color volumes, progressively softer luminous layers, moving gradient highlights,
+and cached radial glints. Existing character and chainsaw details are retained as a top layer,
+rather than replaced by generic glowing lines. Notification borders also use multiple gradient
+layers instead of one flat stroke.
+
+**Camera notch / punch-hole support** is accessible under **Music → Tune → Camera cutout lighting**.
+Modes: Off (default), Auto (Android-reported cutout), Camera ring (manual circular punch-hole),
+and Camera pill (manual rounded pill). Manual horizontal/vertical calibration, diameter,
+pill height and halo gap are adjustable live in the Music preview. The same selection controls
+the notch halo during notification border effects. Geometry adapts to the actual overlay viewport.
+An auto-detected notch may not be exposed by all Samsung overlays; use the manual mode if needed.
+
+Light spread now has a separate tuning control, alongside brightness, glow and thickness.
+These are performance-conscious 2D composited effects that *look* layered; they do not use
+proprietary Muviz Edge code, assets, or shaders. The visual design is original and its hardware
+appearance has not yet been validated on Galaxy A56 / One UI. Protected status bars, the
+camera aperture, AOD and the lock screen may not permit third-party drawing.
+
 # HALO — Samsung Notification Character Studio
 
 **Development: v0.11.0 Animation Studio** — 15 original audio-reactive music designs, nine notification-border effects and seven selectable character entrance motions. This is a developer preview; Samsung One UI hardware validation is still pending. Earlier version sections below are historical.
