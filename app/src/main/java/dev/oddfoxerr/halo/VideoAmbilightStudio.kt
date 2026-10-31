@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 /** TV-style scene color matching for video players, separate from music FFT effects. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoAmbilightStudio(modifier: Modifier = Modifier) {
     val context=LocalContext.current
@@ -132,7 +133,7 @@ fun VideoAmbilightStudio(modifier: Modifier = Modifier) {
         VideoSlider("Color intensity",options.saturation,0f..1.8f) {
             save(options.copy(saturation=it))
         }
-        VideoSlider("Sample distance from screen edge",options.sampleDepth,.025f..19e-2f) {
+        VideoSlider("Sample distance from screen edge",options.sampleDepth,.025f..0.19f) {
             save(options.copy(sampleDepth=it))
         }
 
