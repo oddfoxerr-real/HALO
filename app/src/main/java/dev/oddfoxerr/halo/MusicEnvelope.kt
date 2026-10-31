@@ -19,12 +19,13 @@ class MusicEnvelope {
     private var averageFlux = .012f
     private var beatTime = Long.MIN_VALUE
     private var pendingKick = 0f
+    private var attackImpulse = 0f
     var pulse = 0f; private set
     var kick = 0f; private set
     var phase = 0f; private set
     val motor = ChainDynamics()
 
-    fun accept(input: FloatArray, bass: Float, timeMs: Long, sensitivity: Float) {
+    fun accept(input: FloatArray, bass: Float, timeMs: Long, sensitivity: Float, onset: Float = 0f) {
         val gain = if (sensitivity.isFinite()) sensitivity.coerceIn(.5f, 5f) else 1f
         var flux = 0f
         var rawPeak = 0f
@@ -53,6 +54,9 @@ class MusicEnvelope {
         averageBass += (rawBass - averageBass) * .075f
         averageFlux += (flux - averageFlux) * .09f
         targetBass = (rawBass * gain).coerceIn(0f, 1f)
+        // Onsets bypass the slow band envelope for a visible attack on the exact beat.
+        if (onset.isFinite()) attackImpulse = max(attackImpulse,
+            (onset * (.55f + gain*.22f)).coerceIn(0f,1f))
         sampleAt = timeMs
     }
 
