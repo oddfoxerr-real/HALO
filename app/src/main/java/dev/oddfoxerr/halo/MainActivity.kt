@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -121,7 +122,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), APPS("Apps"), SETTINGS("Settings") }
+private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,7 +164,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.9", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.10", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -173,6 +174,7 @@ private fun HaloApp(
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.STUDIO -> Icons.Default.AutoAwesome
+                        HaloTab.MUSIC -> Icons.Default.MusicNote
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
                     }
@@ -185,12 +187,15 @@ private fun HaloApp(
             }
         }
     ) { contentPadding ->
-        LazyColumn(
+        if (tab == HaloTab.MUSIC) {
+            MusicStudio(Modifier.fillMaxSize().padding(contentPadding))
+        } else LazyColumn(
             Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { Spacer(Modifier.height(3.dp)) }
             when (tab) {
+                HaloTab.MUSIC -> Unit
                 HaloTab.HOME -> {
                     item {
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
@@ -237,7 +242,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
-                            Button(onClick = { context.startActivity(Intent(context, MusicEdgeActivity::class.java)) },
+                            Button(onClick = { tab = HaloTab.MUSIC },
                                 modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
                         }
                     }

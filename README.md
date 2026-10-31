@@ -1,5 +1,8 @@
 # HALO — Samsung Notification Character Studio
 
+**Development: v0.10.0 Music studio** — see [HANDOFF.md](HANDOFF.md) for the current branch, implemented changes and device checks. The v0.9 release details below are historical.
+
+
 **v0.9.0 clean-room Muviz feature study · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
@@ -162,3 +165,19 @@ This update is **not** a decompilation of Muviz Edge. The clean-room comparison 
 - FFT data is coalesced before UI delivery and the edge renderer interpolates smoothly between Android audio callbacks. Rendering rests after the signal decays.
 - Existing Character / Full border / Both notification modes remain unchanged.
 - Some apps/DRM content do not expose audio data to Android Visualizer. HALO cannot bypass those restrictions. No direct Muviz binary analysis or Samsung hardware validation has been performed.
+
+## v0.10 Music studio
+
+Open the **Music** tab. Pick Silk, Spectrum, Orbit, Pulse or Chainsaw, choose a two-color
+palette and use Tune to fit the edge to your display. The preview button is explicitly
+a demo signal. Start music lighting, then play audio from your normal music app.
+Lighting runs over other apps, yields to notifications, and hides on lock or silence.
+Its own Playback settings control media sources and quiet hours. These settings are
+independent of notification characters. One music service replaces the earlier two
+competing services; the old separate local-file music player has been removed.
+
+HALO uses Android's [Visualizer](https://developer.android.com/reference/android/media/audiofx/Visualizer)
+for low-resolution playback analysis. `RECORD_AUDIO` is requested only when music starts;
+no microphone audio is recorded. Not all players/devices expose the output mix.
+Background overlays require Display over other apps; playing-session rules and album
+colors need Notification access. No native Samsung AOD replacement is claimed.

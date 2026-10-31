@@ -1,204 +1,179 @@
 package dev.oddfoxerr.halo
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PathMeasure
-import android.graphics.RectF
+import android.graphics.*
 import android.os.SystemClock
 import android.view.View
-import kotlin.math.atan2
-import kotlin.math.exp
-import kotlin.math.max
-import kotlin.math.sin
+import kotlin.math.*
 
-/**
- * Low-overdraw Muviz-style edge visualizer.
- * Preserves the existing public class name so saved projects and activities can upgrade safely.
- * Audio callbacks set targets; rendering interpolates on screen refresh until the signal decays.
- */
+/** Shared HALO music renderer. Chainsaw is one design, not the music system itself. */
 class ChainsawView(context: Context) : View(context) {
-    val motor = ChainDynamics()
+    private val motion = MusicEnvelope()
     var thickness = 1f
-    var glow = .6f
-    var mode: EdgeMode = EdgeMode.WAVE
-        set(value) { field = value; invalidate() }
-    var edgeColor: Int = Color.rgb(170, 91, 255)
-        set(value) { field = value; invalidate() }
-
+    var glow = .65f
+    var mode = EdgeMode.WAVE
+    var edgeColor = 0xFF9A7BFF.toInt()
+    var accentColor = 0xFF52E0CB.toInt()
+    var edgeInset = 8f
+    var cornerRadius = 32f
+    private var speed = 1f
     private val density = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
-    private val bounds = RectF()
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val perimeter = Path()
     private val wave = Path()
     private val segment = Path()
+    private val tooth = Path()
+    private val bounds = RectF()
     private val measure = PathMeasure()
-    private val point = FloatArray(2)
+    private val position = FloatArray(2)
     private val tangent = FloatArray(2)
-    private val bands = FloatArray(EdgeSpectrum.BAND_COUNT)
-    private val targets = FloatArray(EdgeSpectrum.BAND_COUNT)
-    private var targetPulse = 0f
-    private var pulse = 0f
-    private var phase = 0f
-    private var lastFrameMs = 0L
-    private var lastAudioMs = 0L
-    private var sensitivityValue = 1f
-    private var speedValue = 1f
+    private val coordinates = FloatArray(226)
+    private var geometryKey = ""
+    private var shaderKey = ""
+    private var gradient: Shader? = null
+    private var lastFrame = 0L
 
-    init {
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-    }
+    init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
-    /** Keep FFT capture independent from display refresh and avoid unbounded queued frames. */
-    fun updateSpectrum(fftBands: FloatArray, bass: Float, dtSeconds: Float, sensitivity: Float, speed: Float) {
-        sensitivityValue = sensitivity.coerceIn(.5f, 5f)
-        speedValue = speed.coerceIn(.25f, 3f)
-        for (i in targets.indices) {
-            targets[i] = ((fftBands.getOrElse(i) { 0f }) * sensitivityValue * .75f).coerceIn(0f, 1f)
-        }
-        targetPulse = (bass * sensitivityValue).coerceIn(0f, 1f)
-        lastAudioMs = SystemClock.uptimeMillis()
-        postInvalidateOnAnimation()
+    fun configure(settings: MusicConfiguration) {
+        mode = settings.mode; edgeColor = settings.color; accentColor = settings.accent
+        thickness = settings.thickness; glow = settings.glow; speed = settings.speed
+        edgeInset = settings.inset; cornerRadius = settings.corner
+        invalidate()
     }
-
-    override fun onDetachedFromWindow() {
-        lastFrameMs = 0L
-        super.onDetachedFromWindow()
+    fun clearSignal() { motion.clear(); lastFrame = 0L; invalidate() }
+    fun updateSpectrum(bands: FloatArray, bass: Float, dtSeconds: Float, sensitivity: Float, rate: Float) {
+        speed = rate
+        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
+        if (isShown) postInvalidateOnAnimation()
     }
-
-    private fun advanceFrame(): Boolean {
-        val now = SystemClock.uptimeMillis()
-        val dt = if (lastFrameMs == 0L) 1f / 60f
-            else ((now - lastFrameMs) / 1000f).coerceIn(0f, .05f)
-        lastFrameMs = now
-        val fresh = now - lastAudioMs < 300L
-        val rise = 1f - exp(-dt * 22f)
-        val fall = 1f - exp(-dt * 8f)
-        var strongest = 0f
-        for (i in bands.indices) {
-            val target = if (fresh) targets[i] else 0f
-            val response = if (target > bands[i]) rise else fall
-            bands[i] += (target - bands[i]) * response
-            if (bands[i] < .0025f) bands[i] = 0f
-            strongest = max(strongest, bands[i])
-        }
-        val targetBass = if (fresh) targetPulse else 0f
-        pulse += (targetBass - pulse) * if (targetBass > pulse) rise else fall
-        if (pulse < .0025f) pulse = 0f
-        motor.step(targetBass, dt, sensitivityValue, speedValue)
-        if (fresh && targetBass > .008f) {
-            phase = (phase + dt * 1.15f * speedValue) % 1f
-        }
-        return (fresh && targets.any { it > .006f }) || strongest > .008f ||
-            pulse > .008f || motor.speed > .02f
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        lastFrame = 0L
     }
+    override fun onDetachedFromWindow() { clearSignal(); super.onDetachedFromWindow() }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val keepAnimating = advanceFrame()
-        val unit = density * thickness.coerceIn(.6f, 1.6f)
-        val pad = 13f * unit
-        bounds.set(pad, pad, width - pad, height - pad)
-        if (bounds.width() <= 0 || bounds.height() <= 0) return
-        perimeter.reset()
-        perimeter.addRoundRect(bounds, 32f * density, 32f * density, Path.Direction.CW)
-        measure.setPath(perimeter, true)
-        val length = measure.length
-        if (length <= 0f) return
-
-        when (mode) {
-            EdgeMode.WAVE -> drawWave(canvas, length, unit)
-            EdgeMode.BARS -> drawBars(canvas, length, unit)
-            EdgeMode.TRAIL -> drawTrail(canvas, length, unit)
-            EdgeMode.CHAIN -> drawMechanical(canvas, length, unit)
+        val now = SystemClock.uptimeMillis()
+        val dt = if (lastFrame == 0L) 1f / 60 else (now - lastFrame) / 1000f
+        lastFrame = now
+        val moving = motion.advance(now, dt, speed)
+        val unit = density * thickness
+        val key = "$width:$height:$edgeInset:$cornerRadius:$thickness"
+        if (key != geometryKey) {
+            geometryKey = key
+            val pad = max(edgeInset * density, 4f * unit)
+            bounds.set(pad, pad, width - pad, height - pad)
+            if (bounds.width() <= 0 || bounds.height() <= 0) return
+            perimeter.reset()
+            val radius = min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f)
+            perimeter.addRoundRect(bounds, radius, radius, Path.Direction.CW)
+            measure.setPath(perimeter, true)
         }
-        paint.alpha = 255
-        if (keepAnimating && isAttachedToWindow && visibility == VISIBLE) postInvalidateDelayed(16L)
+        val colors = "$width:$height:$edgeColor:$accentColor"
+        if (colors != shaderKey) {
+            shaderKey = colors
+            gradient = SweepGradient(width / 2f, height / 2f, intArrayOf(edgeColor, accentColor, edgeColor, accentColor, edgeColor), null)
+        }
+        if (measure.length <= 0f) return
+        when (mode) {
+            EdgeMode.WAVE -> silk(canvas, unit)
+            EdgeMode.BARS -> spectrum(canvas, unit)
+            EdgeMode.TRAIL -> orbit(canvas, unit)
+            EdgeMode.PULSE -> {
+                stroke(canvas, perimeter, (1.5f + motion.pulse * 5f) * unit, (38 + motion.pulse * 215).toInt(), true)
+            }
+            EdgeMode.CHAIN -> chainsaw(canvas, unit)
+        }
+        paint.shader = null; paint.alpha = 255
+        if (moving && isShown && isAttachedToWindow) postInvalidateOnAnimation()
     }
-
-    private fun drawWave(canvas: Canvas, length: Float, unit: Float) {
+    private fun amplitude(fraction: Float): Float {
+        // Mirror the spectrum around the frame; interpolate between bands instead of stair-stepping.
+        val value = abs(sin(fraction * PI * 2)).toFloat() * (motion.bands.size - 1)
+        val low = value.toInt()
+        return motion.bands[low] * (1 - (value - low)) + motion.bands[min(low + 1, motion.bands.lastIndex)] * (value - low)
+    }
+    private fun silk(canvas: Canvas, unit: Float) {
+        val count = 112
+        for (i in 0 until count) {
+            measure.getPosTan(measure.length * i / count, position, tangent)
+            val offset = (1f + amplitude(i.toFloat() / count) * 19f) * unit
+            coordinates[i * 2] = position[0] - tangent[1] * offset
+            coordinates[i * 2 + 1] = position[1] + tangent[0] * offset
+        }
         wave.reset()
-        val points = 112
-        for (i in 0..points) {
-            val distance = length * i / points
-            measure.getPosTan(distance.coerceAtMost(length - .01f), point, tangent)
-            val spectrum = bands[(i * (bands.size - 1) / points)]
-            val displacement = (2f + spectrum * 24f + pulse * 4f) * unit
-            val nx = -tangent[1]
-            val ny = tangent[0]
-            val x = point[0] + nx * displacement
-            val y = point[1] + ny * displacement
-            if (i == 0) wave.moveTo(x, y) else wave.lineTo(x, y)
+        wave.moveTo((coordinates[0] + coordinates[(count - 1) * 2]) / 2,
+            (coordinates[1] + coordinates[(count - 1) * 2 + 1]) / 2)
+        for (i in 0 until count) {
+            val next = (i + 1) % count
+            wave.quadTo(coordinates[i * 2], coordinates[i * 2 + 1],
+                (coordinates[i * 2] + coordinates[next * 2]) / 2,
+                (coordinates[i * 2 + 1] + coordinates[next * 2 + 1]) / 2)
         }
         wave.close()
-        stroke(canvas, wave, edgeColor, 11f * unit, (glow * 42).toInt())
-        stroke(canvas, wave, edgeColor, 5f * unit, 105)
-        stroke(canvas, wave, Color.WHITE, 1.4f * unit, 215)
+        stroke(canvas, wave, 2.2f * unit, (55 + motion.bands.maxOrNull()!! * 200).toInt(), true)
     }
-
-    private fun drawBars(canvas: Canvas, length: Float, unit: Float) {
-        stroke(canvas, perimeter, edgeColor, unit, 74)
-        val count = 88
-        paint.style = Paint.Style.STROKE
-        paint.color = edgeColor
-        for (i in 0 until count) {
-            measure.getPosTan(length * i / count, point, tangent)
-            val value = bands[(i * bands.size / count).coerceAtMost(bands.lastIndex)]
-            val height = (2f + value * 25f) * unit
-            paint.strokeWidth = max(1.5f, 2.6f * unit)
-            paint.alpha = (64f + 175f * value).toInt().coerceIn(0, 255)
-            canvas.drawLine(
-                point[0] - tangent[1] * 3f * unit,
-                point[1] + tangent[0] * 3f * unit,
-                point[0] - tangent[1] * (height + 3f * unit),
-                point[1] + tangent[0] * (height + 3f * unit),
-                paint
-            )
+    private fun spectrum(canvas: Canvas, unit: Float) {
+        stroke(canvas, perimeter, unit, 26)
+        paint.style = Paint.Style.STROKE; paint.shader = gradient; paint.strokeWidth = 2.6f * unit
+        for (i in 0 until 120) {
+            val fraction = i / 120f
+            measure.getPosTan(measure.length * fraction, position, tangent)
+            val strength = amplitude(fraction)
+            val length = (1.5f + strength * 25f) * unit
+            paint.alpha = (35 + strength * 220).toInt()
+            canvas.drawLine(position[0], position[1], position[0] - tangent[1] * length, position[1] + tangent[0] * length, paint)
         }
     }
-
-    private fun drawTrail(canvas: Canvas, length: Float, unit: Float) {
-        stroke(canvas, perimeter, edgeColor, 1.6f * unit, 100)
-        val start = phase * length
-        val trailLength = length * (.14f + pulse * .12f)
-        for (part in 0 until 12) {
-            val from = (start - (part + 1) * trailLength / 12f + length * 2f) % length
-            val to = (from + trailLength / 12f)
+    private fun orbit(canvas: Canvas, unit: Float) {
+        stroke(canvas, perimeter, unit, 25)
+        val length = measure.length
+        for (head in 0..1) for (part in 0 until 20) {
+            val start = ((motion.phase + head * .5f - part * .008f + 1f) % 1f) * length
+            val end = start + length * .009f
             segment.reset()
-            measure.getSegment(from, to.coerceAtMost(length), segment, true)
-            if (to > length) measure.getSegment(0f, to - length, segment, true)
-            stroke(canvas, segment, edgeColor, (3f + pulse * 2f) * unit, ((12 - part) * 17).coerceIn(0, 255))
+            measure.getSegment(start, min(end, length), segment, true)
+            if (end > length) measure.getSegment(0f, end - length, segment, true)
+            stroke(canvas, segment, (2.2f + motion.pulse * 3) * unit,
+                ((1f - part / 20f) * (55 + motion.pulse * 200)).toInt())
         }
     }
-
-    private fun drawMechanical(canvas: Canvas, length: Float, unit: Float) {
-        stroke(canvas, perimeter, edgeColor, 5f * unit, 72)
-        val count = (length / (22f * unit)).toInt().coerceIn(12, 120)
-        paint.style = Paint.Style.STROKE
-        val progress = motor.travel * density
+    private fun chainsaw(canvas: Canvas, unit: Float) {
+        val motor = motion.motor
+        stroke(canvas, perimeter, 5f * unit, 70, true)
+        val count = (measure.length / (19f * unit)).toInt().coerceIn(6, 260)
         for (i in 0 until count) {
-            val d = (length * i / count + progress) % length
-            measure.getPosTan(d, point, tangent)
-            val angle = atan2(tangent[1], tangent[0])
-            val dx = sin(angle) * 6f * unit
-            val dy = -kotlin.math.cos(angle) * 6f * unit
-            paint.color = if (i % 4 == 0) edgeColor else Color.rgb(176, 183, 197)
-            paint.strokeWidth = 3f * unit
-            paint.alpha = (95f + pulse * 130f).toInt().coerceIn(0, 255)
-            canvas.drawLine(point[0] - dx, point[1] - dy, point[0] + dx, point[1] + dy, paint)
+            measure.getPosTan((i * measure.length / count + motor.travel * density) % measure.length, position, tangent)
+            canvas.save(); canvas.translate(position[0], position[1])
+            canvas.rotate(Math.toDegrees(atan2(tangent[1], tangent[0]).toDouble()).toFloat())
+            canvas.scale(unit, unit)
+            paint.shader = null; paint.alpha = 255; paint.style = Paint.Style.FILL
+            paint.color = Color.rgb(130, 143, 150)
+            canvas.drawRoundRect(-6f, -2f, 6f, 2f, 2f, 2f, paint)
+            tooth.reset(); tooth.moveTo(-4f, 2f); tooth.lineTo(-2f, 9f); tooth.lineTo(5f, 6f); tooth.lineTo(2f, 2f); tooth.close()
+            paint.color = Color.rgb(210, 219, 221); canvas.drawPath(tooth, paint)
+            if (i % 5 == 0) {
+                paint.color = Color.argb((motor.jam * 205).toInt(), 117, 32, 28)
+                canvas.drawOval(-6f, -3f, 5f, 6f, paint)
+            }
+            if (motor.kick > .1f && i % 8 == 0) {
+                paint.color = Color.argb((motor.kick * 240).toInt(), 255, 181, 73); paint.strokeWidth = 1.2f
+                canvas.drawLine(0f, 9f, 5f, 12f + 18f * (1 - motor.kick), paint)
+            }
+            canvas.restore()
         }
     }
-
-    private fun stroke(canvas: Canvas, path: Path, color: Int, widthPx: Float, opacity: Int) {
-        paint.style = Paint.Style.STROKE
-        paint.color = color
-        paint.alpha = opacity.coerceIn(0, 255)
-        paint.strokeWidth = widthPx
-        canvas.drawPath(path, paint)
+    private fun stroke(canvas: Canvas, path: Path, width: Float, alpha: Int, halo: Boolean = false) {
+        paint.style = Paint.Style.STROKE; paint.shader = gradient; paint.color = Color.WHITE
+        if (halo && glow > 0f) {
+            for (layer in 3 downTo 1) {
+                paint.strokeWidth = width + layer * density * 3f
+                paint.alpha = (alpha * glow * .18f / layer).toInt().coerceIn(0, 255)
+                canvas.drawPath(path, paint)
+            }
+        }
+        paint.strokeWidth = width; paint.alpha = alpha.coerceIn(0, 255); canvas.drawPath(path, paint)
     }
 }
