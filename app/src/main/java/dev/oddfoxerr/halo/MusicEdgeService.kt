@@ -41,12 +41,15 @@ class MusicEdgeService : Service() {
             return true
         }
     }
-    private data class AudioFrame(val bands: FloatArray, val bass: Float, val at: Long)
+    private data class AudioFrame(val bands: FloatArray, val bass: Float, val at: Long, val onset: Float, val level: Float)
     private data class MediaInfo(val pkg: String? = null, val title: String = "", val color: Int? = null, val permission: Boolean = false)
     private val main = Handler(Looper.getMainLooper())
     private lateinit var thread: HandlerThread
     private lateinit var worker: Handler
     private val pending = AtomicReference<AudioFrame?>(null)
+    private val beatTracker = BeatReactiveTracker()
+    private var captureFrames = 0L
+    private var latestEnergy = 0f
     private val media = AtomicReference(MediaInfo())
     @Volatile private var closing = false
     @Volatile private var enabledCapture = false
@@ -73,9 +76,17 @@ class MusicEdgeService : Service() {
         override fun onWaveFormDataCapture(v: Visualizer?, bytes: ByteArray?, rate: Int) = Unit
         override fun onFftDataCapture(v: Visualizer?, bytes: ByteArray?, rate: Int) {
             if (closing || !enabledCapture || bytes == null) return
-            pending.set(AudioFrame(EdgeSpectrum.fromFft(bytes, rate), ChainDynamics.bassEnergy(bytes, rate), SystemClock.elapsedRealtime()))
+            val now = SystemClock.elapsedRealtime()
+            val spectrum = EdgeSpectrum.fromFft(bytes,rate)
+            val detected = beatTracker.process(spectrum,ChainDynamics.bassEnergy(bytes,rate),now)
+            val sample = AudioFrame(spectrum,detected.bass,now,detected.onset,detected.energy)
+            // Preserve a transient if a second capture arrives before the 40ms UI tick.
+            pending.getAndUpdate { old ->
+                if (old != null && now-old.at < 90L)
+                    sample.copy(onset=maxOf(sample.onset,old.onset))
+                else sample
+            }
         }
-    }
     private val mediaPoll = object : Runnable {
         override fun run() {
             if (closing) return
@@ -119,7 +130,9 @@ class MusicEdgeService : Service() {
                 lastCapture = sample.at
                 if (sample.bands.any { it > .008f }) lastAudible = sample.at
                 if (!showingInMusicWindow) {
-                    view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
+                    view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed, sample.onset)
+                    captureFrames++
+                    latestEnergy = sample.level
                 }
             }
             val notification = showingInMusicWindow || NotificationEdgeOverlay.isAnimating
@@ -136,8 +149,16 @@ class MusicEdgeService : Service() {
                 visibility = if (showingInMusicWindow || reason == null) View.VISIBLE else View.INVISIBLE
             }
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
-            MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
-                else reason ?: "Live music lighting", info.title)
+            val emptyCapture = shouldCapture && now-lastCapture > 1400L
+            val silentCapture = shouldCapture && now-lastAudible > 2100L && lastCapture != 0L
+            val message = when {
+                permissionNeeded -> "Enable notification access to detect your player"
+                emptyCapture -> "No FFT frames • Android may block this player's output mix"
+                silentCapture -> "No usable audio signal • try another player or capture mode"
+                else -> reason ?: "Beat-reactive edge lighting"
+            }
+            MusicRuntime.publish(true,message,info.title,
+                if (lastCapture == 0L) 0f else latestEnergy, captureFrames)
             main.postDelayed(this, if (awake) 40L else 500L)
         }
     }
@@ -214,6 +235,7 @@ class MusicEdgeService : Service() {
         if (!enabled) { pending.set(null); lastCapture = 0L; lastAudible = 0L; view?.clearSignal() }
         worker.post {
             if (!closing) try {
+                if (!enabledCapture) beatTracker.reset()
                 visualizer?.let { check(it.setEnabled(enabledCapture) == Visualizer.SUCCESS) }
             } catch (_: RuntimeException) { main.post { fail("Audio analysis disconnected · restart music lighting") } }
         }
