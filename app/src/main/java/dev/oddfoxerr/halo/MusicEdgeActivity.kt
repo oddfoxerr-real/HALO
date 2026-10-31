@@ -223,6 +223,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
             }
             MusicPanel.TUNE -> {
                 MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") { save(settings.copy(sensitivity = it)) }
+                MusicSlider("Beat impact", settings.beatImpact, .5f..3f, "×") { save(settings.copy(beatImpact = it)) }
+                Text("Sensitivity detects quiet sounds. Beat impact expands the light on each kick.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MusicSlider("Motion speed", settings.speed, .25f..3f, "×") { save(settings.copy(speed = it)) }
                 MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
                 MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
