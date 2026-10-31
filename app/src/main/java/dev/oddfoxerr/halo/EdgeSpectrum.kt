@@ -5,7 +5,10 @@ import kotlin.math.sqrt
 
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
 enum class EdgeMode(val title: String) {
-    WAVE("Silk"), BARS("Spectrum"), TRAIL("Orbit"), PULSE("Pulse"), CHAIN("Chainsaw")
+    WAVE("Silk"), BARS("Spectrum"), TRAIL("Orbit"), PULSE("Pulse"), CHAIN("Chainsaw"),
+    AURORA("Aurora"), COMET("Comet"), TWIN("Twin streams"), SPARKS("Sparks"),
+    PIXELS("Pixel rush"), NEON("Neon circuit"), RAIN("Rainfall"), HELIX("Helix"),
+    BLOOM("Bloom"), PRISM("Prism")
 }
 
 enum class NotificationEdgeMode(val title: String) {
@@ -13,7 +16,9 @@ enum class NotificationEdgeMode(val title: String) {
 }
 
 enum class NotificationEdgeStyle(val title: String) {
-    PULSE("Pulse"), TRACE("Outline sweep"), GLOW("Soft glow")
+    PULSE("Pulse"), TRACE("Outline sweep"), GLOW("Soft glow"),
+    COMET("Comet trail"), DASH("Chasing dashes"), SPARK("Electric sparks"),
+    RIPPLE("Ripple"), AURORA("Aurora"), BEACON("Beacon")
 }
 
 object EdgeSpectrum {
