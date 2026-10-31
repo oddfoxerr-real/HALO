@@ -76,7 +76,7 @@ class ProfileStore(context: Context) {
     fun readForPackage(packageName: String): CharacterProfile {
         val rule = readRule(packageName)
         val base = read(rule.character)
-        return base.copy(color = rule.colorOverride ?: base.color, enabled = rule.enabled && base.enabled)
+        return base.copy(color = rule.colorOverride ?: base.color, enabled = rule.enabled)
     }
 
     fun notificationModeFor(packageName: String): NotificationEdgeMode =
