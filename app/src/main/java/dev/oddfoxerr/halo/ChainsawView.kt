@@ -25,6 +25,12 @@ class ChainsawView(context: Context) : View(context) {
             null
         }
     } else null
+    val rendererStatus: String get() = when {
+        Build.VERSION.SDK_INT < 33 -> "Canvas fallback (Android version)"
+        gpu == null -> "Canvas fallback (GPU unavailable)"
+        !isHardwareAccelerated -> "Canvas fallback (hardware acceleration off)"
+        else -> "GPU shader active"
+    }
     private val notchRenderer = NotchLightRenderer()
     private var notchSettings = ProfileStore(context).notchSettings()
     var thickness = 1f
