@@ -21,6 +21,10 @@ Review: https://github.com/oddfoxerr-real/HALO/pull/6 (draft, targets the protot
   Successful tests, lint, APK build/signing and artifact upload:
   https://github.com/oddfoxerr-real/HALO/actions/runs/41236195628
 - Download `HALO-debug-apk` from that run; `HALO-validation-reports` contains the reports.
+- The local Windows wrapper build also passed all 29 unit tests, debug APK assembly and
+  lint on JDK 17 / SDK 36. The downloaded CI APK's checksum and signature were verified
+  locally. The local build's Kotlin session cache is excluded from version control.
+  Lint reports 0 errors, 42 warnings and 9 hints; it is not warning-free.
 - No phone was connected to the continuation PC. The device checks below remain open.
 
 ## User direction
