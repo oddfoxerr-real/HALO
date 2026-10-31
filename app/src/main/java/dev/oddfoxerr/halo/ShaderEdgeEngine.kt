@@ -35,10 +35,20 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("softness", glow.coerceIn(0f, 1f))
             runtime.setFloatUniform("brightness", brightness.coerceIn(0f, 1f))
             fun rgb(c: Int) = floatArrayOf(Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
-            runtime.setFloatUniform("topColor", rgb(colors.top))
-            runtime.setFloatUniform("rightColor", rgb(colors.right))
-            runtime.setFloatUniform("bottomColor", rgb(colors.bottom))
-            runtime.setFloatUniform("leftColor", rgb(colors.left))
+            val zoneNames = arrayOf(
+                "top0", "top1", "top2", "top3",
+                "right0", "right1", "right2", "right3",
+                "bottom0", "bottom1", "bottom2", "bottom3",
+                "left0", "left1", "left2", "left3"
+            )
+            for (index in zoneNames.indices) {
+                val fallback = when (index / 4) {
+                    0 -> colors.top; 1 -> colors.right
+                    2 -> colors.bottom; else -> colors.left
+                }
+                runtime.setFloatUniform(zoneNames[index],
+                    rgb(colors.zones.getOrNull(index) ?: fallback))
+            }
             paint.shader = runtime
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
@@ -106,23 +116,47 @@ internal class ShaderEdgeEngine {
             uniform float width;
             uniform float softness;
             uniform float brightness;
-            uniform float3 topColor;
-            uniform float3 rightColor;
-            uniform float3 bottomColor;
-            uniform float3 leftColor;
+            uniform float3 top0;
+            uniform float3 top1;
+            uniform float3 top2;
+            uniform float3 top3;
+            uniform float3 right0;
+            uniform float3 right1;
+            uniform float3 right2;
+            uniform float3 right3;
+            uniform float3 bottom0;
+            uniform float3 bottom1;
+            uniform float3 bottom2;
+            uniform float3 bottom3;
+            uniform float3 left0;
+            uniform float3 left1;
+            uniform float3 left2;
+            uniform float3 left3;
 
+            float3 sample4(float3 a,float3 b,float3 c,float3 d,float u) {
+                float t=clamp((u-.20)/.60,0.0,1.0)*3.0;
+                if(t<1.0) return mix(a,b,smoothstep(0.0,1.0,t));
+                if(t<2.0) return mix(b,c,smoothstep(1.0,2.0,t));
+                return mix(c,d,smoothstep(2.0,3.0,t));
+            }
             half4 main(float2 p) {
                 float dl=abs(p.x-frame.x);
                 float dr=abs(p.x-frame.z);
                 float dt=abs(p.y-frame.y);
                 float db=abs(p.y-frame.w);
+                float x=clamp((p.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
+                float y=clamp((p.y-frame.y)/max(frame.w-frame.y,1.0),0.0,1.0);
                 float w=max(width,2.0);
                 float sl=exp(-pow(dl/w,2.0)*1.35);
                 float sr=exp(-pow(dr/w,2.0)*1.35);
                 float st=exp(-pow(dt/w,2.0)*1.35);
                 float sb=exp(-pow(db/w,2.0)*1.35);
+                float3 tc=sample4(top0,top1,top2,top3,x);
+                float3 rc=sample4(right0,right1,right2,right3,y);
+                float3 bc=sample4(bottom0,bottom1,bottom2,bottom3,1.0-x);
+                float3 lc=sample4(left0,left1,left2,left3,1.0-y);
                 float total=max(sl+sr+st+sb,.00001);
-                float3 color=(sl*leftColor+sr*rightColor+st*topColor+sb*bottomColor)/total;
+                float3 color=(sl*lc+sr*rc+st*tc+sb*bc)/total;
                 float envelope=max(max(sl,sr),max(st,sb));
                 float light=clamp(envelope*(.82+.18*softness)*brightness,0.0,.78);
                 light *= smoothstep(.0,.09,max(color.r,max(color.g,color.b)));
