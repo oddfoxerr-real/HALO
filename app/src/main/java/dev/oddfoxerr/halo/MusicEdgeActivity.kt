@@ -54,7 +54,7 @@ class MusicEdgeActivity : ComponentActivity() {
     }
 }
 
-private enum class MusicPanel(val label: String) { DESIGNS("Designs"), TUNE("Tune"), RULES("Playback") }
+private enum class MusicPanel(val label: String) { DESIGNS("Designs"), TUNE("Tune"), VIDEO("Video"), RULES("Playback") }
 private data class MusicPalette(val name: String, val first: Long, val second: Long)
 private val palettes = listOf(
     MusicPalette("Aurora", 0xFF9A7BFF, 0xFF52E0CB), MusicPalette("Ember", 0xFFFF684B, 0xFFFFCC65),
@@ -120,6 +120,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     LaunchedEffect(settings, notch) {
         delay(180)
         if (MusicEdgeService.isRunning) context.startService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_REFRESH))
+        if (VideoAmbilightService.isRunning) context.startService(Intent(context, VideoAmbilightService::class.java).setAction(VideoAmbilightService.ACTION_REFRESH))
     }
     LaunchedEffect(demo, resumed) {
         preview.clearSignal()
@@ -218,6 +219,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
             }
             MusicPanel.TUNE -> {
                 MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") { save(settings.copy(sensitivity = it)) }
+                MusicSlider("Beat impact", settings.beatIntensity, .5f..3f, "×") { save(settings.copy(beatIntensity = it)) }
+                Text("Sensitivity changes the amount of detected audio energy. Beat impact controls how strongly the visual flashes on transients.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MusicSlider("Motion speed", settings.speed, .25f..3f, "×") { save(settings.copy(speed = it)) }
                 MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
                 MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
@@ -274,6 +278,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                     corner = 32f, thickness = 1f, brightness = 1f, glow = .75f)) },
                     modifier = Modifier.fillMaxWidth()) { Text("Reset edge calibration") }
             }
+            MusicPanel.VIDEO -> {
+                VideoAmbilightControls()
+            }
             MusicPanel.RULES -> {
                 MusicToggle("Follow music playback", "Hide when your music player is paused. Uses notification access to detect media sessions.", settings.onlyPlaying) {
                     save(settings.copy(onlyPlaying = it))
@@ -287,7 +294,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Sources control when lighting is shown. Android provides a device-wide mix, so simultaneous apps cannot be isolated.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Notifications take priority", style = MaterialTheme.typography.titleMedium)
-                Text("HALO pauses music lighting for an incoming notification, then resumes it. Configure character, full border or both under Settings and App rules.",
+                Text("HALO uses the same GPU animation for notifications. Incoming alerts take priority, then normal playback resumes.",
                     style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -296,7 +303,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Enable notification access")
             }
         }
-        Text("Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. Music lighting hides when playback is silent or Android blocks capture. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
+        Text("For YouTube screen-color matching, use the Video tab instead of Music lighting. Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. Music lighting hides when playback is silent or Android blocks capture. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
     }
