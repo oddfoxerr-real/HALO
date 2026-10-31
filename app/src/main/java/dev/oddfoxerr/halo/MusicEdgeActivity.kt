@@ -118,7 +118,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 val signal = FloatArray(EdgeSpectrum.BAND_COUNT) { index ->
                     beat * (.25f + .45f * abs(sin(frame * .07f + index * .32f)))
                 }
-                preview.updateSpectrum(signal, beat * .32f, .033f, latest.sensitivity, latest.speed)
+                preview.updateSpectrum(signal, beat * .32f, latest.sensitivity, latest.speed)
                 frame++; delay(33)
             }
         }
