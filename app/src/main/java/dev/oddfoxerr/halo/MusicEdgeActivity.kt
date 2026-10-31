@@ -153,6 +153,18 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                if (runtime.active) {
+                    Text("Captured audio · ${(runtime.signal * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LinearProgressIndicator(progress = { runtime.signal.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth())
+                    Text("Bass energy · ${(runtime.bass * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LinearProgressIndicator(progress = { runtime.bass.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth())
+                }
                 Button(onClick = {
                     if (runtime.active) {
                         context.stopService(Intent(context, MusicEdgeService::class.java)); feedback = null
