@@ -168,6 +168,10 @@ class ProfileStore(context: Context) {
     var notificationBorderPersistent: Boolean
         get() = prefs.getBoolean("notification_border_persistent", false)
         set(value) { prefs.edit().putBoolean("notification_border_persistent", value).apply() }
+    /** Duration for the unified Music-edge notification flash. */
+    var notificationDurationMs: Long
+        get() = prefs.getLong("notification_duration_ms", 4200L).coerceIn(800L, 10_000L)
+        set(value) { prefs.edit().putLong("notification_duration_ms", value.coerceIn(800L, 10_000L)).apply() }
     var notificationBorderThickness: Float
         get() = prefs.getFloat("notification_border_thickness", 3f).coerceIn(1f, 8f)
         set(value) { prefs.edit().putFloat("notification_border_thickness", value.coerceIn(1f, 8f)).apply() }
