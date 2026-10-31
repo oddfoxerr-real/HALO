@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val store = remember { ProfileStore(this) }
+            val store = remember { ProfileStore(this).also { it.pillEnabled = false } }
             var dynamic by remember { mutableStateOf(store.dynamicColors) }
             val scheme = if (dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicDarkColorScheme(this) else darkColorScheme(
                 primary = Lavender, onPrimary = Color(0xFF241537), background = AMOLED,
@@ -371,22 +371,6 @@ private fun ColorDot(value: Long, size: Int = 37) {
 }
 
 @Composable
-private fun MiniPreview(profile: CharacterProfile) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(205.dp).height(340.dp).background(Color.Black, RoundedCornerShape(27.dp))) {
-            key(profile.app) {
-                AndroidView(factory = { CharacterView(it).apply { configureLoop(profile) } },
-                    update = { it.configureLoop(profile) }, modifier = Modifier.fillMaxSize())
-            }
-            Column(Modifier.align(Alignment.TopCenter).padding(top = 29.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("HALO", color = Color(0xFFDDD8EB), style = MaterialTheme.typography.headlineSmall)
-                Text(profile.app.displayName, color = Muted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -395,50 +379,6 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggl
         }
         Switch(checked = checked, onCheckedChange = onToggle)
     }
-}
-
-@Composable
-private fun ProfileEditor(profile: CharacterProfile, onUpdate: (CharacterProfile) -> Unit) {
-    var hex by remember(profile.app) { mutableStateOf("#%06X".format(profile.color and 0xFFFFFF)) }
-    Text("${profile.app.displayName} appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    SwitchRow("Enable character", "Disable just this character profile.", profile.enabled) { onUpdate(profile.copy(enabled = it)) }
-    Text("Entrance motion", style = MaterialTheme.typography.labelLarge)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(CharacterMotion.entries) { motion ->
-            FilterChip(selected = profile.motion == motion,
-                onClick = { onUpdate(profile.copy(motion = motion)) },
-                label = { Text(motion.title) })
-        }
-    }
-    SwitchRow("Unread notification dot", "Retain a small indicator until dismissal.", profile.persistent) { onUpdate(profile.copy(persistent = it)) }
-    Text("Lighting color", color = Muted)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(Swatches) { color ->
-            Box(Modifier.size(38.dp).background(Color(color), CircleShape).clickable {
-                hex = "#%06X".format(color and 0xFFFFFF)
-                onUpdate(profile.copy(color = color))
-            }, contentAlignment = Alignment.Center) {
-                if (profile.color == color) Text("✓", color = Color.Black)
-            }
-        }
-    }
-    OutlinedTextField(
-        value = hex, onValueChange = { value ->
-            hex = value.take(7)
-            if (Regex("^#[0-9A-Fa-f]{6}$").matches(hex)) onUpdate(profile.copy(color = hex.drop(1).toLong(16) or 0xFF000000L))
-        }, singleLine = true, label = { Text("Custom HEX") }, modifier = Modifier.fillMaxWidth()
-    )
-    Text("Entry edge", color = Muted)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        EdgeSide.entries.forEach { side -> FilterChip(
-            selected = profile.side == side, onClick = { onUpdate(profile.copy(side = side)) }, label = { Text(side.name.lowercase().replaceFirstChar { it.uppercase() }) }
-        ) }
-    }
-    SettingSlider("Duration", "%.1f seconds".format(profile.durationMs / 1000f), profile.durationMs.toFloat(), 1800f..10000f) { onUpdate(profile.copy(durationMs = it.toLong())) }
-    SettingSlider("Size", "%.2f×".format(profile.scale), profile.scale, .60f..1.60f) { onUpdate(profile.copy(scale = it)) }
-    SettingSlider("Vertical position", "${(profile.anchorY * 100).toInt()}%", profile.anchorY, .20f.. .85f) { onUpdate(profile.copy(anchorY = it)) }
-    SettingSlider("Edge inset", "${profile.edgeInsetDp.toInt()} dp", profile.edgeInsetDp, 0f..32f) { onUpdate(profile.copy(edgeInsetDp = it)) }
-    SettingSlider("Glow", "${(profile.glow * 100).toInt()}%", profile.glow, 0f..1f) { onUpdate(profile.copy(glow = it)) }
 }
 
 @Composable
@@ -519,102 +459,96 @@ private fun launchableApps(context: android.content.Context): List<InstalledApp>
 }
 
 @Composable
-private fun AppRulesEditor(store: ProfileStore, onCharacterEdit: (CharacterApp) -> Unit) {
+private fun AppRulesEditor(store: ProfileStore) {
     val context = LocalContext.current
     val installed = remember { launchableApps(context) }
     var filter by remember { mutableStateOf("") }
     var selectedPackage by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var rule by remember(selectedPackage, revision) { mutableStateOf(selectedPackage?.let(store::readRule)) }
-    fun change(value: ApplicationRule) { store.writeRule(value); rule = value; revision++ }
+
+    fun update(value: ApplicationRule) {
+        store.writeRule(value)
+        rule = value
+        revision++
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(value = filter, onValueChange = { filter = it }, label = { Text("Search installed apps") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        val visible = installed.filter { filter.isBlank() || it.label.contains(filter, true) || it.packageName.contains(filter, true) }
-        if (selectedPackage != null && rule != null) {
-            val current = rule!!
+        OutlinedTextField(value = filter, onValueChange = { filter = it },
+            label = { Text("Search installed apps") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        val visible = installed.filter { filter.isBlank() ||
+            it.label.contains(filter, true) || it.packageName.contains(filter, true) }
+        rule?.let { current ->
             SectionCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(applicationLabel(context, current.packageName), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(current.packageName, style = MaterialTheme.typography.labelSmall, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(applicationLabel(context, current.packageName),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(current.packageName, style = MaterialTheme.typography.labelSmall,
+                            color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(onClick = { selectedPackage = null }) { Text("Close") }
                 }
-                SwitchRow("Enable HALO for this app", "Trigger its assigned character on new notifications.", current.enabled) { change(current.copy(enabled = it)) }
-                var expanded by remember(current.packageName) { mutableStateOf(false) }
-                Box {
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("Character: ${current.character.displayName} ▾") }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        CharacterApp.entries.forEach { app -> DropdownMenuItem(text = { Text(app.displayName) }, onClick = {
-                            change(current.copy(character = app)); expanded = false
-                        }) }
-                    }
+                SwitchRow("Enable notification lighting", "Trigger the Music edge design when this app sends a notification.",
+                    current.enabled) { update(current.copy(enabled = it)) }
+                val fallbackColor = CharacterApp.fromPackage(current.packageName).initialColor
+                var customHex by remember(current.packageName) {
+                    mutableStateOf("#%06X".format((current.colorOverride ?: fallbackColor) and 0xFFFFFF))
                 }
-                Text("Notification effect for this app", style = MaterialTheme.typography.labelLarge)
+                Text("Notification accent color", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(value = customHex, onValueChange = { typed ->
+                    customHex = typed.take(7)
+                    if (Regex("^#[0-9A-Fa-f]{6}$").matches(customHex)) {
+                        update(current.copy(colorOverride =
+                            customHex.substring(1).toLong(16) or 0xFF000000L))
+                    }
+                }, label = { Text("HEX color") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        FilterChip(
-                            selected = current.notificationModeOverride == null,
-                            onClick = { change(current.copy(notificationModeOverride = null)) },
-                            label = { Text("Use default") }
-                        )
+                        FilterChip(selected = current.colorOverride == null,
+                            onClick = { update(current.copy(colorOverride = null)) },
+                            label = { Text("Auto") })
                     }
-                    items(NotificationEdgeMode.entries) { option ->
-                        FilterChip(
-                            selected = current.notificationModeOverride == option,
-                            onClick = { change(current.copy(notificationModeOverride = option)) },
-                            label = { Text(option.title) }
-                        )
+                    items(Swatches) { color ->
+                        Box(Modifier.size(36.dp).background(Color(color), CircleShape)
+                            .clickable { update(current.copy(colorOverride = color)) })
                     }
                 }
-                Text("Per-app color override", style = MaterialTheme.typography.labelLarge)
-                var customHex by remember(current.packageName) {
-                    mutableStateOf("#%06X".format((current.colorOverride ?: store.read(current.character).color) and 0xFFFFFF))
-                }
-                OutlinedTextField(
-                    value = customHex,
-                    onValueChange = { value ->
-                        customHex = value.take(7)
-                        if (Regex("^#[0-9a-fA-F]{6}$").matches(customHex)) {
-                            change(current.copy(colorOverride = customHex.drop(1).toLong(16) or 0xFF000000L))
-                        }
-                    },
-                    label = { Text("Custom per-app HEX color") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    item { FilterChip(selected = current.colorOverride == null, onClick = { change(current.copy(colorOverride = null)) }, label = { Text("Default") }) }
-                    items(Swatches) { color -> Box(Modifier.size(34.dp).background(Color(color), CircleShape).clickable { change(current.copy(colorOverride = color)) }) }
-                }
-                OutlinedButton(onClick = { onCharacterEdit(current.character) }, modifier = Modifier.fillMaxWidth()) { Text("Edit character animation") }
+                Text("The animation style, timing, and geometry are shared with your Music Studio settings.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
                 OutlinedButton(onClick = {
-                    store.clearRule(current.packageName); rule = store.readRule(current.packageName); revision++
+                    store.clearRule(current.packageName)
+                    rule = store.readRule(current.packageName)
+                    revision++
                 }, modifier = Modifier.fillMaxWidth()) { Text("Reset app rule") }
             }
         }
-        Text("${visible.size} apps available", style = MaterialTheme.typography.labelMedium, color = Muted)
-        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+        Text("${visible.size} installed apps", style = MaterialTheme.typography.labelMedium,
+            color = Muted)
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(visible, key = { it.packageName }) { app ->
                 val data = store.readRule(app.packageName)
-                Card(modifier = Modifier.fillMaxWidth().clickable { selectedPackage = app.packageName },
+                Card(modifier = Modifier.fillMaxWidth()
+                    .clickable { selectedPackage = app.packageName },
                     shape = RoundedCornerShape(19.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ColorDot(data.colorOverride ?: store.read(data.character).color)
-                        Spacer(Modifier.width(11.dp))
+                        ColorDot(data.colorOverride ?: CharacterApp.fromPackage(data.packageName).initialColor)
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(data.character.displayName + if (!data.enabled) " · Off" else "", color = Muted,
-                                style = MaterialTheme.typography.bodySmall)
+                            Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                            Text(if (data.enabled) "Uses Music edge" else "Disabled",
+                                color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                         Text("Edit", color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
         }
-        Text("Apps not shown here still use the Other apps fallback character. HALO never needs access to your contacts or message contents.", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text("Only app names and notification metadata are used. HALO does not read or save message text.",
+            color = Muted, style = MaterialTheme.typography.bodySmall)
     }
 }
