@@ -256,7 +256,7 @@ internal class ShaderEdgeEngine {
                     bright=gaussian(warpD+width*.12,width*.16)*(.32+.68*energy);
                     shine=gaussian(warpD-width*.27,width*.09)*.18;
                 } else if (design == 1) { // Dot matrix: three physically separated rows
-                    float columns=max(42.0, round(112.0*dotDensity));
+                    float columns=max(42.0, floor(112.0*dotDensity+0.5));
                     float cycle=u*columns-time*.63;
                     float cell=floor(cycle);
                     float dx=(fract(cycle)-.5)*perimeter/columns;
@@ -272,7 +272,7 @@ internal class ShaderEdgeEngine {
                         bright=max(bright,gaussian(dotDist,radiusPx*.50)*lit);
                     }
                 } else if (design == 2) { // Fireflies: layered drifting particle field
-                    float cells=round(76.0*dotDensity);
+                    float cells=floor(76.0*dotDensity+0.5);
                     float z=u*cells-time*.41;
                     float id=floor(z);
                     float offset=(fract(z)-.5)*perimeter/cells;
@@ -281,9 +281,9 @@ internal class ShaderEdgeEngine {
                     float y=d-floatY;
                     float rad=(2.5+4.0*hash(float2(id,6.5)))*dotSize*thickness;
                     float particle=gaussian(length(float2(offset,y)),rad);
-                    float z2=u*round(47.0*dotDensity)+time*.26;
+                    float z2=u*floor(47.0*dotDensity+0.5)+time*.26;
                     float id2=floor(z2);
-                    float x2=(fract(z2)-.5)*perimeter/max(1.0,round(47.0*dotDensity));
+                    float x2=(fract(z2)-.5)*perimeter/max(1.0,floor(47.0*dotDensity+0.5));
                     float y2=d-(hash(float2(id2,17.0))-.5)*33.0;
                     amount=particle*(.45+.55*activity)+
                         gaussian(length(float2(x2,y2)),3.2*dotSize*thickness)*.7*activity;
