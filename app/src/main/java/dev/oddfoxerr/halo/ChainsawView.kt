@@ -12,6 +12,12 @@ class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
     private val extraEffects = MusicExtraEffects()
     private val lightField = LightFieldRenderer()
+    private val shaderEngine = if (android.os.Build.VERSION.SDK_INT >= 33) ShaderEdgeEngine() else null
+    private val notificationBands = FloatArray(EdgeSpectrum.BAND_COUNT)
+    private var noticeStartAt = 0L
+    private var noticeEndAt = 0L
+    private var noticePersistent = false
+    val isNotificationPlaying: Boolean get() = noticeEndAt > SystemClock.uptimeMillis()
     private val notchRenderer = NotchLightRenderer()
     private var notchSettings = ProfileStore(context).notchSettings()
     var thickness = 1f
@@ -72,6 +78,20 @@ class ChainsawView(context: Context) : View(context) {
         invalidate()
     }
     fun configureNotch(settings: NotchSettings) { notchSettings = settings.normalized(); invalidate() }
+    fun playNotification(color: Int, duration: Long, persistent: Boolean) {
+        noticeStartAt = SystemClock.uptimeMillis()
+        noticeEndAt = noticeStartAt + duration.coerceIn(800L, 10_000L)
+        noticePersistent = persistent
+        edgeColor = color
+        motion.clear()
+        requestFrame()
+        invalidate()
+    }
+    fun stopNotification() {
+        noticeEndAt = 0L
+        noticePersistent = false
+        clearSignal()
+    }
     fun clearSignal() { motion.clear(); stopFrames(); invalidate() }
     fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
         speed = rate
@@ -104,6 +124,16 @@ class ChainsawView(context: Context) : View(context) {
         val now = SystemClock.uptimeMillis()
         val dt = if (lastFrame == 0L) 1f / 60 else (now - lastFrame) / 1000f
         lastFrame = now
+        val noticePlaying = noticeEndAt > now || (noticePersistent && noticeStartAt > 0L)
+        if (noticePlaying) {
+            val seconds = (now - noticeStartAt).coerceAtLeast(0L) / 1000f
+            val beat = (.43f + .24f * sin(seconds * 7f)).coerceIn(.12f, .95f)
+            for (i in notificationBands.indices) {
+                notificationBands[i] = (.15f + beat * (.5f + .5f *
+                    sin(seconds * (2.7f + i % 4 * .14f) + i * .6f))).coerceIn(.03f, .9f)
+            }
+            motion.accept(notificationBands, beat, now, 1f)
+        }
         val moving = motion.advance(now, dt, speed)
         val unit = density * thickness
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$drawTop:$drawBottom:$drawLeft:$drawRight"
@@ -133,10 +163,15 @@ class ChainsawView(context: Context) : View(context) {
         if (measure.length > 0f && (drawTop || drawBottom || drawLeft || drawRight)) {
             canvas.save()
             canvas.clipPath(activeSides)
-            // Dimensioned, translucent filled volumes under the existing personality details.
-            lightField.draw(canvas, measure, motion, mode, width, height, density,
-                thickness, spread, glow, brightness, edgeColor, accentColor)
-            when (mode) {
+            val gpuDrawn = shaderEngine?.render(canvas, width, height, bounds,
+                min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
+                mode, motion.bands, motion.pulse, motion.phase, now / 1000f,
+                density * thickness, spread, glow, brightness, edgeColor, accentColor) == true
+            if (!gpuDrawn) {
+                // API 29–32 and incompatible GPU drivers use the old Canvas renderer.
+                lightField.draw(canvas, measure, motion, mode, width, height, density,
+                    thickness, spread, glow, brightness, edgeColor, accentColor)
+                when (mode) {
             EdgeMode.WAVE -> silk(canvas, unit)
             EdgeMode.BARS -> spectrum(canvas, unit)
             EdgeMode.TRAIL -> orbit(canvas, unit)
@@ -148,13 +183,14 @@ class ChainsawView(context: Context) : View(context) {
             EdgeMode.PIXELS, EdgeMode.NEON, EdgeMode.RAIN, EdgeMode.HELIX,
             EdgeMode.BLOOM, EdgeMode.PRISM -> extraEffects.draw(mode, canvas, perimeter, measure,
                 motion, width, height, density, thickness, brightness, glow, edgeColor, accentColor)
+                }
             }
             canvas.restore()
         }
         notchRenderer.draw(canvas, this, notchSettings, edgeColor, accentColor,
             brightness, glow, motion.pulse + motion.bands.maxOrNull()!!.coerceIn(0f, 1f) * .35f, motion.phase)
         paint.shader = null; paint.alpha = 255
-        if (moving) requestFrame()
+        if (moving || noticePlaying) requestFrame()
     }
     private fun amplitude(fraction: Float): Float {
         // Mirror the spectrum around the frame; interpolate between bands instead of stair-stepping.
