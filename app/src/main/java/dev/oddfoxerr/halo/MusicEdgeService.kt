@@ -33,6 +33,7 @@ class MusicEdgeService : Service() {
                 it.yieldUntil = SystemClock.elapsedRealtime() + duration.coerceIn(800L, 10000L) + 200L
                 it.yielding = true
                 it.view?.visibility = View.INVISIBLE
+                it.updateOverlayOpacity(false)
             }
         }
     }
@@ -49,6 +50,16 @@ class MusicEdgeService : Service() {
     private var visualizer: Visualizer? = null // worker-owned
     private var view: ChainsawView? = null
     private var manager: WindowManager? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
+    private fun updateOverlayOpacity(visible: Boolean) {
+        val params = overlayParams ?: return
+        val drawing = view ?: return
+        val next = if (visible) .78f else 0f
+        if (params.alpha == next) return
+        params.alpha = next
+        try { manager?.updateViewLayout(drawing, params) }
+        catch (_: RuntimeException) { }
+    }
     private var lastCapture = 0L
     private var lastAudible = 0L
     private var yieldUntil = 0L
@@ -125,6 +136,9 @@ class MusicEdgeService : Service() {
                 edgeColor = info.color ?: settings.color
                 visibility = if (reason == null) View.VISIBLE else View.INVISIBLE
             }
+            // Avoid two full-screen pass-through overlay windows adding their opacity:
+            // music goes fully transparent while the shared edge notification draws.
+            updateOverlayOpacity(reason == null)
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
                 else reason ?: "Live music lighting", info.title)
@@ -170,7 +184,7 @@ class MusicEdgeService : Service() {
                 }
             }
             wm.addView(drawing, params)
-            view = drawing; manager = wm
+            view = drawing; manager = wm; overlayParams = params
             refresh()
             ContextCompat.registerReceiver(this, screenReceiver, IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
@@ -228,6 +242,7 @@ class MusicEdgeService : Service() {
         main.removeCallbacksAndMessages(null)
         if (receiverRegistered) unregisterReceiver(screenReceiver)
         view?.let { try { manager?.removeViewImmediate(it) } catch (_: RuntimeException) { } }; view = null
+        overlayParams = null
         pending.set(null)
         worker.removeCallbacksAndMessages(null)
         worker.post {
