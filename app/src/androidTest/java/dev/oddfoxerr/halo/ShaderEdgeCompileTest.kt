@@ -21,10 +21,12 @@ class ShaderEdgeCompileTest {
             video.setFloatUniform("width", 35f)
             video.setFloatUniform("softness", .8f)
             video.setFloatUniform("brightness", 1f)
-            video.setFloatUniform("topColor", 1f, 0f, 0f)
-            video.setFloatUniform("rightColor", 0f, 1f, 0f)
-            video.setFloatUniform("bottomColor", 0f, 0f, 1f)
-            video.setFloatUniform("leftColor", 1f, 1f, 0f)
+            for (side in listOf("top", "right", "bottom", "left")) {
+                for (index in 0 until 4) {
+                    video.setFloatUniform("${side}${index}",
+                        (index + 1) / 4f, .65f, .25f)
+                }
+            }
             assertNotNull(video)
         }
     }
