@@ -144,6 +144,9 @@ internal class ShaderEdgeEngine {
                 float dr=abs(p.x-frame.z);
                 float dt=abs(p.y-frame.y);
                 float db=abs(p.y-frame.w);
+                // Inner pixels are fully transparent: skip costly 16-zone interpolation.
+                float minDistance=min(min(dl,dr),min(dt,db));
+                if(minDistance>max(width,2.0)*3.2) return half4(0.0);
                 float x=clamp((p.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
                 float y=clamp((p.y-frame.y)/max(frame.w-frame.y,1.0),0.0,1.0);
                 float w=max(width,2.0);
