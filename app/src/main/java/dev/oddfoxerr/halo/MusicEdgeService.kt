@@ -73,7 +73,10 @@ class MusicEdgeService : Service() {
         override fun onWaveFormDataCapture(v: Visualizer?, bytes: ByteArray?, rate: Int) = Unit
         override fun onFftDataCapture(v: Visualizer?, bytes: ByteArray?, rate: Int) {
             if (closing || !enabledCapture || bytes == null) return
-            pending.set(AudioFrame(EdgeSpectrum.fromFft(bytes, rate), ChainDynamics.bassEnergy(bytes, rate), SystemClock.elapsedRealtime()))
+            val spectrum = EdgeSpectrum.fromFft(bytes, rate)
+            val bass = maxOf(ChainDynamics.bassEnergy(bytes, rate) * 2.1f,
+                EdgeSpectrum.bass(spectrum) * .85f).coerceIn(0f, 1f)
+            pending.set(AudioFrame(spectrum, bass, SystemClock.elapsedRealtime()))
         }
     }
     private val mediaPoll = object : Runnable {
@@ -137,7 +140,9 @@ class MusicEdgeService : Service() {
             }
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
-                else reason ?: "Live music lighting", info.title)
+                else if (reason == null && now - lastAudible > 2200L)
+                    "Playback detected, but no usable audio signal (player may block capture)"
+                else reason ?: "Live music lighting · tracking beats", info.title)
             main.postDelayed(this, if (awake) 40L else 500L)
         }
     }
@@ -193,7 +198,7 @@ class MusicEdgeService : Service() {
                     val range = Visualizer.getCaptureSizeRange()
                     check(source.setCaptureSize(1024.coerceIn(range.first(), range.last())) == Visualizer.SUCCESS)
                     check(source.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
-                    check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(25000), false, true) == Visualizer.SUCCESS)
+                    check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(60000), false, true) == Visualizer.SUCCESS)
                     // Capture starts only when visibility/media rules permit it.
                     if (enabledCapture) check(source.setEnabled(true) == Visualizer.SUCCESS)
                 } catch (_: RuntimeException) { main.post { fail("Android could not open device audio · try another player and restart") } }
@@ -207,6 +212,8 @@ class MusicEdgeService : Service() {
     private fun refresh() {
         config = MusicConfiguration.read(this)
         view?.configure(config)
+        // Keep the current captured audio spectrum; changing visual settings must
+        // not clear the beat detector or restart audio playback capture.
     }
     private fun setCapture(enabled: Boolean) {
         if (enabled == enabledCapture) return
