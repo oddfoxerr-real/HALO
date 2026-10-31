@@ -6,6 +6,7 @@
 
 - **Music (15):** Silk, Spectrum, Orbit, Pulse, Chainsaw, Aurora, Comet, Twin Streams, Sparks, Pixel Rush, Neon Circuit, Rainfall, Helix, Bloom, and Prism.
 - **Notification borders (9):** Pulse, Outline Sweep, Soft Glow, Comet Trail, Chasing Dashes, Electric Sparks, Ripple, Aurora, and Beacon.
+- **Character motions (7):** Original, Swoop, Orbit, Spring, Glitch, Float, and Blast. Stored per-character profile and adjustable in the live character preview.
 - **Refined existing effects:** spectrum smoothing, Silk motion, Chainsaw energy, and continuously animated retained notification borders.
 - **Performance:** bounded Canvas draw counts, cached geometry and shaders where applicable, no bitmaps or WebViews, and the existing frame-pacing/audio-signal lifecycle.
 - **Customization:** existing palettes, independent four-side offsets and visibility, brightness, glow, thickness and playback rules remain available. Every music effect can be previewed using the built-in demo signal.
