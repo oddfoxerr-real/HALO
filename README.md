@@ -1,6 +1,48 @@
-# HALO — Samsung Notification Character Studio
+# HALO — GPU Music & Notification Edge Studio
 
-**Development: v0.12.0 Light-field Preview** — Music and notification glow refinement, camera cutout calibration, and the 31 earlier animation selections. Galaxy A56 device validation is pending.
+**Development: v0.13.0 Unified GPU Edge Preview**
+
+## HALO v0.13.0 — GPU visualizer and unified notification delivery
+
+### Why this is a different renderer
+v0.12 combined line-based Canvas animations with translucent layers. v0.13 instead uses
+**one Android AGSL RuntimeShader (Android 13+)** to generate the complete visual directly
+from the rounded-edge signed-distance field, FFT bands, and time. The old multi-layer
+LightFieldRenderer was deleted. Each of the 15 music modes uses its own branch of
+procedural geometry (liquid ribbon, spectral columns, moving comet, plasma aurora,
+particle bursts, rain, helix, etc.).
+
+Aurora adapts 3D simplex-noise code from the MIT-licensed **Audio Shader Studio** by Daniel
+Sandner; the unmodified license notice and source reference appear in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Shader Editor (MIT), Fosfora (MIT/Apache),
+ProjectM (LGPL) and other projects were researched but their engines/assets were not
+included without a compatible Android implementation and proper licensing.
+
+### Single notification/musical visualizer
+Notification listener events now create **the same ChainsawView + AGSL edge renderer**
+as Music Studio; instead of capturing audio, a time-varying procedural envelope
+drives the selected edge design. User selections in Music Studio therefore apply
+to both music and notifications. Original cartoon characters, their activity,
+the separate border renderer and the old LightFieldRenderer source have been removed.
+Per-app enable/color rules, notification duration, quiet hours, persistence and
+global camera-notch calibration remain. A new per-notification duration slider is
+independent of removed character profiles.
+
+### Important validation limits
+- Android API 33+ takes the GPU path only on a hardware-accelerated View. Devices
+  below API 33 retain the existing bounded Canvas compatibility effects.
+- Android source compilation and JVM tests **do not verify AGSL runtime shader compilation**:
+  real hardware or emulator testing is required. If shader creation/drawing fails, HALO
+  logs the failure and falls back to the compatibility renderer.
+- Samsung-protected status bar, AOD, lockscreen and Now Bar may not permit drawing
+  regardless of visualizer backend.
+- When notifications take priority during music playback the music overlay window
+  becomes fully transparent to prevent the two pass-through windows combining their
+  touch-obscuring opacity.
+- This is a developer prerelease, not a claim that the device-rendered output has
+  already reached parity with Muviz Edge.
+
+ — Music and notification glow refinement, camera cutout calibration, and the 31 earlier animation selections. Galaxy A56 device validation is pending.
 
 ## v0.12.0 — Light-field visuals and notch support
 
