@@ -165,6 +165,8 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 }
             }
         }
+        Text("Renderer: ${preview.rendererStatus}",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { demo = !demo }, modifier = Modifier.fillMaxWidth()) {
             Text(if (demo) "Stop design preview" else "Play design preview")
         }
