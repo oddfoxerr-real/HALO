@@ -343,6 +343,35 @@ private fun HaloApp(
                                 borderGlow, 0f..1f) {
                                 borderGlow = it; store.notificationBorderGlow = it
                             }
+                            Text("Border size and position", style = MaterialTheme.typography.titleSmall)
+                            Text("Adjust each side separately to change width, height and alignment. Negative values push outward, but Android may clip protected system UI.", color = Muted,
+                                style = MaterialTheme.typography.bodySmall)
+                            var borderTop by remember { mutableFloatStateOf(store.notificationBorderTop) }
+                            var borderBottom by remember { mutableFloatStateOf(store.notificationBorderBottom) }
+                            var borderLeft by remember { mutableFloatStateOf(store.notificationBorderLeft) }
+                            var borderRight by remember { mutableFloatStateOf(store.notificationBorderRight) }
+                            var borderCorner by remember { mutableFloatStateOf(store.notificationBorderCorner) }
+                            SettingSlider("Top position", "${borderTop.toInt()} dp", borderTop, -24f..120f) {
+                                borderTop = it; store.notificationBorderTop = it
+                            }
+                            SettingSlider("Bottom position", "${borderBottom.toInt()} dp", borderBottom, -24f..120f) {
+                                borderBottom = it; store.notificationBorderBottom = it
+                            }
+                            SettingSlider("Left position", "${borderLeft.toInt()} dp", borderLeft, -24f..120f) {
+                                borderLeft = it; store.notificationBorderLeft = it
+                            }
+                            SettingSlider("Right position", "${borderRight.toInt()} dp", borderRight, -24f..120f) {
+                                borderRight = it; store.notificationBorderRight = it
+                            }
+                            SettingSlider("Corner radius", "${borderCorner.toInt()} dp", borderCorner, 0f..100f) {
+                                borderCorner = it; store.notificationBorderCorner = it
+                            }
+                            OutlinedButton(onClick = {
+                                borderTop = 6f; borderBottom = 6f; borderLeft = 6f; borderRight = 6f; borderCorner = 35f
+                                store.notificationBorderTop = 6f; store.notificationBorderBottom = 6f
+                                store.notificationBorderLeft = 6f; store.notificationBorderRight = 6f
+                                store.notificationBorderCorner = 35f
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Reset border calibration") }
                             Button(onClick = {
                                 if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
                                     4200L, false, store) else requestOverlay()
