@@ -24,12 +24,6 @@ enum class NotificationEdgeMode(val title: String) {
     CHARACTER("Character"), BORDER("Full border"), BOTH("Both")
 }
 
-enum class NotificationEdgeStyle(val title: String) {
-    PULSE("Pulse"), TRACE("Outline sweep"), GLOW("Soft glow"),
-    COMET("Comet trail"), DASH("Chasing dashes"), SPARK("Electric sparks"),
-    RIPPLE("Ripple"), AURORA("Aurora"), BEACON("Beacon")
-}
-
 object EdgeSpectrum {
     const val BAND_COUNT = 24
 
@@ -80,6 +74,4 @@ object EdgeSpectrum {
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
 
-    fun notificationStyle(value: String?): NotificationEdgeStyle =
-        NotificationEdgeStyle.entries.firstOrNull { it.name == value } ?: NotificationEdgeStyle.PULSE
 }
