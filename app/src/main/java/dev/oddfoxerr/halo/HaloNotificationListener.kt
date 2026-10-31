@@ -179,12 +179,12 @@ class HaloNotificationListener : NotificationListenerService() {
             }
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
-                MusicEdgeService.yieldForNotification(profile.durationMs)
+                MusicEdgeService.yieldForNotification(store.notificationDurationMs)
                 PillHaloOverlay.dismiss()
                 // Every notification uses the Music Studio effect. Characters and the
                 // legacy notification-only border renderer are no longer dispatched.
-                NotificationEdgeOverlay.show(this, profile.color, profile.durationMs,
-                    store.notificationBorderPersistent && profile.persistent, store)
+                NotificationEdgeOverlay.show(this, profile.color, store.notificationDurationMs,
+                    store.notificationBorderPersistent, store)
             } else refreshIndicatorIfIdle()
         }
     }
@@ -257,7 +257,7 @@ class HaloNotificationListener : NotificationListenerService() {
         val retained = if (store.notificationBorderPersistent) {
             tracker.newestIndicatorPackages().asSequence()
                 .map(store::readForPackage)
-                .firstOrNull { it.enabled && it.persistent }
+                .firstOrNull { it.enabled }
         } else null
         if (retained == null) {
             if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
