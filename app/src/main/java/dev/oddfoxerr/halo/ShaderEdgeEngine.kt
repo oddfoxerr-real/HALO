@@ -370,7 +370,8 @@ internal class ShaderEdgeEngine {
                 float alpha=clamp(amount+bright*.27+shine*.1,0.0,.91);
                 alpha *= clamp(brightness,0.1,1.0);
                 // Stable translucent diffusion around the true generated geometry.
-                alpha += clamp(glow,0.0,1.0)*.085*gaussian(d,width*1.35)*activity;
+                float ambient=(design == 1 || design == 2) ? amount : gaussian(d,width*1.35)*activity;
+                alpha += clamp(glow,0.0,1.0)*.085*ambient;
                 alpha=clamp(alpha,0.0,.94);
                 return half4(half3(reflected)*half(alpha),half(alpha));
             }
