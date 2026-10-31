@@ -15,7 +15,6 @@
         <activity android:name=".MusicEdgeActivity" android:exported="false" />
         <service android:name=".MusicEdgeService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".PillPreviewActivity" android:exported="false" />
-        <activity android:name=".PreviewActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
