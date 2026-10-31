@@ -56,6 +56,8 @@ class MusicEdgeService : Service() {
     private var manager: WindowManager? = null
     private var lastCapture = 0L
     private var lastAudible = 0L
+    private var lastSignalLevel = 0f
+    private var lastBassLevel = 0f
     private var yieldUntil = 0L
     private var yielding = false
     private var receiverRegistered = false
@@ -120,10 +122,18 @@ class MusicEdgeService : Service() {
             val showingInMusicWindow = yielding && now < yieldUntil
             pending.getAndSet(null)?.let { sample ->
                 lastCapture = sample.at
+                lastSignalLevel = sample.bands.maxOrNull() ?: 0f
+                lastBassLevel = sample.bass
                 if (sample.bands.any { it > .008f }) lastAudible = sample.at
                 if (!showingInMusicWindow) {
                     view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
                 }
+            }
+            if (lastCapture == 0L || now - lastCapture > 550L) {
+                lastSignalLevel *= .65f
+                lastBassLevel *= .65f
+                if (lastSignalLevel < .01f) lastSignalLevel = 0f
+                if (lastBassLevel < .01f) lastBassLevel = 0f
             }
             val notification = showingInMusicWindow || NotificationEdgeOverlay.isAnimating
             if (yielding && !notification) {
@@ -142,7 +152,8 @@ class MusicEdgeService : Service() {
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
                 else if (reason == null && now - lastAudible > 2200L)
                     "Playback detected, but no usable audio signal (player may block capture)"
-                else reason ?: "Live music lighting · tracking beats", info.title)
+                else reason ?: "Live music lighting · tracking beats",
+                info.title, lastSignalLevel, lastBassLevel)
             main.postDelayed(this, if (awake) 40L else 500L)
         }
     }
@@ -218,7 +229,11 @@ class MusicEdgeService : Service() {
     private fun setCapture(enabled: Boolean) {
         if (enabled == enabledCapture) return
         enabledCapture = enabled
-        if (!enabled) { pending.set(null); lastCapture = 0L; lastAudible = 0L; view?.clearSignal() }
+        if (!enabled) {
+            pending.set(null); lastCapture = 0L; lastAudible = 0L
+            lastSignalLevel = 0f; lastBassLevel = 0f
+            view?.clearSignal()
+        }
         worker.post {
             if (!closing) try {
                 visualizer?.let { check(it.setEnabled(enabledCapture) == Visualizer.SUCCESS) }
