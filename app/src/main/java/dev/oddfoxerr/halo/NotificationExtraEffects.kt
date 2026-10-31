@@ -55,7 +55,7 @@ internal class NotificationExtraEffects {
             NotificationEdgeStyle.DASH -> {
                 for (i in 0 until 40) {
                     trace(measure, i / 40f + seconds * .08f, .012f)
-                    val beat = .5f + .5f * sin((i / 40f * 6f - seconds * 2.2f) * (2f * PI)).toFloat()
+                    val beat = .5f + .5f * sin((i / 40f * 6f - seconds * 2.2f) * (2f * PI.toFloat())).toFloat()
                     line(canvas, segment, thickness * density * (1f + beat * .8f),
                         (110f + beat * 145f).toInt(), color, glow, density)
                 }
@@ -65,7 +65,7 @@ internal class NotificationExtraEffects {
                 for (i in 0 until 55) {
                     val fraction = wrap(i * .6180339f + seconds * .022f * (1 + i % 3))
                     measure.getPosTan(length * fraction, pos, tan)
-                    val spark = max(0f, sin((seconds * (2f + i % 5) + i * .71f) * (2f * PI)).toFloat())
+                    val spark = max(0f, sin((seconds * (2f + i % 5) + i * .71f) * (2f * PI.toFloat())).toFloat())
                     if (spark < .55f) continue
                     paint.shader = null
                     paint.style = Paint.Style.STROKE
@@ -79,7 +79,7 @@ internal class NotificationExtraEffects {
             }
             NotificationEdgeStyle.RIPPLE -> {
                 for (layer in 0..2) {
-                    val wave = sin((seconds * 1.25f + layer / 3f) * (2f * PI)).toFloat()
+                    val wave = sin((seconds * 1.25f + layer / 3f) * (2f * PI.toFloat())).toFloat()
                     val opacity = (140 + (wave + 1f) * 50f).toInt().coerceIn(0, 255)
                     // Ripple offsets the contour uniformly instead of scaling the whole screen.
                     for (i in 0 until 16) {
@@ -99,7 +99,7 @@ internal class NotificationExtraEffects {
                 for (layer in 0..2) {
                     for (i in 0 until 28) {
                         val u = i / 28f
-                        val s = sin(((u * 4f) - seconds * .4f + layer * .33f) * (2f * PI)).toFloat()
+                        val s = sin(((u * 4f) - seconds * .4f + layer * .33f) * (2f * PI.toFloat())).toFloat()
                         val strength = (s + 1f) * .5f
                         trace(measure, u, .033f)
                         line(canvas, segment, (thickness * (.7f + layer * .15f) + strength * 2f) * density,
