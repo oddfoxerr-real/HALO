@@ -139,6 +139,11 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         .padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Edge Visuals", style = MaterialTheme.typography.headlineLarge)
         Text("One GPU effect for both music and notifications.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = {
+            context.startActivity(Intent(context, VideoAmbientActivity::class.java))
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text("Video Ambilight · match YouTube & video colors")
+        }
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
