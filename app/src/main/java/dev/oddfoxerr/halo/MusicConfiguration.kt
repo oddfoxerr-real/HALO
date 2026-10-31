@@ -11,10 +11,19 @@ data class MusicConfiguration(
     val accent: Int = 0xFF52E0CB.toInt(),
     val sensitivity: Float = 1.5f,
     val thickness: Float = 1f,
-    val glow: Float = .65f,
+    val glow: Float = .75f,
+    val brightness: Float = 1f,
     val speed: Float = 1f,
     val inset: Float = 8f,
     val corner: Float = 32f,
+    val leftInset: Float = 4f,
+    val rightInset: Float = 4f,
+    val topInset: Float = 4f,
+    val bottomInset: Float = 4f,
+    val drawTop: Boolean = true,
+    val drawBottom: Boolean = true,
+    val drawLeft: Boolean = true,
+    val drawRight: Boolean = true,
     val colorSource: EdgeColorSource = EdgeColorSource.MANUAL,
     val onlyPlaying: Boolean = true,
     val allowedSources: Set<String> = emptySet(),
@@ -24,7 +33,12 @@ data class MusicConfiguration(
         context.getSharedPreferences("chainsaw_music", Context.MODE_PRIVATE).edit()
             .putString("edge_mode", mode.name).putInt("edge_color", color).putInt("edge_accent", accent)
             .putFloat("sensitivity", sensitivity).putFloat("thickness", thickness).putFloat("glow", glow)
+            .putFloat("brightness", brightness)
             .putFloat("rate", speed).putFloat("edge_inset", inset).putFloat("edge_corner", corner)
+            .putFloat("left_inset", leftInset).putFloat("right_inset", rightInset)
+            .putFloat("top_inset", topInset).putFloat("bottom_inset", bottomInset)
+            .putBoolean("draw_top", drawTop).putBoolean("draw_bottom", drawBottom)
+            .putBoolean("draw_left", drawLeft).putBoolean("draw_right", drawRight)
             .putString("color_source", colorSource.name).putBoolean("only_while_playing", onlyPlaying)
             .putStringSet("allowed_sources", allowedSources.toSet()).putBoolean("respect_quiet", respectQuiet).apply()
     }
@@ -37,8 +51,15 @@ data class MusicConfiguration(
                 mode = EdgeSpectrum.mode(p.getString("edge_mode", null)),
                 color = p.getInt("edge_color", 0xFF9A7BFF.toInt()), accent = p.getInt("edge_accent", 0xFF52E0CB.toInt()),
                 sensitivity = value("sensitivity", 1.5f, .5f, 5f), thickness = value("thickness", 1f, .6f, 1.6f),
-                glow = value("glow", .65f, 0f, 1f), speed = value("rate", 1f, .25f, 3f),
-                inset = value("edge_inset", 8f, 3f, 32f), corner = value("edge_corner", 32f, 4f, 64f),
+                glow = value("glow", .75f, 0f, 1f), brightness = value("brightness", 1f, .2f, 1f),
+                speed = value("rate", 1f, .25f, 3f),
+                inset = value("edge_inset", 8f, 0f, 100f), corner = value("edge_corner", 32f, 0f, 100f),
+                leftInset = value("left_inset", 4f, -24f, 120f),
+                rightInset = value("right_inset", 4f, -24f, 120f),
+                topInset = value("top_inset", 4f, -24f, 120f),
+                bottomInset = value("bottom_inset", 4f, -24f, 120f),
+                drawTop = p.getBoolean("draw_top", true), drawBottom = p.getBoolean("draw_bottom", true),
+                drawLeft = p.getBoolean("draw_left", true), drawRight = p.getBoolean("draw_right", true),
                 colorSource = MediaEdgePolicy.colorSource(p.getString("color_source", null)),
                 onlyPlaying = p.getBoolean("only_while_playing", true),
                 allowedSources = p.getStringSet("allowed_sources", emptySet())?.toSet().orEmpty(),
