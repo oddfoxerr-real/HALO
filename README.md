@@ -4,7 +4,7 @@
 
 **Video Mode:** Select **Music → Video → Start video lighting**. HALO explicitly
 requests Android screen-sharing consent, then analyzes a small, downsampled
-RGBA frame in memory roughly 15 times per second. A four-zone sampler averages
+RGBA frame in memory up to 30 times per second. A 16-zone sampler divides each edge into four independent color regions and averages
 the content near the top, right, bottom and left of the picture. A dedicated
 transparent AGSL video shader lights those edges using the *actual colors of the
 current scene*, with fast adjustable smoothing on scene cuts. It does not
