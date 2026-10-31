@@ -76,6 +76,11 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     var feedback by remember { mutableStateOf<String?>(null) }
     var chooseSources by remember { mutableStateOf(false) }
     val preview = remember { ChainsawView(context) }
+    var rendererStatus by remember { mutableStateOf("Checking GPU renderer") }
+    LaunchedEffect(settings, demo, resumed) {
+        delay(300L)
+        rendererStatus = preview.rendererStatus
+    }
     val profileStore = remember(context) { ProfileStore(context) }
     var notch by remember { mutableStateOf(profileStore.notchSettings()) }
     fun save(value: MusicConfiguration) { settings = value; value.save(context) }
@@ -165,6 +170,8 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 }
             }
         }
+        Text("Renderer · $rendererStatus", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { demo = !demo }, modifier = Modifier.fillMaxWidth()) {
             Text(if (demo) "Stop design preview" else "Play design preview")
         }
