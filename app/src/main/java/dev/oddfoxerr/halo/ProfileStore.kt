@@ -13,6 +13,8 @@ class ProfileStore(context: Context) {
             app = app,
             color = prefs.getLong("${key}_color", app.initialColor),
             side = if (prefs.getString("${key}_side", "RIGHT") == "LEFT") EdgeSide.LEFT else EdgeSide.RIGHT,
+            motion = CharacterMotion.entries.firstOrNull { it.name == prefs.getString("${key}_motion", "ORIGINAL") }
+                ?: CharacterMotion.ORIGINAL,
             durationMs = prefs.getLong("${key}_duration", 4200L).coerceIn(1800, 10000),
             scale = prefs.getFloat("${key}_scale", 1f).coerceIn(.60f, 1.60f),
             glow = prefs.getFloat("${key}_glow", .65f).coerceIn(0f, 1f),
@@ -27,6 +29,7 @@ class ProfileStore(context: Context) {
         prefs.edit()
             .putLong("${key}_color", profile.color)
             .putString("${key}_side", profile.side.name)
+            .putString("${key}_motion", profile.motion.name)
             .putLong("${key}_duration", profile.durationMs.coerceIn(1800L, 10000L))
             .putFloat("${key}_scale", profile.scale.coerceIn(.60f, 1.60f))
             .putFloat("${key}_glow", profile.glow.coerceIn(0f, 1f))
