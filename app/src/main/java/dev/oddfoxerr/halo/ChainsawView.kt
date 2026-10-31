@@ -3,6 +3,7 @@ package dev.oddfoxerr.halo
 import android.content.Context
 import android.graphics.*
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.View
 import kotlin.math.*
 
@@ -32,6 +33,15 @@ class ChainsawView(context: Context) : View(context) {
     private var shaderKey = ""
     private var gradient: Shader? = null
     private var lastFrame = 0L
+    private val renderLoop = MusicRenderLoop()
+    private val choreographer by lazy { Choreographer.getInstance() }
+    private val redraw = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!canRender()) { stopFrames(); return }
+            if (renderLoop.onFrame(frameTimeNanos / 1_000_000L)) invalidate()
+            else choreographer.postFrameCallback(this)
+        }
+    }
 
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
@@ -41,15 +51,30 @@ class ChainsawView(context: Context) : View(context) {
         edgeInset = settings.inset; cornerRadius = settings.corner
         invalidate()
     }
-    fun clearSignal() { motion.clear(); lastFrame = 0L; invalidate() }
-    fun updateSpectrum(bands: FloatArray, bass: Float, dtSeconds: Float, sensitivity: Float, rate: Float) {
+    fun clearSignal() { motion.clear(); stopFrames(); invalidate() }
+    fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
         speed = rate
         motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
-        if (isShown) postInvalidateOnAnimation()
+        requestFrame()
+    }
+    private fun requestFrame() {
+        if (canRender() && renderLoop.request()) choreographer.postFrameCallback(redraw)
+    }
+    private fun canRender() = isShown && isAttachedToWindow && windowVisibility == VISIBLE
+    private fun stopFrames() {
+        choreographer.removeFrameCallback(redraw)
+        renderLoop.reset()
+        lastFrame = 0L
     }
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        lastFrame = 0L
+        stopFrames()
+        if (visibility == VISIBLE) requestFrame()
+    }
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        stopFrames()
+        if (visibility == VISIBLE) requestFrame()
     }
     override fun onDetachedFromWindow() { clearSignal(); super.onDetachedFromWindow() }
 
@@ -87,7 +112,7 @@ class ChainsawView(context: Context) : View(context) {
             EdgeMode.CHAIN -> chainsaw(canvas, unit)
         }
         paint.shader = null; paint.alpha = 255
-        if (moving && isShown && isAttachedToWindow) postInvalidateOnAnimation()
+        if (moving) requestFrame()
     }
     private fun amplitude(fraction: Float): Float {
         // Mirror the spectrum around the frame; interpolate between bands instead of stair-stepping.

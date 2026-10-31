@@ -111,7 +111,7 @@ class MusicEdgeService : Service() {
             pending.getAndSet(null)?.let { sample ->
                 lastCapture = sample.at
                 if (sample.bands.any { it > .008f }) lastAudible = sample.at
-                view?.updateSpectrum(sample.bands, sample.bass, .04f, settings.sensitivity, settings.speed)
+                view?.updateSpectrum(sample.bands, sample.bass, settings.sensitivity, settings.speed)
             }
             val notification = now < yieldUntil || HaloOverlay.isAnimating() || NotificationEdgeOverlay.isAnimating
             if (yielding && !notification) {
@@ -169,8 +169,8 @@ class MusicEdgeService : Service() {
                     val source = Visualizer(0)
                     visualizer = source
                     val range = Visualizer.getCaptureSizeRange()
-                    source.captureSize = 1024.coerceIn(range.first(), range.last())
-                    source.scalingMode = Visualizer.SCALING_MODE_AS_PLAYED
+                    check(source.setCaptureSize(1024.coerceIn(range.first(), range.last())) == Visualizer.SUCCESS)
+                    check(source.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
                     check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(25000), false, true) == Visualizer.SUCCESS)
                     // Capture starts only when visibility/media rules permit it.
                     if (enabledCapture) check(source.setEnabled(true) == Visualizer.SUCCESS)
@@ -212,16 +212,23 @@ class MusicEdgeService : Service() {
             .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, "Stop", stop).build()).build()
     }
     override fun onDestroy() {
-        closing = true; isRunning = false; current = null
+        closing = true; enabledCapture = false; isRunning = false; current = null
         main.removeCallbacksAndMessages(null)
         if (receiverRegistered) unregisterReceiver(screenReceiver)
         view?.let { try { manager?.removeViewImmediate(it) } catch (_: RuntimeException) { } }; view = null
         pending.set(null)
         worker.removeCallbacksAndMessages(null)
         worker.post {
-            visualizer?.let { try { it.enabled = false; it.release() } catch (_: RuntimeException) { } }
-            visualizer = null
-            thread.quitSafely()
+            try {
+                visualizer?.let { source ->
+                    // A disconnected engine may reject disable; release must still run.
+                    try { source.enabled = false } catch (_: RuntimeException) { }
+                    try { source.release() } catch (_: RuntimeException) { }
+                }
+            } finally {
+                visualizer = null
+                thread.quitSafely()
+            }
         }
         if (!failed) MusicRuntime.publish(false, "Music lighting is off")
         stopForeground(STOP_FOREGROUND_REMOVE)

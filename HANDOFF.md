@@ -1,8 +1,31 @@
 # HALO PC continuation — 31 October 2026
 
-Branch: `prototype/music-studio`. Based on main `7c0f26c` (v0.9.0).
+Current continuation branch: `fix/music-studio-validation`.
+Continues `prototype/music-studio` at `f6af63c`, based on main `7c0f26c` (v0.9.0).
 Repository: https://github.com/oddfoxerr-real/HALO
 Version prepared: **0.10.0**, versionCode **11**.
+Review: https://github.com/oddfoxerr-real/HALO/pull/6 (draft, targets the prototype branch).
+
+## PC continuation completed
+
+- Restored rendering around 60 fps on high-refresh displays using the display's frame
+  timestamp. Capture bursts share a pending redraw; hidden/detached views cancel it.
+- Added five frame-pacing regressions covering 120 Hz, 60 Hz, capture bursts, hiding and
+  resuming, and restarting after silence.
+- Audio setup now checks capture-size/scaling return codes. Cleanup always attempts to
+  release the Visualizer even when disabling it fails.
+- Replaced the wrapper bootstrap's verified HTTP 404 with the standard Gradle 8.13
+  wrapper, checked-in JAR and pinned distribution SHA-256. It respects `JAVA_HOME`.
+- Debug CI now runs lint as well as unit tests and assembly, and uploads validation reports.
+- Verified code commit: `ab6e3e952b5094fc46c2ee1af0e83a882506dd58`.
+  Successful tests, lint, APK build/signing and artifact upload:
+  https://github.com/oddfoxerr-real/HALO/actions/runs/41236195628
+- Download `HALO-debug-apk` from that run; `HALO-validation-reports` contains the reports.
+- The local Windows wrapper build also passed all 29 unit tests, debug APK assembly and
+  lint on JDK 17 / SDK 36. The downloaded CI APK's checksum and signature were verified
+  locally. The local build's Kotlin session cache is excluded from version control.
+  Lint reports 0 errors, 42 warnings and 9 hints; it is not warning-free.
+- No phone was connected to the continuation PC. The device checks below remain open.
 
 ## User direction
 
@@ -33,7 +56,7 @@ choices and existing characters. Do not modify CYN or Gro-Ler.
 ## Validation and next checks
 
 - `git diff --check` passes.
-- GitHub Actions is configured to run unit tests, assemble a debug APK, verify its
+- GitHub Actions is configured to run unit tests and lint, assemble a debug APK, verify its
   signature and upload it for this branch. Check the latest branch run before using
   an APK; a source push alone is not a successful Android build.
 - New tests cover stale capture decay, invalid samples, clearing animation state,
@@ -55,14 +78,20 @@ choices and existing characters. Do not modify CYN or Gro-Ler.
 ```sh
 git clone https://github.com/oddfoxerr-real/HALO.git
 cd HALO
-git switch prototype/music-studio
+git switch fix/music-studio-validation
 ```
 
-Use JDK 17, Android SDK 36 and Gradle 8.13, then run:
+Use JDK 17 and Android SDK platform 36. Set `JAVA_HOME` and `ANDROID_HOME`, then run:
 
 ```sh
-gradle :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
+
+On Windows use `.\gradlew.bat` with the same tasks. The wrapper supplies Gradle 8.13.
+On the continuation PC, build tools/cache live at `D:\Codex\HALO-build-01a19375` because
+C: ran out of space during initial dependency setup. Its `sdk`, `gradle-home` and
+`android-user` directories can be used as `ANDROID_HOME`, `GRADLE_USER_HOME` and
+`ANDROID_USER_HOME`. Only this task's temporary downloads/cache were cleaned or moved.
 
 Main has an automatic release workflow. Keep development on this branch until review;
 merging version 0.10.0 into main will trigger publication. Do not replace the existing
