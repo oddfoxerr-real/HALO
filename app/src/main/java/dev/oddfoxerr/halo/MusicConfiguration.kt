@@ -73,9 +73,9 @@ data class MusicConfiguration(
     }
 }
 
-data class MusicRuntimeState(val active: Boolean = false, val message: String = "Music lighting is off", val source: String = "")
+data class MusicRuntimeState(val active: Boolean = false, val message: String = "Music lighting is off", val source: String = "", val energy: Float = 0f, val frames: Long = 0L)
 object MusicRuntime {
     private val mutable = MutableStateFlow(MusicRuntimeState())
     val state = mutable.asStateFlow()
-    fun publish(active: Boolean, message: String, source: String = "") { mutable.value = MusicRuntimeState(active, message, source) }
+    fun publish(active: Boolean, message: String, source: String = "", energy: Float = 0f, frames: Long = 0L) { mutable.value = MusicRuntimeState(active, message, source, energy, frames) }
 }
