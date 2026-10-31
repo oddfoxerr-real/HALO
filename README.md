@@ -1,3 +1,7 @@
+# HALO — Samsung Notification Character Studio
+
+**Development: v0.12.0 Light-field Preview** — Music and notification glow refinement, camera cutout calibration, and the 31 earlier animation selections. Galaxy A56 device validation is pending.
+
 ## v0.12.0 — Light-field visuals and notch support
 
 This preview addresses the flat, drawn-on appearance of earlier HALO styles using an original
@@ -20,9 +24,7 @@ proprietary Muviz Edge code, assets, or shaders. The visual design is original a
 appearance has not yet been validated on Galaxy A56 / One UI. Protected status bars, the
 camera aperture, AOD and the lock screen may not permit third-party drawing.
 
-# HALO — Samsung Notification Character Studio
-
-**Development: v0.11.0 Animation Studio** — 15 original audio-reactive music designs, nine notification-border effects and seven selectable character entrance motions. This is a developer preview; Samsung One UI hardware validation is still pending. Earlier version sections below are historical.
+*The following release sections document earlier versions.*
 
 ## v0.11.0 — Animation Studio
 
