@@ -18,6 +18,7 @@ data class CharacterProfile(
     val app: CharacterApp,
     val color: Long = app.initialColor,
     val side: EdgeSide = EdgeSide.RIGHT,
+    val motion: CharacterMotion = CharacterMotion.ORIGINAL,
     val durationMs: Long = 4200L,
     val scale: Float = 1f,
     val glow: Float = 0.65f,
@@ -28,6 +29,12 @@ data class CharacterProfile(
 )
 
 enum class EdgeSide { LEFT, RIGHT }
+
+/** Entrance motion independent of the character artwork and notification source. */
+enum class CharacterMotion(val title: String) {
+    ORIGINAL("Original"), SWOOP("Swoop"), ORBIT("Orbit"), SPRING("Spring"),
+    GLITCH("Glitch"), FLOAT("Float"), BLAST("Blast")
+}
 
 /** Notification keys, not bodies, are held in memory; duplicates must not replay. */
 class NotificationTracker {
