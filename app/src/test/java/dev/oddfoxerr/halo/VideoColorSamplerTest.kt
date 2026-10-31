@@ -39,7 +39,7 @@ class VideoColorSamplerTest {
     @Test fun smoothingReactsToCutsAndKeepsBlackDark() {
         val result = VideoColorSampler.smooth(VideoEdgeColors.BLACK,
             VideoEdgeColors(-0x10000, -0x10000, -0x10000, -0x10000), .5f)
-        assertEquals(127, result.top ushr 16 and 255, 1)
+        assertEquals(127.0, (result.top ushr 16 and 255).toDouble(), 1.0)
         assertTrue(VideoColorSampler.isDark(VideoEdgeColors.BLACK))
         assertTrue(!VideoColorSampler.isDark(result))
     }
