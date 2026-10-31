@@ -91,6 +91,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     }
     fun start() {
         try {
+            if (VideoAmbilightService.isRunning) {
+                context.stopService(Intent(context, VideoAmbilightService::class.java))
+            }
             context.startForegroundService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_START))
             feedback = null
         } catch (_: RuntimeException) { feedback = "Android could not start lighting. Keep HALO open and check its permissions." }
