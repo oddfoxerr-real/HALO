@@ -148,7 +148,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Box(Modifier.width(158.dp).height(250.dp).background(Color.Black, RoundedCornerShape(26.dp))) {
+            Box(Modifier.width(204.dp).height(370.dp).background(Color.Black, RoundedCornerShape(26.dp))) {
                 AndroidView(factory = { preview }, update = { it.configure(settings) }, modifier = Modifier.fillMaxSize())
                 Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("HALO", style = MaterialTheme.typography.titleLarge, color = Color(0xFFEEE9FA))
@@ -203,15 +203,29 @@ fun MusicStudio(modifier: Modifier = Modifier) {
             MusicPanel.TUNE -> {
                 MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") { save(settings.copy(sensitivity = it)) }
                 MusicSlider("Motion speed", settings.speed, .25f..3f, "×") { save(settings.copy(speed = it)) }
-                MusicSlider("Thickness", settings.thickness, .6f..1.6f, "×") { save(settings.copy(thickness = it)) }
+                MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
+                MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
                 MusicSlider("Glow", settings.glow, 0f..1f, "") { save(settings.copy(glow = it)) }
                 HorizontalDivider()
+                Text("Choose screen edges", style = MaterialTheme.typography.titleMedium)
+                Text("Use any combination. All four sides are enabled by default.", style = MaterialTheme.typography.bodySmall)
+                MusicToggle("Top edge", "Light the top of your display.", settings.drawTop) { save(settings.copy(drawTop = it)) }
+                MusicToggle("Bottom edge", "Light the bottom of your display.", settings.drawBottom) { save(settings.copy(drawBottom = it)) }
+                MusicToggle("Left edge", "Light the left side.", settings.drawLeft) { save(settings.copy(drawLeft = it)) }
+                MusicToggle("Right edge", "Light the right side.", settings.drawRight) { save(settings.copy(drawRight = it)) }
+                HorizontalDivider()
                 Text("Fit your display", style = MaterialTheme.typography.titleMedium)
-                Text("Adjust the gap and rounded corners to match your phone.", style = MaterialTheme.typography.bodySmall)
-                MusicSlider("Edge inset", settings.inset, 3f..32f, "dp") { save(settings.copy(inset = it)) }
-                MusicSlider("Corner radius", settings.corner, 4f..64f, "dp") { save(settings.copy(corner = it)) }
-                OutlinedButton(onClick = { save(settings.copy(inset = 8f, corner = 32f, thickness = 1f)) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Reset display fit") }
+                Text("Move each edge independently. Negative inset values push the frame outward; Android may clip protected system UI.", style = MaterialTheme.typography.bodySmall)
+                MusicSlider("Top position", settings.topInset, -24f..120f, "dp") { save(settings.copy(topInset = it)) }
+                MusicSlider("Bottom position", settings.bottomInset, -24f..120f, "dp") { save(settings.copy(bottomInset = it)) }
+                MusicSlider("Left position", settings.leftInset, -24f..120f, "dp") { save(settings.copy(leftInset = it)) }
+                MusicSlider("Right position", settings.rightInset, -24f..120f, "dp") { save(settings.copy(rightInset = it)) }
+                MusicSlider("Corner radius", settings.corner, 0f..100f, "dp") { save(settings.copy(corner = it)) }
+                OutlinedButton(onClick = { save(settings.copy(
+                    topInset = 4f, bottomInset = 4f, leftInset = 4f, rightInset = 4f,
+                    drawTop = true, drawBottom = true, drawLeft = true, drawRight = true,
+                    corner = 32f, thickness = 1f, brightness = 1f, glow = .75f)) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Reset edge calibration") }
             }
             MusicPanel.RULES -> {
                 MusicToggle("Follow music playback", "Hide when your music player is paused. Uses notification access to detect media sessions.", settings.onlyPlaying) {
@@ -235,7 +249,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Enable notification access")
             }
         }
-        Text("Play music in your usual app. Lighting continues over other apps while the screen is unlocked and hides in silence. Some players restrict audio visualization. No microphone audio is recorded. Samsung's lock screen and AOD are not replaced.",
+        Text("Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. Music lighting hides when playback is silent or Android blocks capture. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
     }
