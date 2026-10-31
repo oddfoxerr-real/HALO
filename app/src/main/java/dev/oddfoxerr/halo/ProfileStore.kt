@@ -142,8 +142,23 @@ class ProfileStore(context: Context) {
         get() = prefs.getFloat("notification_border_thickness", 3f).coerceIn(1f, 8f)
         set(value) { prefs.edit().putFloat("notification_border_thickness", value.coerceIn(1f, 8f)).apply() }
     var notificationBorderGlow: Float
-        get() = prefs.getFloat("notification_border_glow", .65f).coerceIn(0f, 1f)
+        get() = prefs.getFloat("notification_border_glow", .75f).coerceIn(0f, 1f)
         set(value) { prefs.edit().putFloat("notification_border_glow", value.coerceIn(0f, 1f)).apply() }
+    var notificationBorderLeft: Float
+        get() = prefs.getFloat("notification_border_left", 6f).coerceIn(-24f, 120f)
+        set(value) { prefs.edit().putFloat("notification_border_left", value.coerceIn(-24f, 120f)).apply() }
+    var notificationBorderRight: Float
+        get() = prefs.getFloat("notification_border_right", 6f).coerceIn(-24f, 120f)
+        set(value) { prefs.edit().putFloat("notification_border_right", value.coerceIn(-24f, 120f)).apply() }
+    var notificationBorderTop: Float
+        get() = prefs.getFloat("notification_border_top", 6f).coerceIn(-24f, 120f)
+        set(value) { prefs.edit().putFloat("notification_border_top", value.coerceIn(-24f, 120f)).apply() }
+    var notificationBorderBottom: Float
+        get() = prefs.getFloat("notification_border_bottom", 6f).coerceIn(-24f, 120f)
+        set(value) { prefs.edit().putFloat("notification_border_bottom", value.coerceIn(-24f, 120f)).apply() }
+    var notificationBorderCorner: Float
+        get() = prefs.getFloat("notification_border_corner", 35f).coerceIn(0f, 100f)
+        set(value) { prefs.edit().putFloat("notification_border_corner", value.coerceIn(0f, 100f)).apply() }
 
     fun isQuietNow(): Boolean {
         val c = Calendar.getInstance()

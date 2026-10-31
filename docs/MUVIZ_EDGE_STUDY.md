@@ -46,3 +46,11 @@ apktool d -f -o ./local-analysis/resources ./local-apks/base.apk
 Treat decompiler output as **evidence**, not as a source-code dependency. Do not commit APKs, raw decompiled code, proprietary assets or unapproved captures. Check platform APIs, window types, permission boundaries, and lifecycle/state management, then implement and test original HALO components.
 
 The analysis above is limited to *public documentation and independent HALO code inspection*. A real binary audit requires a lawfully acquired APK and separate analysis; it has not been performed here. Some features can only be verified on a real Galaxy device.
+
+## 0.10 implementation correction
+
+HALO now has its own Music navigation destination and design collection. Silk, Spectrum,
+Orbit and Pulse are normal styles; Chainsaw is optional. Two-color gradients, display
+calibration and observable live status replace the single-color, long settings page.
+Capture runs on its own looper; visibility is checked even when callbacks stop. Incoming
+notifications temporarily take priority instead of being disabled by music mode.

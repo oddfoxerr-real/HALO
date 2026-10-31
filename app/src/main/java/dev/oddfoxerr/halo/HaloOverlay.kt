@@ -57,7 +57,7 @@ object HaloOverlay {
                 gravity = Gravity.TOP or (if (side == EdgeSide.RIGHT) Gravity.RIGHT else Gravity.LEFT)
                 // Android 12+ restricts pass-through gestures underneath untrusted overlays.
                 // Keep the window narrow and below the platform opacity threshold.
-                alpha = 0.55f
+                alpha = 0.40f
             }
             val drawing = CharacterView(context.applicationContext, true)
             try {

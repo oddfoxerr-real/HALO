@@ -3,294 +3,340 @@ package dev.oddfoxerr.halo
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.sin
 
-/** Dedicated audio-lighting studio; independent of notification characters and themes. */
+/** Notification shortcut opens the same music studio that lives in HALO's Music tab. */
 class MusicEdgeActivity : ComponentActivity() {
-    private val prefs by lazy { getSharedPreferences("chainsaw_music", MODE_PRIVATE) }
-    private var status by mutableStateOf("Choose a style, then start music lighting.")
-    private var active by mutableStateOf(false)
-    private var selectedMode by mutableStateOf(EdgeMode.WAVE)
-    private var selectedColor by mutableIntStateOf(AndroidColor.rgb(170, 91, 255))
-    private var sensitivity by mutableFloatStateOf(1.5f)
-    private var size by mutableFloatStateOf(1f)
-    private var glow by mutableFloatStateOf(.65f)
-    private var speed by mutableFloatStateOf(1f)
-    private var colorSource by mutableStateOf(EdgeColorSource.MANUAL)
-    private var onlyWhilePlaying by mutableStateOf(false)
-    private var allowedSources by mutableStateOf<Set<String>>(emptySet())
-    private var sourcePickerOpen by mutableStateOf(false)
-
-    private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) requestOverlayPermission() else status = "Android audio visualization permission was denied."
-    }
-    private val overlayPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (Settings.canDrawOverlays(this)) startMusic() else status = "Display-over-other-apps permission is required."
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedMode = EdgeSpectrum.mode(prefs.getString("edge_mode", "WAVE"))
-        selectedColor = prefs.getInt("edge_color", AndroidColor.rgb(170, 91, 255))
-        sensitivity = prefs.getFloat("sensitivity", 1.5f).coerceIn(.5f, 5f)
-        size = prefs.getFloat("thickness", 1f).coerceIn(.6f, 1.6f)
-        glow = prefs.getFloat("glow", .65f).coerceIn(0f, 1f)
-        speed = prefs.getFloat("rate", 1f).coerceIn(.25f, 3f)
-        colorSource = MediaEdgePolicy.colorSource(prefs.getString("color_source", "MANUAL"))
-        onlyWhilePlaying = prefs.getBoolean("only_while_playing", false)
-        allowedSources = prefs.getStringSet("allowed_sources", emptySet())?.toSet().orEmpty()
-
         setContent {
-            val preview = remember { ChainsawView(this) }
-            var previewIteration by remember { mutableIntStateOf(0) }
-            LaunchedEffect(previewIteration) {
-                if (previewIteration == 0) return@LaunchedEffect
-                for (tick in 0 until 52) {
-                    val envelope = abs(sin(tick / 7f)) * (1f - (tick / 52f) * .3f)
-                    val signal = FloatArray(EdgeSpectrum.BAND_COUNT) { band ->
-                        envelope * (0.15f + .45f * abs(sin(tick / 6f + band / 4f)))
-                    }
-                    preview.updateSpectrum(signal, envelope * .35f, .033f, sensitivity, speed)
-                    delay(33)
-                }
-                preview.updateSpectrum(FloatArray(EdgeSpectrum.BAND_COUNT), 0f, .033f, sensitivity, speed)
-            }
-
-            MaterialTheme(colorScheme = darkColorScheme(
-                primary = Color(0xFFBA97FF),
-                background = Color(0xFF08090C),
-                surface = Color(0xFF171923),
-                onSurface = Color.White
-            )) {
-                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                    .safeDrawingPadding().verticalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Music Edge", style = MaterialTheme.typography.headlineMedium)
-                    Text("Muviz-style effects for your whole screen", color = Color.LightGray)
-                    Box(Modifier.fillMaxWidth().height(230.dp).background(
-                        MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.RoundedCornerShape(28.dp))) {
-                        AndroidView(factory = { preview }, modifier = Modifier.fillMaxSize().padding(5.dp), update = {
-                            it.mode = selectedMode
-                            it.edgeColor = selectedColor
-                            it.thickness = size
-                            it.glow = glow
-                        })
-                        Text("STUDIO PREVIEW", modifier = Modifier.align(Alignment.Center),
-                            style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                    }
-                    OutlinedButton(
-                        onClick = { previewIteration++ }, modifier = Modifier.fillMaxWidth()
-                    ) { Text("Preview animation (demo signal)") }
-
-                    Text("Visual styles", style = MaterialTheme.typography.titleMedium)
-                    EdgeMode.entries.chunked(2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            pair.forEach { mode ->
-                                FilterChip(
-                                    selected = selectedMode == mode,
-                                    onClick = { selectedMode = mode; save() },
-                                    label = { Text(mode.title) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                    Text("Color source", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        EdgeColorSource.entries.forEach { source ->
-                            FilterChip(
-                                selected = colorSource == source,
-                                onClick = { colorSource = source; save() },
-                                label = { Text(source.label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Text(
-                        if (colorSource == EdgeColorSource.ALBUM_ART)
-                            "HALO samples the current album cover when Android exposes media metadata. Requires Notification Access; falls back to your saved color."
-                        else "Pick a fixed color for all music.",
-                        color = Color.LightGray, style = MaterialTheme.typography.bodySmall
-                    )
-                    Text("Colors", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(0xFFAA5BFF, 0xFF4CC8FF, 0xFF45E0B5, 0xFFFF785E).forEach { color ->
-                            FilterChip(
-                                selected = selectedColor == color.toInt(),
-                                onClick = { selectedColor = color.toInt(); save() },
-                                label = { Text("●", color = Color(color)) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    ControlSlider("Sensitivity", sensitivity, .5f..5f) { sensitivity = it; save() }
-                    ControlSlider("Size", size, .6f..1.6f) { size = it; save() }
-                    ControlSlider("Glow", glow, 0f..1f) { glow = it; save() }
-                    ControlSlider("Movement speed", speed, .25f..3f) { speed = it; save() }
-
-                    HorizontalDivider()
-                    Text("Playback rules", style = MaterialTheme.typography.titleMedium)
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Only while music is playing")
-                            Text("Hide when no active Android media session is detected. Requires HALO Notification Access.",
-                                style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        }
-                        Switch(checked = onlyWhilePlaying, onCheckedChange = {
-                            onlyWhilePlaying = it; save()
-                        })
-                    }
-                    OutlinedButton(
-                        onClick = { sourcePickerOpen = true }, modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (allowedSources.isEmpty()) "Music sources: All supported apps"
-                            else "Music sources: ${allowedSources.size} selected apps"
-                        )
-                    }
-                    Text("This filters music sources, not the foreground app. Protected or unsupported audio cannot be bypassed.",
-                        color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-
-                    HorizontalDivider()
-                    Text("Live on your phone", style = MaterialTheme.typography.titleMedium)
-                    Text(status, style = MaterialTheme.typography.bodyMedium, color = Color.LightGray)
-                    Button(onClick = ::requestPermissions, enabled = !active,
-                        modifier = Modifier.fillMaxWidth()) { Text("Start live music edge") }
-                    OutlinedButton(onClick = {
-                        stopService(Intent(this@MusicEdgeActivity, MusicEdgeService::class.java))
-                        active = false
-                        status = "Music edge stopped."
-                    }, enabled = active, modifier = Modifier.fillMaxWidth()) { Text("Stop live music edge") }
-                    Text("After starting, open your music player. HALO uses Android's low-resolution playback visualizer; some apps may block it. The notification provides a Stop action. HALO does not record microphone audio.",
-                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    TextButton(onClick = { finish() }) { Text("Back to HALO") }
-                    if (sourcePickerOpen) {
-                        val candidates = remember { installedSourceApps() }
-                        var search by remember { mutableStateOf("") }
-                        AlertDialog(
-                            onDismissRequest = { sourcePickerOpen = false },
-                            title = { Text("Choose music sources") },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = search, onValueChange = { search = it },
-                                        singleLine = true, label = { Text("Search apps") }
-                                    )
-                                    Text("No selections = allow all media apps", style = MaterialTheme.typography.bodySmall)
-                                    Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-                                        candidates.filter {
-                                            it.second.contains(search, ignoreCase = true) ||
-                                                it.first.contains(search, ignoreCase = true)
-                                        }.forEach { (pkg, name) ->
-                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                                Text(name, modifier = Modifier.weight(1f))
-                                                Checkbox(checked = pkg in allowedSources, onCheckedChange = { checked ->
-                                                    allowedSources = if (checked) allowedSources + pkg else allowedSources - pkg
-                                                    save()
-                                                })
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            confirmButton = {
-                                TextButton(onClick = { sourcePickerOpen = false }) { Text("Done") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { allowedSources = emptySet(); save() }) { Text("Allow all") }
-                            }
-                        )
-                    }
-                }
+            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFBEABFF), background = Color.Black,
+                surface = Color(0xFF16171D))) {
+                MusicStudio(Modifier.fillMaxSize().safeDrawingPadding())
             }
         }
     }
+}
 
-    @Composable
-    private fun ControlSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-        Text("$label · %.2f".format(value), color = Color.White)
-        Slider(value = value, onValueChange = onChange, valueRange = range)
-    }
+private enum class MusicPanel(val label: String) { DESIGNS("Designs"), TUNE("Tune"), RULES("Playback") }
+private data class MusicPalette(val name: String, val first: Long, val second: Long)
+private val palettes = listOf(
+    MusicPalette("Aurora", 0xFF9A7BFF, 0xFF52E0CB), MusicPalette("Ember", 0xFFFF684B, 0xFFFFCC65),
+    MusicPalette("Ice", 0xFF4CAEFF, 0xFFB7F5FF), MusicPalette("Rose", 0xFFED73A7, 0xFFC6A0FF)
+)
 
-    private fun save() {
-        prefs.edit()
-            .putString("edge_mode", selectedMode.name)
-            .putInt("edge_color", selectedColor)
-            .putFloat("sensitivity", sensitivity)
-            .putFloat("thickness", size)
-            .putFloat("glow", glow)
-            .putFloat("rate", speed)
-            .putString("color_source", colorSource.name)
-            .putBoolean("only_while_playing", onlyWhilePlaying)
-            .putStringSet("allowed_sources", allowedSources.toSet())
-            .apply()
-        if (MusicEdgeService.isRunning) {
-            startService(Intent(this, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_REFRESH))
-        }
-    }
-
-    private fun requestPermissions() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permission.launch(Manifest.permission.RECORD_AUDIO)
-        } else requestOverlayPermission()
-    }
-
-    private fun requestOverlayPermission() {
-        if (Settings.canDrawOverlays(this)) startMusic()
-        else overlayPermission.launch(
-            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-        )
-    }
-
-    private fun startMusic() {
-        if (MusicEdgeService.isRunning) {
-            active = true
-            status = "Music edge is already active."
-            return
-        }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MusicStudio(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var settings by remember { mutableStateOf(MusicConfiguration.read(context)) }
+    val latest by rememberUpdatedState(settings)
+    val runtime by MusicRuntime.state.collectAsState()
+    var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
+    var demo by remember { mutableStateOf(false) }
+    var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    var revision by remember { mutableIntStateOf(0) }
+    var feedback by remember { mutableStateOf<String?>(null) }
+    var chooseSources by remember { mutableStateOf(false) }
+    val preview = remember { ChainsawView(context) }
+    fun save(value: MusicConfiguration) { settings = value; value.save(context) }
+    fun start() {
         try {
-            // Ensure the legacy music overlay doesn't remain stacked over the new version.
-            stopService(Intent(this, ChainsawOverlayService::class.java))
-            startForegroundService(
-                Intent(this, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_START))
-            status = "Starting. Switch to your music app and use the notification to stop."
-        } catch (_: Exception) {
-            status = "Android blocked the foreground visualizer. Check permissions and retry."
+            context.startForegroundService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_START))
+            feedback = null
+        } catch (_: RuntimeException) { feedback = "Android could not start lighting. Keep HALO open and check its permissions." }
+    }
+    val overlayLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        revision++
+        if (Settings.canDrawOverlays(context)) start() else feedback = "Allow display over other apps to light the screen edges."
+    }
+    fun afterAudioPermission() {
+        if (Settings.canDrawOverlays(context)) start()
+        else overlayLauncher.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+    }
+    val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        revision++
+        if (granted) afterAudioPermission() else feedback = "Audio access is required to analyze playback. No microphone audio is recorded."
+    }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) { resumed = true; revision++ }
+            if (event == Lifecycle.Event.ON_PAUSE) resumed = false
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); preview.clearSignal() }
+    }
+    val listenerAccess = remember(revision) { NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName) }
+    // Debounce service refresh. Slider dragging never queues a service start for every pointer event.
+    LaunchedEffect(settings) {
+        delay(180)
+        if (MusicEdgeService.isRunning) context.startService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_REFRESH))
+    }
+    LaunchedEffect(demo, resumed) {
+        preview.clearSignal()
+        if (demo && resumed) {
+            var frame = 0
+            while (true) {
+                val beat = if (frame % 100 < 70) kotlin.math.exp(-(frame % 15) * .32f) else 0f
+                val signal = FloatArray(EdgeSpectrum.BAND_COUNT) { index ->
+                    beat * (.25f + .45f * abs(sin(frame * .07f + index * .32f)))
+                }
+                preview.updateSpectrum(signal, beat * .32f, latest.sensitivity, latest.speed)
+                frame++; delay(33)
+            }
         }
     }
-
-    /** Launcher-visible apps only; does not request QUERY_ALL_PACKAGES. */
-    private fun installedSourceApps(): List<Pair<String, String>> {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        return packageManager.queryIntentActivities(intent, 0)
-            .map { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }
-            .distinctBy { it.first }
-            .sortedBy { it.second.lowercase() }
+    Column(modifier.background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())
+        .padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Music", style = MaterialTheme.typography.headlineLarge)
+        Text("Your soundtrack, around your screen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(9.dp).background(if (runtime.active) Color(0xFF74DDB4) else Color.Gray, RoundedCornerShape(9.dp)))
+                    Column(Modifier.weight(1f)) {
+                        Text(runtime.message, style = MaterialTheme.typography.titleSmall)
+                        if (runtime.source.isNotBlank()) Text(runtime.source, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Button(onClick = {
+                    if (runtime.active) {
+                        context.stopService(Intent(context, MusicEdgeService::class.java)); feedback = null
+                    } else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        audioLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    } else afterAudioPermission()
+                }, modifier = Modifier.fillMaxWidth()) { Text(if (runtime.active) "Stop music lighting" else "Start music lighting") }
+                feedback?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Box(Modifier.width(204.dp).height(370.dp).background(Color.Black, RoundedCornerShape(26.dp))) {
+                AndroidView(factory = { preview }, update = { it.configure(settings) }, modifier = Modifier.fillMaxSize())
+                Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("HALO", style = MaterialTheme.typography.titleLarge, color = Color(0xFFEEE9FA))
+                    Text(settings.mode.title, style = MaterialTheme.typography.labelMedium, color = Color(0xFFB4ACCA))
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (demo) "DEMO SIGNAL" else "PREVIEW", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                }
+            }
+        }
+        OutlinedButton(onClick = { demo = !demo }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (demo) "Stop design preview" else "Play design preview")
+        }
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            MusicPanel.entries.forEachIndexed { index, value ->
+                SegmentedButton(selected = panel == value, onClick = { panel = value },
+                    shape = SegmentedButtonDefaults.itemShape(index, MusicPanel.entries.size)) { Text(value.label) }
+            }
+        }
+        when (panel) {
+            MusicPanel.DESIGNS -> {
+                Text("Edge collection", style = MaterialTheme.typography.titleMedium)
+                EdgeMode.entries.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { mode ->
+                            DesignTile(mode, settings.mode == mode, settings.color, settings.accent,
+                                Modifier.weight(1f)) { save(settings.copy(mode = mode)); demo = true }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                Text("Palette", style = MaterialTheme.typography.titleMedium)
+                palettes.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { palette ->
+                            FilterChip(selected = settings.color == palette.first.toInt() && settings.accent == palette.second.toInt(),
+                                onClick = { save(settings.copy(color = palette.first.toInt(), accent = palette.second.toInt(), colorSource = EdgeColorSource.MANUAL)) },
+                                label = { Text(palette.name) }, leadingIcon = {
+                                    Box(Modifier.size(18.dp).background(Brush.linearGradient(listOf(Color(palette.first), Color(palette.second))), RoundedCornerShape(9.dp)))
+                                }, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                MusicToggle("Use album colors", "Use the current cover as the main color; keep your accent as the second color.",
+                    settings.colorSource == EdgeColorSource.ALBUM_ART) {
+                    save(settings.copy(colorSource = if (it) EdgeColorSource.ALBUM_ART else EdgeColorSource.MANUAL))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HexColor("Main color", settings.color, Modifier.weight(1f)) { save(settings.copy(color = it, colorSource = EdgeColorSource.MANUAL)) }
+                    HexColor("Accent", settings.accent, Modifier.weight(1f)) { save(settings.copy(accent = it)) }
+                }
+            }
+            MusicPanel.TUNE -> {
+                MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") { save(settings.copy(sensitivity = it)) }
+                MusicSlider("Motion speed", settings.speed, .25f..3f, "×") { save(settings.copy(speed = it)) }
+                MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
+                MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
+                MusicSlider("Glow", settings.glow, 0f..1f, "") { save(settings.copy(glow = it)) }
+                HorizontalDivider()
+                Text("Choose screen edges", style = MaterialTheme.typography.titleMedium)
+                Text("Use any combination. All four sides are enabled by default.", style = MaterialTheme.typography.bodySmall)
+                MusicToggle("Top edge", "Light the top of your display.", settings.drawTop) { save(settings.copy(drawTop = it)) }
+                MusicToggle("Bottom edge", "Light the bottom of your display.", settings.drawBottom) { save(settings.copy(drawBottom = it)) }
+                MusicToggle("Left edge", "Light the left side.", settings.drawLeft) { save(settings.copy(drawLeft = it)) }
+                MusicToggle("Right edge", "Light the right side.", settings.drawRight) { save(settings.copy(drawRight = it)) }
+                HorizontalDivider()
+                Text("Fit your display", style = MaterialTheme.typography.titleMedium)
+                Text("Move each edge independently. Negative inset values push the frame outward; Android may clip protected system UI.", style = MaterialTheme.typography.bodySmall)
+                MusicSlider("Top position", settings.topInset, -24f..120f, "dp") { save(settings.copy(topInset = it)) }
+                MusicSlider("Bottom position", settings.bottomInset, -24f..120f, "dp") { save(settings.copy(bottomInset = it)) }
+                MusicSlider("Left position", settings.leftInset, -24f..120f, "dp") { save(settings.copy(leftInset = it)) }
+                MusicSlider("Right position", settings.rightInset, -24f..120f, "dp") { save(settings.copy(rightInset = it)) }
+                MusicSlider("Corner radius", settings.corner, 0f..100f, "dp") { save(settings.copy(corner = it)) }
+                OutlinedButton(onClick = { save(settings.copy(
+                    topInset = 4f, bottomInset = 4f, leftInset = 4f, rightInset = 4f,
+                    drawTop = true, drawBottom = true, drawLeft = true, drawRight = true,
+                    corner = 32f, thickness = 1f, brightness = 1f, glow = .75f)) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Reset edge calibration") }
+            }
+            MusicPanel.RULES -> {
+                MusicToggle("Follow music playback", "Hide when your music player is paused. Uses notification access to detect media sessions.", settings.onlyPlaying) {
+                    save(settings.copy(onlyPlaying = it))
+                }
+                MusicToggle("Respect quiet hours", "Use HALO's quiet-hours schedule for music lighting too.", settings.respectQuiet) {
+                    save(settings.copy(respectQuiet = it))
+                }
+                OutlinedButton(onClick = { chooseSources = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (settings.allowedSources.isEmpty()) "Music sources · All apps" else "Music sources · ${settings.allowedSources.size} selected")
+                }
+                Text("Sources control when lighting is shown. Android provides a device-wide mix, so simultaneous apps cannot be isolated.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Notifications take priority", style = MaterialTheme.typography.titleMedium)
+                Text("HALO pauses music lighting for an incoming notification, then resumes it. Configure character, full border or both under Settings and App rules.",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (!listenerAccess && (settings.onlyPlaying || settings.colorSource == EdgeColorSource.ALBUM_ART || settings.allowedSources.isNotEmpty())) {
+            OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Enable notification access")
+            }
+        }
+        Text("Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. Music lighting hides when playback is silent or Android blocks capture. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
     }
+    if (chooseSources) SourcePicker(settings.allowedSources, { save(settings.copy(allowedSources = it)) }, { chooseSources = false })
+}
 
-    override fun onResume() {
-        super.onResume()
-        active = MusicEdgeService.isRunning
+@Composable
+private fun DesignTile(mode: EdgeMode, selected: Boolean, first: Int, second: Int, modifier: Modifier, choose: () -> Unit) {
+    Card(onClick = choose, modifier = modifier.semantics { contentDescription = "${mode.title} design${if (selected) ", selected" else ""}" },
+        colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(52.dp)) {
+                val brush = Brush.linearGradient(listOf(Color(first), Color(second)))
+                drawRoundRect(brush, cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(2.dp.toPx()), alpha = .35f)
+                when (mode) {
+                    EdgeMode.BARS -> for (i in 0..14) {
+                        val x = 6.dp.toPx() + (size.width - 12.dp.toPx()) * i / 14
+                        val height = (4 + 18 * abs(sin(i * .7))).toFloat().dp.toPx()
+                        drawLine(brush, Offset(x, size.height - 5.dp.toPx()), Offset(x, size.height - height), 2.dp.toPx())
+                    }
+                    EdgeMode.TRAIL -> drawLine(brush, Offset(size.width * .2f, 0f), Offset(size.width * .8f, 0f), 3.dp.toPx())
+                    EdgeMode.CHAIN -> for (i in 1..12) {
+                        val x = size.width * i / 13
+                        drawLine(Color.LightGray, Offset(x - 3.dp.toPx(), size.height - 2.dp.toPx()), Offset(x, size.height - 9.dp.toPx()), 2.dp.toPx())
+                    }
+                    EdgeMode.WAVE, EdgeMode.PULSE -> drawRoundRect(brush, Offset(5.dp.toPx(), 5.dp.toPx()),
+                        androidx.compose.ui.geometry.Size(size.width - 10.dp.toPx(), size.height - 10.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx()))
+                }
+            }
+            Text(mode.title, style = MaterialTheme.typography.titleSmall)
+        }
     }
+}
+@Composable
+private fun MusicToggle(title: String, detail: String, value: Boolean, change: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(value, change, modifier = Modifier.semantics { contentDescription = title })
+    }
+}
+@Composable
+private fun MusicSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, unit: String, change: (Float) -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label); Text("%.2f %s".format(value, unit), color = MaterialTheme.colorScheme.primary)
+        }
+        Slider(value, change, valueRange = range, modifier = Modifier.semantics { contentDescription = label })
+    }
+}
+@Composable
+private fun HexColor(label: String, color: Int, modifier: Modifier, change: (Int) -> Unit) {
+    var hex by remember(color) { mutableStateOf("#%06X".format(color and 0xFFFFFF)) }
+    OutlinedTextField(hex, { input ->
+        hex = input.take(7)
+        if (hex.matches(Regex("#[0-9a-fA-F]{6}"))) change((hex.drop(1).toLong(16) or 0xFF000000L).toInt())
+    }, modifier = modifier, label = { Text(label) }, singleLine = true, isError = hex.length == 7 && !hex.matches(Regex("#[0-9a-fA-F]{6}")))
+}
+@Composable
+private fun SourcePicker(selected: Set<String>, change: (Set<String>) -> Unit, close: () -> Unit) {
+    val context = LocalContext.current
+    var apps by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    var search by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        apps = withContext(Dispatchers.IO) {
+            context.packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.packageName to it.loadLabel(context.packageManager).toString() }
+                .distinctBy { it.first }.sortedBy { it.second.lowercase() }
+        }
+    }
+    AlertDialog(onDismissRequest = close, title = { Text("Music sources") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(search, { search = it }, label = { Text("Search apps") }, singleLine = true)
+            Text("Nothing selected means all music apps.", style = MaterialTheme.typography.bodySmall)
+            if (apps == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+            else androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 340.dp)) {
+                val visible = apps.orEmpty().filter { it.second.contains(search, true) || it.first.contains(search, true) }
+                items(visible.size, key = { visible[it].first }) { index ->
+                    val (pkg, name) = visible[index]
+                    Row(Modifier.fillMaxWidth().clickable { change(if (pkg in selected) selected - pkg else selected + pkg) }, verticalAlignment = Alignment.CenterVertically) {
+                        Text(name, Modifier.weight(1f)); Checkbox(pkg in selected, null)
+                    }
+                }
+            }
+        }
+    }, confirmButton = { TextButton(onClick = close) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { change(emptySet()) }) { Text("Allow all") } })
 }

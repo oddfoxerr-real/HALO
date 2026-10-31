@@ -1,5 +1,8 @@
 # HALO — Samsung Notification Character Studio
 
+**Development: v0.10.0 Music studio** — see [HANDOFF.md](HANDOFF.md) for the current branch, implemented changes and device checks. The v0.9 release details below are historical.
+
+
 **v0.9.0 clean-room Muviz feature study · Android 16 / Galaxy A56 target · Kotlin · Jetpack Compose Material 3**
 
 HALO is a real Android notification-listener app rather than a browser simulation. Its native Canvas renderer provides five character effects: Discord-inspired liquid mascot, WhatsApp bubble, YouTube play character, Gmail envelope, and a generic star. Character illustrations are original, not official brand assets.
@@ -36,21 +39,21 @@ HALO is a real Android notification-listener app rather than a browser simulatio
 
 The repository must be **separate from CYN and Gro-Ler**. Create `oddfoxerr-real/HALO` (if needed) and upload all project files to the repo root, preserving `.github/workflows/android-debug.yml`.
 
-1. Push to `main` or any `prototype/**` branch, or select **Actions → Build HALO Android APK → Run workflow**.
-2. The workflow installs JDK 17, Android SDK 36, Gradle 8.13, runs `:app:testDebugUnitTest :app:assembleDebug`, and verifies the APK signature.
+1. Push to a `prototype/**`, `feature/**` or `fix/**` branch, or select **Actions → Build HALO Android APK → Run workflow**. Main also builds, and its release workflow publishes new versions.
+2. The workflow installs JDK 17 and Android SDK 36, uses the checked-in Gradle 8.13 wrapper, runs `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug`, and verifies the APK signature. Test and lint reports are uploaded as `HALO-validation-reports`.
 3. Open the completed run → **Artifacts → HALO-debug-apk**. GitHub distributes the APK in a ZIP. Extract `app-debug.apk` to install it. On merge to `main`, `.github/workflows/android-release.yml` publishes a named APK to GitHub Releases for the current `versionName` if that version does not yet exist.
 
 **The v0.6.0 debug APK passed GitHub Actions unit tests and signature verification and was published in [GitHub Releases](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.6.0).** The newer [v0.7.0 APK](https://github.com/oddfoxerr-real/HALO/releases/tag/v0.7.0) adds optional floating mode. Neither version has been validated on a physical Galaxy A56.
 
 ### Local build
 
-Use Android Studio with JDK 17, Android SDK 36 and Gradle 8.13. The preinstalled Gradle CLI can run:
+Use JDK 17 and Android SDK platform 36. Set `JAVA_HOME` and `ANDROID_HOME` (or configure the SDK through Android Studio), then run:
 
 ```shell
-gradle :app:testDebugUnitTest :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
-The project includes an optional wrapper bootstrapper; it requires network access to acquire and verify its missing wrapper JAR. If the wrapper is unavailable, use the installed Gradle 8.13 CLI, as in GitHub Actions. No SDK or Gradle is available in the current execution container.
+On Windows PowerShell, use `.\gradlew.bat` with the same tasks. The standard wrapper JAR is included in the repository and downloads Gradle 8.13 with a pinned SHA-256 checksum. The first build needs network access for Gradle, Android build tools and dependencies; a separate Gradle installation is unnecessary.
 
 ### Offline Kotlin policy checks
 
@@ -59,7 +62,7 @@ kotlinc app/src/main/java/dev/oddfoxerr/halo/Profiles.kt app/src/main/java/dev/o
 java -jar halo-policy.jar
 ```
 
-This source checkpoint passed 44 Kotlin policy assertions. JUnit Android-project tests are included but not runnable here without the SDK/Gradle.
+This historical source checkpoint passed 44 Kotlin policy assertions. The Gradle build above runs the complete JUnit suite, including music visibility, signal decay and frame-pacing checks.
 
 ## Implementation structure
 
@@ -83,7 +86,7 @@ Ideas researched from [aodNotify on Google Play](https://play.google.com/store/a
 
 ### Verification still needed
 
-- Android lint on SDK 36 (CI compile and unit tests already passed).
+- Android unit tests, lint, APK assembly and signing passed for the Music studio continuation in [this CI run](https://github.com/oddfoxerr-real/HALO/actions/runs/41236195628). The remaining checks require a device.
 - Test the overlay's touch pass-through and screen cutout handling on the Samsung A56.
 - Confirm notification arrival, dismissal, background execution and battery saver behavior on One UI.
 - Check performance and notification-rank handling across Samsung notification channels.
@@ -162,3 +165,19 @@ This update is **not** a decompilation of Muviz Edge. The clean-room comparison 
 - FFT data is coalesced before UI delivery and the edge renderer interpolates smoothly between Android audio callbacks. Rendering rests after the signal decays.
 - Existing Character / Full border / Both notification modes remain unchanged.
 - Some apps/DRM content do not expose audio data to Android Visualizer. HALO cannot bypass those restrictions. No direct Muviz binary analysis or Samsung hardware validation has been performed.
+
+## v0.10 Music studio
+
+Open the **Music** tab. Pick Silk, Spectrum, Orbit, Pulse or Chainsaw, choose a two-color
+palette and use Tune to fit the edge to your display. The preview button is explicitly
+a demo signal. Start music lighting, then play audio from your normal music app.
+Lighting runs over other apps, yields to notifications, and hides on lock or silence.
+Its own Playback settings control media sources and quiet hours. These settings are
+independent of notification characters. One music service replaces the earlier two
+competing services; the old separate local-file music player has been removed.
+
+HALO uses Android's [Visualizer](https://developer.android.com/reference/android/media/audiofx/Visualizer)
+for low-resolution playback analysis. `RECORD_AUDIO` is requested only when music starts;
+no microphone audio is recorded. Not all players/devices expose the output mix.
+Background overlays require Display over other apps; playing-session rules and album
+colors need Notification access. No native Samsung AOD replacement is claimed.

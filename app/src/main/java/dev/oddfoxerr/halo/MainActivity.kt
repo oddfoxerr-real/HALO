@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -59,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -121,7 +123,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), APPS("Apps"), SETTINGS("Settings") }
+private enum class HaloTab(val label: String) { HOME("Home"), STUDIO("Studio"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,7 +165,7 @@ private fun HaloApp(
                         Text("NOTIFICATION STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.9", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
+                actions = { Text("v0.10", modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -173,6 +175,7 @@ private fun HaloApp(
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.STUDIO -> Icons.Default.AutoAwesome
+                        HaloTab.MUSIC -> Icons.Default.MusicNote
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
                     }
@@ -185,12 +188,15 @@ private fun HaloApp(
             }
         }
     ) { contentPadding ->
-        LazyColumn(
+        if (tab == HaloTab.MUSIC) {
+            MusicStudio(Modifier.fillMaxSize().padding(contentPadding))
+        } else LazyColumn(
             Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { Spacer(Modifier.height(3.dp)) }
             when (tab) {
+                HaloTab.MUSIC -> Unit
                 HaloTab.HOME -> {
                     item {
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
@@ -237,7 +243,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Music edge studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Muviz-style audio-reactive waves, spectrum bars, neon trails and optional mechanical lighting.", color = Muted)
-                            Button(onClick = { context.startActivity(Intent(context, MusicEdgeActivity::class.java)) },
+                            Button(onClick = { tab = HaloTab.MUSIC },
                                 modifier = Modifier.fillMaxWidth()) { Text("Customize music edge") }
                         }
                     }
@@ -338,6 +344,35 @@ private fun HaloApp(
                                 borderGlow, 0f..1f) {
                                 borderGlow = it; store.notificationBorderGlow = it
                             }
+                            Text("Border size and position", style = MaterialTheme.typography.titleSmall)
+                            Text("Adjust each side separately to change width, height and alignment. Negative values push outward, but Android may clip protected system UI.", color = Muted,
+                                style = MaterialTheme.typography.bodySmall)
+                            var borderTop by remember { mutableFloatStateOf(store.notificationBorderTop) }
+                            var borderBottom by remember { mutableFloatStateOf(store.notificationBorderBottom) }
+                            var borderLeft by remember { mutableFloatStateOf(store.notificationBorderLeft) }
+                            var borderRight by remember { mutableFloatStateOf(store.notificationBorderRight) }
+                            var borderCorner by remember { mutableFloatStateOf(store.notificationBorderCorner) }
+                            SettingSlider("Top position", "${borderTop.toInt()} dp", borderTop, -24f..120f) {
+                                borderTop = it; store.notificationBorderTop = it
+                            }
+                            SettingSlider("Bottom position", "${borderBottom.toInt()} dp", borderBottom, -24f..120f) {
+                                borderBottom = it; store.notificationBorderBottom = it
+                            }
+                            SettingSlider("Left position", "${borderLeft.toInt()} dp", borderLeft, -24f..120f) {
+                                borderLeft = it; store.notificationBorderLeft = it
+                            }
+                            SettingSlider("Right position", "${borderRight.toInt()} dp", borderRight, -24f..120f) {
+                                borderRight = it; store.notificationBorderRight = it
+                            }
+                            SettingSlider("Corner radius", "${borderCorner.toInt()} dp", borderCorner, 0f..100f) {
+                                borderCorner = it; store.notificationBorderCorner = it
+                            }
+                            OutlinedButton(onClick = {
+                                borderTop = 6f; borderBottom = 6f; borderLeft = 6f; borderRight = 6f; borderCorner = 35f
+                                store.notificationBorderTop = 6f; store.notificationBorderBottom = 6f
+                                store.notificationBorderLeft = 6f; store.notificationBorderRight = 6f
+                                store.notificationBorderCorner = 35f
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Reset border calibration") }
                             Button(onClick = {
                                 if (overlayEnabled) NotificationEdgeOverlay.show(context, currentProfile.color,
                                     4200L, false, store) else requestOverlay()
