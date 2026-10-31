@@ -19,6 +19,36 @@ internal class ShaderEdgeEngine {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
     private val frequencies = FloatArray(4)
     private var shader: RuntimeShader? = null
+    private var videoShader: RuntimeShader? = null
+
+    /** Video mode is color-sampled, not an audio FFT animation. */
+    fun renderVideo(canvas: Canvas, width: Int, height: Int, bounds: RectF,
+        colors: VideoEdgeColors, thickness: Float, spread: Float, glow: Float,
+        brightness: Float): Boolean {
+        if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
+        return try {
+            val runtime = videoShader ?: RuntimeShader(VIDEO_SOURCE).also { videoShader = it }
+            runtime.setFloatUniform("frame", bounds.left, bounds.top, bounds.right, bounds.bottom)
+            runtime.setFloatUniform("width", (30f * thickness * spread).coerceIn(8f, 180f))
+            runtime.setFloatUniform("softness", glow.coerceIn(0f, 1f))
+            runtime.setFloatUniform("brightness", brightness.coerceIn(0f, 1f))
+            fun rgb(c: Int) = floatArrayOf(Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
+            runtime.setFloatUniform("topColor", rgb(colors.top))
+            runtime.setFloatUniform("rightColor", rgb(colors.right))
+            runtime.setFloatUniform("bottomColor", rgb(colors.bottom))
+            runtime.setFloatUniform("leftColor", rgb(colors.left))
+            paint.shader = runtime
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            paint.shader = null
+            true
+        } catch (failure: RuntimeException) {
+            disabled = true
+            paint.shader = null
+            Log.e("HALO", "Video edge shader failed", failure)
+            false
+        }
+    }
+
     private var disabled = false
 
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
@@ -64,6 +94,34 @@ internal class ShaderEdgeEngine {
         }
     }
     private companion object {
+        private val VIDEO_SOURCE = """
+            uniform float4 frame;
+            uniform float width;
+            uniform float softness;
+            uniform float brightness;
+            uniform float3 topColor;
+            uniform float3 rightColor;
+            uniform float3 bottomColor;
+            uniform float3 leftColor;
+
+            half4 main(float2 p) {
+                float dl=abs(p.x-frame.x);
+                float dr=abs(p.x-frame.z);
+                float dt=abs(p.y-frame.y);
+                float db=abs(p.y-frame.w);
+                float w=max(width,2.0);
+                float sl=exp(-pow(dl/w,2.0)*1.35);
+                float sr=exp(-pow(dr/w,2.0)*1.35);
+                float st=exp(-pow(dt/w,2.0)*1.35);
+                float sb=exp(-pow(db/w,2.0)*1.35);
+                float total=max(sl+sr+st+sb,.00001);
+                float3 color=(sl*leftColor+sr*rightColor+st*topColor+sb*bottomColor)/total;
+                float envelope=max(max(sl,sr),max(st,sb));
+                float light=clamp(envelope*(.82+.18*softness)*brightness,0.0,.78);
+                light *= smoothstep(.0,.09,max(color.r,max(color.g,color.b)));
+                return half4(half3(color*light),half(light));
+            }
+        """.trimIndent()
         private val SOURCE = """
             
             uniform float2 resolution;
