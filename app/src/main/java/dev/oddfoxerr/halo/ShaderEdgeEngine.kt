@@ -17,7 +17,9 @@ import kotlin.math.max
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal class ShaderEdgeEngine {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
-    private val frequencies = FloatArray(4)
+    private val frequencies = FloatArray(8)
+    private val firstHalf = FloatArray(4)
+    private val secondHalf = FloatArray(4)
     private var shader: RuntimeShader? = null
     private var videoShader: RuntimeShader? = null
 
@@ -56,7 +58,7 @@ internal class ShaderEdgeEngine {
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
         thickness: Float, spread: Float, glow: Float, brightness: Float,
-        primary: Int, secondary: Int): Boolean {
+        primary: Int, secondary: Int, attack: Float): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -66,6 +68,7 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("seconds",seconds)
             runtime.setFloatUniform("phase",phase)
             runtime.setFloatUniform("bass",bass.coerceIn(0f,1f))
+            runtime.setFloatUniform("attack",attack.coerceIn(0f,1.5f))
             runtime.setFloatUniform("thickness",thickness)
             runtime.setFloatUniform("spread",spread)
             runtime.setFloatUniform("glow",glow)
@@ -73,10 +76,13 @@ internal class ShaderEdgeEngine {
             runtime.setIntUniform("design",mode.ordinal)
             java.util.Arrays.fill(frequencies,0f)
             for (i in bands.indices) {
-                val k=(i*4/max(1,bands.size)).coerceIn(0,3)
+                val k=(i*8/max(1,bands.size)).coerceIn(0,7)
                 frequencies[k]=max(frequencies[k],bands[i].coerceIn(0f,1f))
             }
-            runtime.setFloatUniform("audio",frequencies)
+            System.arraycopy(frequencies, 0, firstHalf, 0, 4)
+            System.arraycopy(frequencies, 4, secondHalf, 0, 4)
+            runtime.setFloatUniform("audio",firstHalf)
+            runtime.setFloatUniform("audioHigh",secondHalf)
             runtime.setFloatUniform("first", Color.red(primary)/255f,
                 Color.green(primary)/255f,Color.blue(primary)/255f)
             runtime.setFloatUniform("second",Color.red(secondary)/255f,
@@ -130,7 +136,9 @@ internal class ShaderEdgeEngine {
             uniform float seconds;
             uniform float phase;
             uniform float bass;
+            uniform float attack;
             uniform float4 audio;
+            uniform float4 audioHigh;
             uniform float thickness;
             uniform float spread;
             uniform float glow;
@@ -248,12 +256,20 @@ internal class ShaderEdgeEngine {
                 }
                 return fract(s/max(perimeter,1.0));
             }
+            // All eight spectrum groups contribute; the last interpolates back to the
+            // first so music peaks have no jump around the rounded edge seam.
             float harmonic(float u) {
-                float x=fract(u)*3.0, k=floor(x), t=x-k;
+                float x=fract(u)*8.0;
+                float k=floor(x), t=fract(x);
                 t=t*t*(3.0-2.0*t);
-                if (k<1.0) return mix(audio.x,audio.y,t);
-                if (k<2.0) return mix(audio.y,audio.z,t);
-                return mix(audio.z,audio.w,t);
+                if(k<1.0) return mix(audio.x,audio.y,t);
+                if(k<2.0) return mix(audio.y,audio.z,t);
+                if(k<3.0) return mix(audio.z,audio.w,t);
+                if(k<4.0) return mix(audio.w,audioHigh.x,t);
+                if(k<5.0) return mix(audioHigh.x,audioHigh.y,t);
+                if(k<6.0) return mix(audioHigh.y,audioHigh.z,t);
+                if(k<7.0) return mix(audioHigh.z,audioHigh.w,t);
+                return mix(audioHigh.w,audio.x,t);
             }
             float periodicDistance(float u, float point) {
                 return abs(fract(u-point+.5)-.5);
@@ -280,9 +296,9 @@ internal class ShaderEdgeEngine {
                 float lengthPx=1.0;
                 float u=edgeParameter(px,lengthPx);
                 float energy=clamp(harmonic(u),0.0,1.0);
-                float kick=clamp(bass,0.0,1.0);
+                float kick=clamp(bass+attack*.6,0.0,1.5);
                 float time=seconds*.85 + phase*.25;
-                float volume=(.70+.52*energy+.36*kick)*max(spread,.25);
+                float volume=(.32+.85*energy+.95*kick)*max(spread,.25);
                 float core=0.0, aura=0.0, sparkle=0.0;
                 float travel=time*.45;
                 float local=0.0;
@@ -385,8 +401,11 @@ internal class ShaderEdgeEngine {
                 float whiteSpark=clamp(sparkle*(.48+.45*energy+.4*kick),0.0,.85);
                 float3 rgb=mix(base,float3(1.0),whiteSpark);
                 // Glow is an integral part of the material instead of a second Canvas layer.
+                // A pronounced attack response, not an always-bright idle loop.
+                float transient=clamp(attack,0.0,1.5);
+                float musicalGain=clamp(.22+.58*energy+.50*kick+.48*transient,.18,1.4);
                 float a=clamp((core*.77 + aura*(.10+.35*glow)+whiteSpark*.28)
-                    *brightness*(.82+.18*energy),0.0,.96);
+                    *brightness*musicalGain,0.0,.96);
                 a*=1.0-smoothstep(40.0*max(spread,.3),92.0*max(spread,.3),abs(d));
                 // RuntimeShader colors are premultiplied, preserving correct edge blending.
                 return half4(half3(rgb*a),half(a));
