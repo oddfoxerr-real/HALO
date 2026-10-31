@@ -234,7 +234,7 @@ internal class ShaderEdgeEngine {
                 // Do not allocate the center of the display to expensive shaders.
                 if (abs(d)>max(62.0, 165.0*thickness*spread)) return half4(0.0);
                 float u = perimeterLocation(px);
-                float perimeter = 2.0*(frame.z-frame.x+frame.w-frame.y-8.0*radius)
+                float perimeter = 2.0*(frame.z-frame.x+frame.w-frame.y-4.0*radius)
                     + 6.2831853*radius;
                 perimeter = max(perimeter, 1.0);
                 float time=seconds*.55;
