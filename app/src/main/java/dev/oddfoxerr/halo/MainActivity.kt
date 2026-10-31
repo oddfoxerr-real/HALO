@@ -188,7 +188,7 @@ private fun HaloApp(
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                             enabled = value
                             store.masterEnabled = value
-                            if (!value) { PillNotificationEdgeOverlay.dismiss() }
+                            if (!value) { PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
                             HaloNotificationListener.requestPillRefresh()
                         }
                     }
@@ -343,7 +343,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { PillNotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
+                            OutlinedButton(onClick = { PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
                             Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
