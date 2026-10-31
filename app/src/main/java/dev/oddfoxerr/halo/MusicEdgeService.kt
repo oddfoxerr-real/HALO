@@ -214,7 +214,7 @@ class MusicEdgeService : Service() {
                     val range = Visualizer.getCaptureSizeRange()
                     check(source.setCaptureSize(1024.coerceIn(range.first(), range.last())) == Visualizer.SUCCESS)
                     check(source.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
-                    check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(25000), false, true) == Visualizer.SUCCESS)
+                    check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(60000), false, true) == Visualizer.SUCCESS)
                     // Capture starts only when visibility/media rules permit it.
                     if (enabledCapture) check(source.setEnabled(true) == Visualizer.SUCCESS)
                 } catch (_: RuntimeException) { main.post { fail("Android could not open device audio · try another player and restart") } }
