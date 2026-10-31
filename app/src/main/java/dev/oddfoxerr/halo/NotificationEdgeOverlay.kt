@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import kotlin.math.sin
@@ -29,15 +30,31 @@ class NotificationBorderView(context: Context) : View(context) {
     private val rect = RectF()
     var tint: Int = Color.rgb(170, 91, 255)
     var thicknessDp: Float = 3f
-    var glow: Float = .65f
+    var glow: Float = .75f
+    var insetLeft = 6f
+    var insetRight = 6f
+    var insetTop = 6f
+    var insetBottom = 6f
+    var cornerRadius = 35f
     var style: NotificationEdgeStyle = NotificationEdgeStyle.PULSE
     private var startedAt = 0L
     private var duration = 3500L
     private var animated = false
+    private var repeating = false
 
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
+    fun configureFit(store: ProfileStore) {
+        insetLeft = store.notificationBorderLeft
+        insetRight = store.notificationBorderRight
+        insetTop = store.notificationBorderTop
+        insetBottom = store.notificationBorderBottom
+        cornerRadius = store.notificationBorderCorner
+        invalidate()
+    }
+
     fun play(color: Int, thickness: Float, glowAmount: Float, newStyle: NotificationEdgeStyle, millis: Long) {
+        repeating = false
         tint = color
         thicknessDp = thickness.coerceIn(1f, 8f)
         glow = glowAmount.coerceIn(0f, 1f)
@@ -48,34 +65,41 @@ class NotificationBorderView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun settle() {
-        animated = false
+    fun keepAnimating() {
+        // A retained notification must not leave a permanently frozen border.
+        repeating = true
+        animated = true
+        startedAt = SystemClock.uptimeMillis()
+        duration = 3500L
         invalidate()
     }
 
-    val isAnimating: Boolean get() = animated
+    // A persistent indicator loops visually but does not keep stealing music priority.
+    val isAnimating: Boolean get() = animated && !repeating
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (width <= 0 || height <= 0) return
-        val pad = 13f * density
-        rect.set(pad, pad, width - pad, height - pad)
+        rect.set(insetLeft * density, insetTop * density,
+            width - insetRight * density, height - insetBottom * density)
         if (rect.width() <= 0 || rect.height() <= 0) return
         border.reset()
-        border.addRoundRect(rect, 35f * density, 35f * density, Path.Direction.CW)
+        val radius = (cornerRadius * density).coerceAtMost(minOf(rect.width(), rect.height()) / 2f)
+        border.addRoundRect(rect, radius, radius, Path.Direction.CW)
         val elapsed = (SystemClock.uptimeMillis() - startedAt).coerceAtLeast(0L)
-        val t = if (animated) (elapsed.toFloat() / duration).coerceIn(0f, 1f) else 1f
-        val strength = if (!animated) .33f else when (style) {
+        val t = if (repeating) (elapsed % duration).toFloat() / duration
+            else if (animated) (elapsed.toFloat() / duration).coerceIn(0f, 1f) else 1f
+        val strength = if (!animated) 0f else when (style) {
             NotificationEdgeStyle.PULSE -> .60f + .40f * sin(t * 8f * Math.PI.toFloat()).let { kotlin.math.abs(it) }
             NotificationEdgeStyle.TRACE -> .8f
             NotificationEdgeStyle.GLOW -> (1f - t * .70f)
         }
         paint.color = tint
-        paint.alpha = ((24f + 65f * glow) * strength).toInt().coerceIn(0, 255)
+        paint.alpha = ((125f + 100f * glow) * strength).toInt().coerceIn(0, 255)
         paint.strokeWidth = (12f + glow * 8f) * density
         canvas.drawPath(border, paint)
 
-        paint.alpha = (195f * strength + 35f).toInt().coerceIn(0, 255)
+        paint.alpha = (210f * strength + 45f).toInt().coerceIn(0, 255)
         paint.strokeWidth = thicknessDp * density
         canvas.drawPath(border, paint)
 
@@ -92,8 +116,8 @@ class NotificationBorderView(context: Context) : View(context) {
             paint.strokeWidth = (thicknessDp + 1.5f) * density
             canvas.drawPath(segment, paint)
         }
-        if (animated && elapsed < duration && isAttachedToWindow) postInvalidateDelayed(33L)
-        else if (animated) animated = false
+        if (animated && (repeating || elapsed < duration) && isAttachedToWindow) postInvalidateDelayed(33L)
+        else if (!repeating && animated) animated = false
     }
 }
 
@@ -110,11 +134,12 @@ object NotificationEdgeOverlay {
         val view = ensure(context) ?: return
         generation++
         val id = generation
+        view.configureFit(store)
         view.play(color.toInt(), store.notificationBorderThickness,
             store.notificationBorderGlow, store.notificationEdgeStyle, duration)
         handler.postDelayed({
             if (generation == id) {
-                if (persistent) view.settle() else dismiss()
+                if (persistent) view.keepAnimating() else dismiss()
             }
         }, duration.coerceIn(800L, 10000L))
     }
@@ -122,9 +147,10 @@ object NotificationEdgeOverlay {
     fun showStatic(context: Context, color: Long, store: ProfileStore) {
         if (isAnimating) return
         val view = ensure(context) ?: return
+        view.configureFit(store)
         view.play(color.toInt(), store.notificationBorderThickness,
-            store.notificationBorderGlow, store.notificationEdgeStyle, 1000L)
-        view.settle()
+            store.notificationBorderGlow, store.notificationEdgeStyle, 3500L)
+        view.keepAnimating()
     }
 
     private fun ensure(context: Context): NotificationBorderView? {
@@ -137,11 +163,17 @@ object NotificationEdgeOverlay {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
-            // Along with the narrow character overlay, stay under cumulative 0.8 touch opacity.
-            alpha = .35f
+            gravity = Gravity.TOP or Gravity.START
+            // Combined with the narrow character window (0.40), remains below Android's
+            // 0.80 obscuring-opacity threshold while making the perimeter visible.
+            alpha = .55f
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
         return try {
             NotificationBorderView(context.applicationContext).also {
