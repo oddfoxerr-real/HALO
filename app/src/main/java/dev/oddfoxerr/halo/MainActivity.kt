@@ -194,7 +194,6 @@ private fun HaloApp(
                                 store.masterEnabled = value
                                 if (!value) {
                                     NotificationEdgeOverlay.dismiss()
-                                    HaloOverlay.dismiss()
                                     PillHaloOverlay.dismiss()
                                 }
                                 HaloNotificationListener.requestPillRefresh()
@@ -309,7 +308,6 @@ private fun HaloApp(
                                     dynamicColors, onDynamicColorsChange)
                                 OutlinedButton(onClick = {
                                     NotificationEdgeOverlay.dismiss()
-                                    HaloOverlay.dismiss()
                                     PillHaloOverlay.dismiss()
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Clear overlay effects") }
                             }
@@ -411,7 +409,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
     Text("Quiet hours", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     SwitchRow("Enable quiet hours", "Suppress effects during your sleep schedule.", enabled) {
         enabled = it; store.quietEnabled = it
-        if (it && store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+        if (it && store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
         HaloNotificationListener.requestPillRefresh()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -425,7 +423,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
         valid = a != null && b != null
         if (valid) {
             store.quietStart = a!!; store.quietEnd = b!!
-            if (store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+            if (store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
             HaloNotificationListener.requestPillRefresh()
         }
     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
