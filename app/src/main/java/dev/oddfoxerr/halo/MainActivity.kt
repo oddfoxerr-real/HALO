@@ -277,11 +277,17 @@ private fun HaloApp(
                                     persistent = it
                                     store.notificationBorderPersistent = it
                                 }
+                                var noticeDuration by remember { mutableFloatStateOf(store.notificationDurationMs.toFloat()) }
+                                SettingSlider("Animation duration", "%.1f seconds".format(noticeDuration / 1000f),
+                                    noticeDuration, 800f..10_000f) {
+                                    noticeDuration = it
+                                    store.notificationDurationMs = it.toLong()
+                                }
                                 Button(onClick = {
                                     if (overlayEnabled) {
                                         val config = MusicConfiguration.read(context)
                                         NotificationEdgeOverlay.show(context, config.color.toLong(),
-                                            4200L, false, store)
+                                            store.notificationDurationMs, false, store)
                                     } else requestOverlay()
                                 }, modifier = Modifier.fillMaxWidth()) { Text("Test selected Music edge effect") }
                                 OutlinedButton(onClick = { tab = HaloTab.MUSIC },
