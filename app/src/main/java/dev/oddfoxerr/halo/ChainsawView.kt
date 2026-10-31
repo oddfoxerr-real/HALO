@@ -12,6 +12,11 @@ import kotlin.math.*
 /** Shared HALO music renderer. Chainsaw is one design, not the music system itself. */
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
+    private var notificationStartedAt = -1L
+    private var notificationRepeating = false
+    private var notificationDuration = 4200L
+    private val notificationBands = FloatArray(EdgeSpectrum.BAND_COUNT)
+    val notificationIsPlaying: Boolean get() = notificationStartedAt >= 0L && !notificationRepeating
     private val extraEffects = MusicExtraEffects()
     // API 33+ uses a mutually exclusive GPU pipeline. Legacy Canvas is a fallback only.
     private var gpu: GpuEdgeRenderer? = if (Build.VERSION.SDK_INT >= 33) {
@@ -80,10 +85,34 @@ class ChainsawView(context: Context) : View(context) {
         invalidate()
     }
     fun configureNotch(settings: NotchSettings) { notchSettings = settings.normalized(); invalidate() }
-    fun clearSignal() { motion.clear(); stopFrames(); invalidate() }
+    fun showNotificationSignal(duration: Long, repeating: Boolean = false) {
+        notificationStartedAt = SystemClock.uptimeMillis()
+        notificationRepeating = repeating
+        notificationDuration = duration.coerceIn(800L, 10000L)
+        motion.clear()
+        requestFrame()
+        invalidate()
+    }
+    fun holdNotificationSignal() {
+        if (notificationStartedAt >= 0L) {
+            notificationRepeating = true
+            requestFrame()
+        }
+    }
+    fun stopNotificationSignal() {
+        notificationStartedAt = -1L
+        notificationRepeating = false
+        motion.clear()
+        stopFrames()
+        invalidate()
+    }
+    fun clearSignal() {
+        notificationStartedAt = -1L
+        motion.clear(); stopFrames(); invalidate()
+    }
     fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
         speed = rate
-        motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
+        if (notificationStartedAt < 0L) motion.accept(bands, bass, SystemClock.uptimeMillis(), sensitivity)
         requestFrame()
     }
     private fun requestFrame() {
@@ -112,6 +141,18 @@ class ChainsawView(context: Context) : View(context) {
         val now = SystemClock.uptimeMillis()
         val dt = if (lastFrame == 0L) 1f / 60 else (now - lastFrame) / 1000f
         lastFrame = now
+        if (notificationStartedAt >= 0L) {
+            val seconds = (now - notificationStartedAt).coerceAtLeast(0L) / 1000f
+            val fade = if (notificationRepeating) .48f else
+                (1f - (now - notificationStartedAt).toFloat() / notificationDuration)
+                    .coerceIn(0f, 1f)
+            val beat = .20f + .37f * (0.5f + 0.5f * sin(seconds * 7.4f))
+            for (i in notificationBands.indices) {
+                val waviness = .5f + .5f * sin(seconds * (2.1f + i % 5 * .12f) + i * .63f)
+                notificationBands[i] = (fade * (.12f + beat * waviness)).coerceIn(0f, 1f)
+            }
+            motion.accept(notificationBands, (beat * fade).coerceIn(0f, 1f), now, 1f)
+        }
         val moving = motion.advance(now, dt, speed)
         val unit = density * thickness
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$drawTop:$drawBottom:$drawLeft:$drawRight"
@@ -176,7 +217,7 @@ class ChainsawView(context: Context) : View(context) {
         notchRenderer.draw(canvas, this, notchSettings, edgeColor, accentColor,
             brightness, glow, motion.pulse + motion.bands.maxOrNull()!!.coerceIn(0f, 1f) * .35f, motion.phase)
         paint.shader = null; paint.alpha = 255
-        if (moving) requestFrame()
+        if (moving || notificationStartedAt >= 0L) requestFrame()
     }
     private fun amplitude(fraction: Float): Float {
         // Mirror the spectrum around the frame; interpolate between bands instead of stair-stepping.
