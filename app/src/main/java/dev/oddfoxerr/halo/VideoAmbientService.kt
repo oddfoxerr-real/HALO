@@ -85,7 +85,7 @@ class VideoAmbientService : Service() {
         }
         val consent = if (Build.VERSION.SDK_INT >= 33)
             intent.getParcelableExtra(EXTRA_CONSENT, Intent::class.java)
-        else @Suppress("DEPRECATION") intent.getParcelableExtra<Intent>(EXTRA_CONSENT)
+        else intent.getParcelableExtra<Intent>(EXTRA_CONSENT)
         val code = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         if (code != Activity.RESULT_OK || consent == null) {
             stopSelf()
