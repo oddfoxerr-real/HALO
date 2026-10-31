@@ -131,6 +131,33 @@ class ProfileStore(context: Context) {
         get() = prefs.getLong("pill_color", 0xFF1ED760L)
         set(value) { prefs.edit().putLong("pill_color", value).apply() }
 
+    /** Global notch lighting, shared by music and notification border renderers. */
+    fun notchSettings(): NotchSettings {
+        fun setting(key: String, default: Float): Float {
+            val v = prefs.getFloat(key, default)
+            return if (v.isFinite()) v else default
+        }
+        return NotchSettings(
+            mode = NotchMode.entries.firstOrNull { it.name == prefs.getString("notch.mode", "OFF") }
+                ?: NotchMode.OFF,
+            xOffsetDp = setting("notch.x", 0f),
+            topDp = setting("notch.top", 24f),
+            widthDp = setting("notch.width", 30f),
+            heightDp = setting("notch.height", 30f),
+            gapDp = setting("notch.gap", 4f)
+        ).normalized()
+    }
+
+    fun saveNotch(settings: NotchSettings) {
+        val s = settings.normalized()
+        prefs.edit().putString("notch.mode", s.mode.name)
+            .putFloat("notch.x", s.xOffsetDp)
+            .putFloat("notch.top", s.topDp)
+            .putFloat("notch.width", s.widthDp)
+            .putFloat("notch.height", s.heightDp)
+            .putFloat("notch.gap", s.gapDp).apply()
+    }
+
     /** Global notification placement: character, full perimeter, or both. */
     var notificationEdgeMode: NotificationEdgeMode
         get() = EdgeSpectrum.notificationMode(prefs.getString("notification_edge_mode", "CHARACTER"))

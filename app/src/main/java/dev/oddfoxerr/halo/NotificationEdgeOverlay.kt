@@ -2,6 +2,8 @@ package dev.oddfoxerr.halo
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.SweepGradient
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
@@ -28,6 +30,11 @@ class NotificationBorderView(context: Context) : View(context) {
     private val segment = Path()
     private val measure = PathMeasure()
     private val extraEffects = NotificationExtraEffects()
+    private val notchRenderer = NotchLightRenderer()
+    private var notchSettings = NotchSettings()
+    private val gradientMatrix = Matrix()
+    private var edgeGradient: SweepGradient? = null
+    private var edgeGradientKey = ""
     private val rect = RectF()
     var tint: Int = Color.rgb(170, 91, 255)
     var thicknessDp: Float = 3f
@@ -51,6 +58,7 @@ class NotificationBorderView(context: Context) : View(context) {
         insetTop = store.notificationBorderTop
         insetBottom = store.notificationBorderBottom
         cornerRadius = store.notificationBorderCorner
+        notchSettings = store.notchSettings()
         invalidate()
     }
 
@@ -97,14 +105,23 @@ class NotificationBorderView(context: Context) : View(context) {
             NotificationEdgeStyle.COMET, NotificationEdgeStyle.DASH, NotificationEdgeStyle.SPARK,
             NotificationEdgeStyle.RIPPLE, NotificationEdgeStyle.AURORA, NotificationEdgeStyle.BEACON -> .68f
         }
-        paint.color = tint
-        paint.alpha = ((125f + 100f * glow) * strength).toInt().coerceIn(0, 255)
-        paint.strokeWidth = (12f + glow * 8f) * density
-        canvas.drawPath(border, paint)
-
-        paint.alpha = (210f * strength + 45f).toInt().coerceIn(0, 255)
-        paint.strokeWidth = thicknessDp * density
-        canvas.drawPath(border, paint)
+        val gradientKey = width.toString() + ":" + height + ":" + tint
+        if (edgeGradientKey != gradientKey) {
+            edgeGradientKey = gradientKey
+            edgeGradient = SweepGradient(width / 2f, height / 2f,
+                intArrayOf(tint, Color.WHITE, tint, tint, Color.WHITE, tint), null)
+        }
+        gradientMatrix.setRotate(t * 300f, width / 2f, height / 2f)
+        edgeGradient?.setLocalMatrix(gradientMatrix)
+        paint.shader = edgeGradient
+        val layers = floatArrayOf(20f, 11f, 5f, 0f)
+        val opacities = floatArrayOf(.065f, .14f, .32f, .92f)
+        for (index in layers.indices) {
+            paint.alpha = (255f * opacities[index] * strength).toInt().coerceIn(0, 255)
+            paint.strokeWidth = (layers[index] * glow + thicknessDp) * density
+            canvas.drawPath(border, paint)
+        }
+        paint.shader = null
 
         measure.setPath(border, true)
         if (animated && style == NotificationEdgeStyle.TRACE) {
@@ -118,6 +135,10 @@ class NotificationBorderView(context: Context) : View(context) {
             paint.alpha = (if (repeating) 210f else (1f - t) * 210f).toInt().coerceIn(0, 255)
             paint.strokeWidth = (thicknessDp + 1.5f) * density
             canvas.drawPath(segment, paint)
+        }
+        if (animated) {
+            notchRenderer.draw(canvas, this, notchSettings, tint, Color.WHITE,
+                .94f, glow, strength, t)
         }
         if (animated && style != NotificationEdgeStyle.PULSE && style != NotificationEdgeStyle.TRACE && style != NotificationEdgeStyle.GLOW) {
             extraEffects.draw(style, canvas, measure, elapsed, density, tint, thicknessDp, glow)
@@ -178,7 +199,9 @@ object NotificationEdgeOverlay {
             // 0.80 obscuring-opacity threshold while making the perimeter visible.
             alpha = .55f
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                layoutInDisplayCutoutMode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    else WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
         return try {

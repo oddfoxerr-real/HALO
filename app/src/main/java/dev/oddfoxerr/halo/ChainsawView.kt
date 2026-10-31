@@ -11,9 +11,13 @@ import kotlin.math.*
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
     private val extraEffects = MusicExtraEffects()
+    private val lightField = LightFieldRenderer()
+    private val notchRenderer = NotchLightRenderer()
+    private var notchSettings = ProfileStore(context).notchSettings()
     var thickness = 1f
     var glow = .75f
     var brightness = 1f
+    var spread = 1f
     var mode = EdgeMode.WAVE
     var edgeColor = 0xFF9A7BFF.toInt()
     var accentColor = 0xFF52E0CB.toInt()
@@ -58,7 +62,8 @@ class ChainsawView(context: Context) : View(context) {
 
     fun configure(settings: MusicConfiguration) {
         mode = settings.mode; edgeColor = settings.color; accentColor = settings.accent
-        thickness = settings.thickness; glow = settings.glow; brightness = settings.brightness; speed = settings.speed
+        thickness = settings.thickness; glow = settings.glow; brightness = settings.brightness; spread = settings.spread; speed = settings.speed
+        notchSettings = ProfileStore(context).notchSettings()
         edgeInset = settings.inset; cornerRadius = settings.corner
         leftInset = settings.leftInset; rightInset = settings.rightInset
         topInset = settings.topInset; bottomInset = settings.bottomInset
@@ -66,6 +71,7 @@ class ChainsawView(context: Context) : View(context) {
         drawLeft = settings.drawLeft; drawRight = settings.drawRight
         invalidate()
     }
+    fun configureNotch(settings: NotchSettings) { notchSettings = settings.normalized(); invalidate() }
     fun clearSignal() { motion.clear(); stopFrames(); invalidate() }
     fun updateSpectrum(bands: FloatArray, bass: Float, sensitivity: Float, rate: Float) {
         speed = rate
@@ -124,11 +130,13 @@ class ChainsawView(context: Context) : View(context) {
             shaderKey = colors
             gradient = SweepGradient(width / 2f, height / 2f, intArrayOf(edgeColor, accentColor, edgeColor, accentColor, edgeColor), null)
         }
-        if (measure.length <= 0f || (!drawTop && !drawBottom && !drawLeft && !drawRight)) return
-        // Crop the shared perimeter renderer to the user's selected physical edges.
-        canvas.save()
-        canvas.clipPath(activeSides)
-        when (mode) {
+        if (measure.length > 0f && (drawTop || drawBottom || drawLeft || drawRight)) {
+            canvas.save()
+            canvas.clipPath(activeSides)
+            // Dimensioned, translucent filled volumes under the existing personality details.
+            lightField.draw(canvas, measure, motion, mode, width, height, density,
+                thickness, spread, glow, brightness, edgeColor, accentColor)
+            when (mode) {
             EdgeMode.WAVE -> silk(canvas, unit)
             EdgeMode.BARS -> spectrum(canvas, unit)
             EdgeMode.TRAIL -> orbit(canvas, unit)
@@ -140,8 +148,11 @@ class ChainsawView(context: Context) : View(context) {
             EdgeMode.PIXELS, EdgeMode.NEON, EdgeMode.RAIN, EdgeMode.HELIX,
             EdgeMode.BLOOM, EdgeMode.PRISM -> extraEffects.draw(mode, canvas, perimeter, measure,
                 motion, width, height, density, thickness, brightness, glow, edgeColor, accentColor)
+            }
+            canvas.restore()
         }
-        canvas.restore()
+        notchRenderer.draw(canvas, this, notchSettings, edgeColor, accentColor,
+            brightness, glow, motion.pulse + motion.bands.maxOrNull()!!.coerceIn(0f, 1f) * .35f, motion.phase)
         paint.shader = null; paint.alpha = 255
         if (moving) requestFrame()
     }

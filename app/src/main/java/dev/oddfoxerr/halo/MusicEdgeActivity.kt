@@ -76,7 +76,14 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     var feedback by remember { mutableStateOf<String?>(null) }
     var chooseSources by remember { mutableStateOf(false) }
     val preview = remember { ChainsawView(context) }
+    val profileStore = remember(context) { ProfileStore(context) }
+    var notch by remember { mutableStateOf(profileStore.notchSettings()) }
     fun save(value: MusicConfiguration) { settings = value; value.save(context) }
+    fun saveNotch(value: NotchSettings) {
+        notch = value.normalized()
+        profileStore.saveNotch(notch)
+        preview.configureNotch(notch)
+    }
     fun start() {
         try {
             context.startForegroundService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_START))
@@ -105,7 +112,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     }
     val listenerAccess = remember(revision) { NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName) }
     // Debounce service refresh. Slider dragging never queues a service start for every pointer event.
-    LaunchedEffect(settings) {
+    LaunchedEffect(settings, notch) {
         delay(180)
         if (MusicEdgeService.isRunning) context.startService(Intent(context, MusicEdgeService::class.java).setAction(MusicEdgeService.ACTION_REFRESH))
     }
@@ -149,7 +156,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
             Box(Modifier.width(204.dp).height(370.dp).background(Color.Black, RoundedCornerShape(26.dp))) {
-                AndroidView(factory = { preview }, update = { it.configure(settings) }, modifier = Modifier.fillMaxSize())
+                AndroidView(factory = { preview }, update = { it.configure(settings); it.configureNotch(notch) }, modifier = Modifier.fillMaxSize())
                 Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("HALO", style = MaterialTheme.typography.titleLarge, color = Color(0xFFEEE9FA))
                     Text(settings.mode.title, style = MaterialTheme.typography.labelMedium, color = Color(0xFFB4ACCA))
@@ -208,6 +215,37 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
                 MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
                 MusicSlider("Glow", settings.glow, 0f..1f, "") { save(settings.copy(glow = it)) }
+                MusicSlider("Light spread", settings.spread, .3f..2.8f, "×") { save(settings.copy(spread = it)) }
+                HorizontalDivider()
+                Text("Camera cutout lighting", style = MaterialTheme.typography.titleMedium)
+                Text("Illuminate your real camera cutout automatically, or position a custom round/pill halo. Uses the same calibrated shape for notification edges.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                NotchMode.entries.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { option ->
+                            FilterChip(selected = notch.mode == option,
+                                onClick = { saveNotch(notch.copy(mode = option)) },
+                                label = { Text(option.title) }, modifier = Modifier.weight(1f))
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                if (notch.mode != NotchMode.OFF) {
+                    if (notch.mode == NotchMode.AUTO) {
+                        Text("Auto mode uses Android's reported camera cutout. Some Samsung screens may not expose that region to overlay windows; use Camera ring if nothing appears.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        MusicSlider("Horizontal offset", notch.xOffsetDp, -120f..120f, "dp") { saveNotch(notch.copy(xOffsetDp = it)) }
+                        MusicSlider("Vertical center", notch.topDp, 0f..125f, "dp") { saveNotch(notch.copy(topDp = it)) }
+                        MusicSlider("Cutout width", notch.widthDp, 12f..160f, "dp") { saveNotch(notch.copy(widthDp = it)) }
+                        if (notch.mode == NotchMode.PILL) {
+                            MusicSlider("Cutout height", notch.heightDp, 12f..90f, "dp") { saveNotch(notch.copy(heightDp = it)) }
+                        }
+                    }
+                    MusicSlider("Camera halo gap", notch.gapDp, 0f..24f, "dp") { saveNotch(notch.copy(gapDp = it)) }
+                    OutlinedButton(onClick = { saveNotch(NotchSettings(mode = notch.mode)) },
+                        modifier = Modifier.fillMaxWidth()) { Text("Reset camera alignment") }
+                }
                 HorizontalDivider()
                 Text("Choose screen edges", style = MaterialTheme.typography.titleMedium)
                 Text("Use any combination. All four sides are enabled by default.", style = MaterialTheme.typography.bodySmall)
