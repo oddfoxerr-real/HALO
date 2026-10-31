@@ -21,6 +21,13 @@ class AnimationCatalogueTest {
             assertEquals(style, EdgeSpectrum.notificationStyle(style.name))
     }
 
+    @Test fun characterMotionPresetsAreUniqueAndRetainOriginalDefault() {
+        assertEquals(7, CharacterMotion.entries.size)
+        assertEquals(7, CharacterMotion.entries.map { it.title }.distinct().size)
+        assertEquals(CharacterMotion.ORIGINAL, CharacterProfile(CharacterApp.DISCORD).motion)
+        assertTrue(CharacterMotion.entries.any { it.name == "GLITCH" })
+    }
+
     @Test fun oldStyleIdentifiersRemainBackwardCompatible() {
         for (name in listOf("WAVE", "BARS", "TRAIL", "PULSE", "CHAIN"))
             assertTrue(EdgeMode.entries.any { it.name == name })
