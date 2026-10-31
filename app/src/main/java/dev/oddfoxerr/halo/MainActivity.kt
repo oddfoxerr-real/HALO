@@ -188,7 +188,7 @@ private fun HaloApp(
                         StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                             enabled = value
                             store.masterEnabled = value
-                            if (!value) { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+                            if (!value) { PillNotificationEdgeOverlay.dismiss() }
                             HaloNotificationListener.requestPillRefresh()
                         }
                     }
@@ -338,7 +338,7 @@ private fun HaloApp(
                         SectionCard {
                             Text("Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Listener: ${if (listenerEnabled) "Authorized" else "Permission needed"} · Overlay: ${if (overlayEnabled) "Authorized" else "Permission needed"}", color = Muted)
-                            OutlinedButton(onClick = { HaloOverlay.dismiss(); PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
+                            OutlinedButton(onClick = { PillNotificationEdgeOverlay.dismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Clear HALO overlay") }
                             Text("HALO monitors notification metadata locally. Message bodies are not stored. Android may prevent third-party overlays on secure screens or Samsung's AOD.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -389,22 +389,6 @@ private fun ColorDot(value: Long, size: Int = 37) {
 }
 
 @Composable
-private fun MiniPreview(profile: CharacterProfile) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(205.dp).height(340.dp).background(Color.Black, RoundedCornerShape(27.dp))) {
-            key(profile.app) {
-                AndroidView(factory = { CharacterView(it).apply { configureLoop(profile) } },
-                    update = { it.configureLoop(profile) }, modifier = Modifier.fillMaxSize())
-            }
-            Column(Modifier.align(Alignment.TopCenter).padding(top = 29.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("HALO", color = Color(0xFFDDD8EB), style = MaterialTheme.typography.headlineSmall)
-                Text(profile.app.displayName, color = Muted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -413,50 +397,6 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onToggl
         }
         Switch(checked = checked, onCheckedChange = onToggle)
     }
-}
-
-@Composable
-private fun ProfileEditor(profile: CharacterProfile, onUpdate: (CharacterProfile) -> Unit) {
-    var hex by remember(profile.app) { mutableStateOf("#%06X".format(profile.color and 0xFFFFFF)) }
-    Text("${profile.app.displayName} appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    SwitchRow("Enable character", "Disable just this character profile.", profile.enabled) { onUpdate(profile.copy(enabled = it)) }
-    Text("Entrance motion", style = MaterialTheme.typography.labelLarge)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(CharacterMotion.entries) { motion ->
-            FilterChip(selected = profile.motion == motion,
-                onClick = { onUpdate(profile.copy(motion = motion)) },
-                label = { Text(motion.title) })
-        }
-    }
-    SwitchRow("Unread notification dot", "Retain a small indicator until dismissal.", profile.persistent) { onUpdate(profile.copy(persistent = it)) }
-    Text("Lighting color", color = Muted)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(Swatches) { color ->
-            Box(Modifier.size(38.dp).background(Color(color), CircleShape).clickable {
-                hex = "#%06X".format(color and 0xFFFFFF)
-                onUpdate(profile.copy(color = color))
-            }, contentAlignment = Alignment.Center) {
-                if (profile.color == color) Text("✓", color = Color.Black)
-            }
-        }
-    }
-    OutlinedTextField(
-        value = hex, onValueChange = { value ->
-            hex = value.take(7)
-            if (Regex("^#[0-9A-Fa-f]{6}$").matches(hex)) onUpdate(profile.copy(color = hex.drop(1).toLong(16) or 0xFF000000L))
-        }, singleLine = true, label = { Text("Custom HEX") }, modifier = Modifier.fillMaxWidth()
-    )
-    Text("Entry edge", color = Muted)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        EdgeSide.entries.forEach { side -> FilterChip(
-            selected = profile.side == side, onClick = { onUpdate(profile.copy(side = side)) }, label = { Text(side.name.lowercase().replaceFirstChar { it.uppercase() }) }
-        ) }
-    }
-    SettingSlider("Duration", "%.1f seconds".format(profile.durationMs / 1000f), profile.durationMs.toFloat(), 1800f..10000f) { onUpdate(profile.copy(durationMs = it.toLong())) }
-    SettingSlider("Size", "%.2f×".format(profile.scale), profile.scale, .60f..1.60f) { onUpdate(profile.copy(scale = it)) }
-    SettingSlider("Vertical position", "${(profile.anchorY * 100).toInt()}%", profile.anchorY, .20f.. .85f) { onUpdate(profile.copy(anchorY = it)) }
-    SettingSlider("Edge inset", "${profile.edgeInsetDp.toInt()} dp", profile.edgeInsetDp, 0f..32f) { onUpdate(profile.copy(edgeInsetDp = it)) }
-    SettingSlider("Glow", "${(profile.glow * 100).toInt()}%", profile.glow, 0f..1f) { onUpdate(profile.copy(glow = it)) }
 }
 
 @Composable
@@ -489,7 +429,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
     Text("Quiet hours", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     SwitchRow("Enable quiet hours", "Suppress effects during your sleep schedule.", enabled) {
         enabled = it; store.quietEnabled = it
-        if (it && store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+        if (it && store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
         HaloNotificationListener.requestPillRefresh()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -503,7 +443,7 @@ private fun QuietHoursEditor(store: ProfileStore) {
         valid = a != null && b != null
         if (valid) {
             store.quietStart = a!!; store.quietEnd = b!!
-            if (store.isQuietNow()) { HaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+            if (store.isQuietNow()) { NotificationEdgeOverlay.dismiss() }
             HaloNotificationListener.requestPillRefresh()
         }
     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
