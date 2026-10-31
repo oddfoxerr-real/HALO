@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** Music settings are independent of all notification profiles. Keeps v0.6–0.9 preferences. */
 data class MusicConfiguration(
-    val mode: EdgeMode = EdgeMode.WAVE,
+    val mode: EdgeMode = EdgeMode.DOTS,
     val color: Int = 0xFF9A7BFF.toInt(),
     val accent: Int = 0xFF52E0CB.toInt(),
     val sensitivity: Float = 1.5f,
