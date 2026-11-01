@@ -85,7 +85,7 @@ fun MiscPaintedControls() {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Thick oil-paint marks, broad colour patches and raised palette-knife ridges inspired by impasto painting. The live picture is fully repainted while taps still reach the app beneath.",
+                "Live brush-texture shader: follows image edges, preserves smooth colour gradients and adds oil-paint bristle ridges. This is not a pixel-art filter; touches still reach the app beneath.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text("Paint style", style = MaterialTheme.typography.titleMedium)
@@ -108,14 +108,14 @@ fun MiscPaintedControls() {
                 onValueChange = { save(settings.copy(strength = it)) },
                 valueRange = .35f..1f
             )
-            Text("Brush size · ${(settings.brushSize * 100).toInt()}%",
+            Text("Brush scale · ${(settings.brushSize * 100).toInt()}%",
                 style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = settings.brushSize,
                 onValueChange = { save(settings.copy(brushSize = it)) },
                 valueRange = .65f..2.3f
             )
-            Text("Paint thickness / ridges · ${(settings.relief * 100).toInt()}%",
+            Text("Stroke relief / ridges · ${(settings.relief * 100).toInt()}%",
                 style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = settings.relief,
@@ -124,7 +124,7 @@ fun MiscPaintedControls() {
             )
             Text(
                 when (settings.style) {
-                    PaintedStyle.OIL -> "Reference style: overlapping opaque oil daubs, broad strokes, raised palette-knife ridges and sculpted highlights."
+                    PaintedStyle.OIL -> "Edge-following oil strokes with continuous colour mixing, textured pigment and directional raised brush ridges."
                     PaintedStyle.WATERCOLOR -> "Washes with softened pigment relief and less pronounced ridges."
                     PaintedStyle.INK -> "Graphic colour planes, bolder contours and harder brush marks."
                 },
