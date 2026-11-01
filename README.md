@@ -1,5 +1,30 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.16.0 — 20 GPU animations + matching camera light + Color Studio
+
+Eight new original AGSL effects expand the library from 12 to 20: Shockwave,
+Plasma Veil, Electric Arcs, Crystal Shards, Tidal Flow, Ember Drift,
+Solar Corona and Orbiting Satellites. Existing saved effects retain their
+original mode IDs and shader ordinals.
+
+Camera ring/pill/auto-cutout lighting now draws the selected **same GPU
+animation** instead of the independent rotating Canvas gradient. The camera
+opening is clipped out and compact particle density prevents crowding on
+small punch holes. It shares the primary/accent colors, motion timing,
+music FFT beat response, speed, brightness, glow and thickness.
+
+The new Color Studio replaces its four fixed palettes and basic HEX-only
+entry with 16 named gradient presets, 24 color swatches, independent primary
+and accent HSV (hue/saturation/brightness) sliders, exact #RRGGBB entry,
+live gradient preview and swap. Custom colors persist as the normal
+music configuration, and selecting album colors remains optional.
+
+Camera overlays remain subject to manufacturer status-bar/lock-screen
+restrictions; direct visual validation on a Samsung Galaxy A56/One UI
+is still required. All effects are procedural; no proprietary shaders
+or graphics have been copied.
+
+
 ## v0.15.1 — Overlay ownership and GPU isolation
 
 Video Ambilight has exclusive ownership of screen-edge lighting while capturing.

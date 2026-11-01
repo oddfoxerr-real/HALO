@@ -1,16 +1,8 @@
 package dev.oddfoxerr.halo
 
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PathMeasure
 import android.graphics.RectF
-import android.graphics.SweepGradient
 import android.view.View
 import kotlin.math.abs
-import kotlin.math.min
 
 enum class NotchMode(val title: String) {
     OFF("Off"), AUTO("Auto"), CIRCLE("Camera ring"), PILL("Camera pill")
@@ -66,80 +58,3 @@ internal object NotchGeometry {
     }
 }
 
-/** Independent light halo; the physical camera interior is never filled or obscured. */
-internal class NotchLightRenderer {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
-    private val path = Path()
-    private val segment = Path()
-    private val measure = PathMeasure()
-    private val matrix = Matrix()
-    private var gradient: SweepGradient? = null
-    private var geometryKey = ""
-    private var gradientKey = ""
-    private val bounds = RectF()
-    private val location = IntArray(2)
-
-    fun draw(
-        canvas: Canvas, host: View, settings: NotchSettings,
-        primary: Int, accent: Int, brightness: Float, glow: Float,
-        energy: Float, phase: Float
-    ) {
-        val placement = NotchGeometry.find(host, settings) ?: return
-        val rect = placement.first
-        if (rect.width() <= 2f || rect.height() <= 2f) return
-        val density = host.resources.displayMetrics.density
-        val key = rect.toString() + placement.second.toString()
-        if (key != geometryKey) {
-            geometryKey = key
-            bounds.set(rect)
-            path.reset()
-            if (placement.second) {
-                path.addOval(bounds, Path.Direction.CW)
-            } else {
-                val radius = min(bounds.width(), bounds.height()) / 2f
-                path.addRoundRect(bounds, radius, radius, Path.Direction.CW)
-            }
-            measure.setPath(path, true)
-            gradientKey = ""
-        }
-        val colorKey = key + primary + ":" + accent
-        if (colorKey != gradientKey) {
-            gradientKey = colorKey
-            gradient = SweepGradient(bounds.centerX(), bounds.centerY(),
-                intArrayOf(primary, accent, primary, Color.WHITE, accent, primary), null)
-        }
-        val active = energy.coerceIn(0f, 1f)
-        val opacity = brightness.coerceIn(.2f, 1f)
-        val soft = glow.coerceIn(0f, 1f)
-        val centerWidth = (1.6f + active * 3.5f) * density
-        matrix.setRotate(phase * 360f, bounds.centerX(), bounds.centerY())
-        gradient?.setLocalMatrix(matrix)
-        paint.shader = gradient
-        val widths = floatArrayOf(14f, 8f, 3f, .7f)
-        val alphas = floatArrayOf(.06f, .16f, .42f, .92f)
-        for (index in widths.indices) {
-            paint.strokeWidth = centerWidth + widths[index] * density * (if (index == 0) soft else 1f)
-            paint.alpha = (255f * alphas[index] * opacity * (.7f + active * .3f)).toInt().coerceIn(0, 255)
-            canvas.drawPath(path, paint)
-        }
-        if (active > .02f && measure.length > 0f) {
-            val start = ((phase * .9f + .16f) % 1f) * measure.length
-            val end = start + measure.length * (.1f + active * .12f)
-            segment.reset()
-            measure.getSegment(start, min(end, measure.length), segment, true)
-            if (end > measure.length) measure.getSegment(0f, end - measure.length, segment, true)
-            paint.shader = null
-            paint.color = Color.WHITE
-            paint.strokeWidth = (1f + active) * density
-            paint.alpha = (160f * opacity * active).toInt().coerceIn(0, 255)
-            canvas.drawPath(segment, paint)
-        }
-        paint.shader = null
-        paint.color = Color.WHITE
-        paint.alpha = 255
-    }
-}

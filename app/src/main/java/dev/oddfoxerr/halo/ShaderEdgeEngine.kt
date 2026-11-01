@@ -70,7 +70,7 @@ internal class ShaderEdgeEngine {
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
         thickness: Float, spread: Float, glow: Float, brightness: Float,
-        primary: Int, secondary: Int, attack: Float): Boolean {
+        primary: Int, secondary: Int, attack: Float, compact: Boolean = false): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -86,6 +86,7 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("glow",glow)
             runtime.setFloatUniform("brightness",brightness)
             runtime.setIntUniform("design",mode.ordinal)
+            runtime.setFloatUniform("compact", if (compact) 1f else 0f)
             java.util.Arrays.fill(frequencies,0f)
             for (i in bands.indices) {
                 val k=(i*8/max(1,bands.size)).coerceIn(0,7)
@@ -185,6 +186,7 @@ internal class ShaderEdgeEngine {
             uniform float3 first;
             uniform float3 second;
             uniform int design;
+            uniform float compact;
             
             const float PI = 3.14159265358979;
             const float TAU = 6.28318530717958;
@@ -341,23 +343,26 @@ internal class ShaderEdgeEngine {
                 float core=0.0, aura=0.0, sparkle=0.0;
                 float travel=time*.45;
                 float local=0.0;
+                // A punch-hole has a much shorter perimeter than the display.
+                float densityScale=mix(1.0,.20,compact);
             
                 if(design==0) { // Luminous Dots — precise circular beads travelling around corners
-                    float dot=disc(u,d,62.0,travel*13.0,0.0,2.8*thicknessPx*volume,lengthPx);
+                    float beads=62.0*densityScale;
+                    float dot=disc(u,d,beads,travel*13.0,0.0,2.8*thicknessPx*volume,lengthPx);
                     core=dot;
-                    aura=gaussian(length(float2((fract(u*62.0-travel*13.0)-.5)*lengthPx/62.0,d)),12.0*thicknessPx*volume);
+                    aura=gaussian(length(float2((fract(u*beads-travel*13.0)-.5)*lengthPx/beads,d)),12.0*thicknessPx*volume);
                     sparkle=pow(dot,3.0)*(.34+.66*kick);
                 } else if(design==1) { // Constellation — drifting, scattered individual point lights
-                    float p=disc(u,d,84.0,travel*4.4,-6.0*thicknessPx,2.2*thicknessPx,lengthPx);
-                    float q=disc(u,d,51.0,-travel*2.7,7.0*thicknessPx,3.0*thicknessPx,lengthPx);
+                    float p=disc(u,d,84.0*densityScale,travel*4.4,-6.0*thicknessPx,2.2*thicknessPx,lengthPx);
+                    float q=disc(u,d,51.0*densityScale,-travel*2.7,7.0*thicknessPx,3.0*thicknessPx,lengthPx);
                     float stars=max(p,q*.8);
                     float twinkle=.65+.35*sin(TAU*(u*17.0-time*.7));
                     core=stars*twinkle;
                     aura=stars*.36+gaussian(d,18.0*thicknessPx)*.035;
                     sparkle=pow(stars,4.0)*twinkle;
                 } else if(design==2) { // Fireflies — loose luminous orbiting orbs
-                    float a=disc(u,d,34.0,travel*6.0,5.0*thicknessPx,3.4*thicknessPx*(1.0+energy),lengthPx);
-                    float b=disc(u,d,23.0,-travel*4.1,-8.0*thicknessPx,2.2*thicknessPx,lengthPx);
+                    float a=disc(u,d,34.0*densityScale,travel*6.0,5.0*thicknessPx,3.4*thicknessPx*(1.0+energy),lengthPx);
+                    float b=disc(u,d,23.0*densityScale,-travel*4.1,-8.0*thicknessPx,2.2*thicknessPx,lengthPx);
                     core=max(a,b*.8);
                     aura=gaussian(d,21.0*thicknessPx)*(.04+.10*energy)+max(a,b)*.7;
                     sparkle=pow(core,2.0)*.5;
@@ -416,21 +421,86 @@ internal class ShaderEdgeEngine {
                     aura=gaussian(d,18.0*thicknessPx)*(.28+.25*variation+.22*kick);
                     sparkle=gaussian(d,1.25*thicknessPx)*variation*.25;
                 } else if(design==10) { // Pixel Matrix — individually bounded LED cells
-                    float grid=u*78.0-time*.8;
+                    float cells=78.0*densityScale;
+                    float grid=u*cells-time*.8;
                     float cell=fract(grid)-.5;
                     float cellIndex=floor(grid);
-                    float band=harmonic(fract((cellIndex+.5)/78.0));
+                    float band=harmonic(fract((cellIndex+.5)/cells));
                     float dy=abs(d)-4.5*thicknessPx*(.5+band);
-                    float rectangle=max(abs(cell)*lengthPx/78.0-2.5*thicknessPx,dy);
+                    float rectangle=max(abs(cell)*lengthPx/cells-2.5*thicknessPx,dy);
                     core=1.0-smoothstep(-.5,1.2*thicknessPx,rectangle);
                     aura=gaussian(rectangle,7.0*thicknessPx)*.19;
                     sparkle=core*(.12+.30*kick);
-                } else { // Halo Rings — radiating concentric light
+                } else if(design==11) { // Halo Rings — radiating concentric light
                     float ripple=cos(d*.13/thicknessPx-time*3.6);
                     core=gaussian(d,3.6*thicknessPx)+pow(max(0.0,ripple),12.0)
                         *gaussian(d,26.0*thicknessPx)*(.2+.75*kick);
                     aura=gaussian(d,26.0*thicknessPx)*(.22+.43*kick);
                     sparkle=gaussian(d,2.1*thicknessPx)*.25;
+                } else if(design==12) { // Shockwave — fast traveling impact fronts
+                    float front=fract(u*3.0-time*(.34+kick*.12));
+                    float ridge=exp(-front*18.0)*gaussian(d-6.0*thicknessPx*kick,4.0*thicknessPx);
+                    float echo=exp(-fract(front+.37)*23.0)*gaussian(d+5.0*thicknessPx,3.0*thicknessPx);
+                    core=ridge+echo*.48+gaussian(d,2.1*thicknessPx)*.18;
+                    aura=gaussian(d,21.0*thicknessPx)*(ridge*.44+kick*.21);
+                    sparkle=pow(ridge,2.0)*.82;
+                } else if(design==13) { // Plasma Veil — turbulent volumetric folds
+                    float3 domain=float3(u*12.0,d*.063,time*.28);
+                    float warp=noise3(domain)+.4*noise3(domain*2.35+float3(8.0,2.0,4.0));
+                    float ridge=d+warp*19.0*thicknessPx*volume;
+                    core=gaussian(ridge,3.3*thicknessPx)*(.62+.48*energy);
+                    aura=gaussian(ridge+8.0*thicknessPx,20.0*thicknessPx)*(.42+.35*kick);
+                    sparkle=pow(max(warp,0.0),3.0)*gaussian(ridge,4.0*thicknessPx);
+                } else if(design==14) { // Electric Arcs — intermittent jagged discharges
+                    float cell=fract(u*(7.0*densityScale+2.0)-time*.39);
+                    float fracture=sin(u*340.0+time*18.0)*sin(u*171.0-time*11.0);
+                    float path=d+fracture*5.5*thicknessPx;
+                    float gate=pow(max(0.0,sin(TAU*(cell-.12))),5.0);
+                    core=gaussian(path,1.45*thicknessPx)*(gate*.9+.18+kick*.6);
+                    aura=gaussian(path,11.0*thicknessPx)*(gate*.30+.12*kick);
+                    sparkle=pow(gate,2.0)*gaussian(path,1.4*thicknessPx);
+                } else if(design==15) { // Crystal Shards — faceted refractions
+                    float count=32.0*densityScale;
+                    float cell=floor(u*count);
+                    float f=fract(u*count);
+                    float facet=abs(f-.5)*2.0;
+                    float tilt=(hash(float2(cell,2.0))-.5)*9.0*thicknessPx;
+                    float crystal=abs(d+tilt+facet*7.0*thicknessPx);
+                    float cut=1.0-smoothstep(.38,.49,facet);
+                    core=gaussian(crystal,2.2*thicknessPx)*cut;
+                    aura=gaussian(crystal,13.0*thicknessPx)*cut*.31;
+                    sparkle=pow(max(0.0,sin(f*PI)),6.0)*core*(.3+.5*kick);
+                } else if(design==16) { // Tidal Flow — opposing fluid currents
+                    float a=sin(TAU*(u*5.0-time*.14));
+                    float b=sin(TAU*(u*8.0+time*.11));
+                    float waveA=d-(a*11.0+3.0)*thicknessPx*(.35+energy);
+                    float waveB=d+(b*9.0+4.0)*thicknessPx*(.35+energy);
+                    core=gaussian(waveA,3.4*thicknessPx)+gaussian(waveB,3.1*thicknessPx)*.75;
+                    aura=gaussian(waveA,14.0*thicknessPx)*.34+gaussian(waveB,12.0*thicknessPx)*.27;
+                    sparkle=gaussian(waveA-waveB,3.0*thicknessPx)*core*.28;
+                } else if(design==17) { // Ember Drift — floating glowing particles with ascent
+                    float particles=27.0*densityScale;
+                    float a=disc(u,d,particles,time*4.8,7.0*thicknessPx,3.6*thicknessPx,lengthPx);
+                    float b=disc(u,d,particles*.67,time*2.6,-9.0*thicknessPx,2.8*thicknessPx,lengthPx);
+                    core=max(a,b*.72)*(.62+.4*energy);
+                    aura=gaussian(d,24.0*thicknessPx)*.09+max(a,b)*.51;
+                    sparkle=pow(core,3.0)*(.25+.6*kick);
+                } else if(design==18) { // Solar Corona — breathing turbulent solar flare
+                    float3 plasma=float3(u*19.0,d*.045,time*.26);
+                    float surge=noise3(plasma)+.6*noise3(plasma*2.5);
+                    float flame=d-(surge*.7+.3)*25.0*thicknessPx*(.4+energy);
+                    core=gaussian(flame,3.1*thicknessPx)*(.75+.4*kick);
+                    aura=gaussian(flame,24.0*thicknessPx)*(.34+.38*energy);
+                    sparkle=pow(max(surge,0.0),3.0)*core;
+                } else if(design==19) { // Orbiting Satellites — separate orbital speed and lanes
+                    float p=disc(u,d,8.0*densityScale,time*3.1,-7.0*thicknessPx,4.0*thicknessPx,lengthPx);
+                    float q=disc(u,d,5.0*densityScale,-time*1.8,9.0*thicknessPx,3.3*thicknessPx,lengthPx);
+                    core=p+q*.9+gaussian(d,1.5*thicknessPx)*.15;
+                    aura=max(p,q)*.7+gaussian(d,14.0*thicknessPx)*.08;
+                    sparkle=pow(max(p,q),3.0)*(.5+.4*kick);
+                } else {
+                    core=gaussian(d,3.0*thicknessPx);
+                    aura=gaussian(d,12.0*thicknessPx)*.2;
                 }
             
                 // Fix v0.13's hard angular gradient jumps: colors use physical perimeter

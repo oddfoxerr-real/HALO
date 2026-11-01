@@ -17,7 +17,15 @@ enum class EdgeMode(val title: String) {
     BLOOM("Pulse Bloom"),
     NEON("Neon Current"),
     PIXEL("Pixel Matrix"),
-    HALO("Halo Rings")
+    HALO("Halo Rings"),
+    SHOCKWAVE("Shockwave"),
+    PLASMA("Plasma Veil"),
+    SPARKLINE("Electric Arcs"),
+    CRYSTAL("Crystal Shards"),
+    TIDAL("Tidal Flow"),
+    EMBER("Ember Drift"),
+    RADIANCE("Solar Corona"),
+    ORBITAL("Orbiting Satellites")
 }
 
 enum class NotificationEdgeMode(val title: String) {
