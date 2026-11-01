@@ -214,17 +214,14 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         when (panel) {
             MusicPanel.DESIGNS -> {
-                Text("${EdgeMode.entries.size} GPU-native light designs", style = MaterialTheme.typography.titleMedium)
-                Text("A curated set of four original music-reactive designs. Bass changes impact, mids shape movement and treble drives detail. No more filler animations.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                EdgeMode.entries.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pair.forEach { mode ->
-                            DesignTile(mode, settings.mode == mode, settings.color, settings.accent,
-                                Modifier.weight(1f)) { save(settings.copy(mode = mode)); demo = true }
-                        }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
-                    }
+                Text("Electric Arcs", style = MaterialTheme.typography.titleMedium)
+                Text("Restored original electric effect. The other experimental designs have been retired, not renamed. Test the real moving effect in the live phone preview above.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DesignTile(EdgeMode.ELECTRIC_ARCS, true, settings.color, settings.accent,
+                    Modifier.fillMaxWidth()) {
+                    save(settings.copy(mode = EdgeMode.ELECTRIC_ARCS))
+                    demo = true
                 }
                 Text("Color Studio", style = MaterialTheme.typography.titleMedium)
                 Text("Pick any two colors with precise hue, saturation, brightness and HEX editing, or apply a ready-made gradient.",
@@ -362,12 +359,7 @@ private fun DesignTile(
     mode: EdgeMode, selected: Boolean, first: Int, second: Int,
     modifier: Modifier, choose: () -> Unit
 ) {
-    val group = when (mode) {
-        EdgeMode.ELECTRIC_ARCS -> "BRANCHED PLASMA"
-        EdgeMode.MIRROR_RAIN -> "MIRRORED LIGHT DROPLETS"
-        EdgeMode.FLAT_WAVES -> "SPECTRAL CONTOURS"
-        EdgeMode.SIDE_SPECTRUM -> "VERTICAL FFT METERS"
-    }
+    val group = "CLASSIC ELECTRIC LIGHT"
     Card(
         onClick = choose,
         modifier = modifier.semantics {
