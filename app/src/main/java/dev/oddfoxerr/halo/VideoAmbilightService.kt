@@ -55,6 +55,7 @@ class VideoAmbilightService : Service() {
     private var view: ChainsawView? = null
     private var lastSampleAt = 0L
     private var colors = VideoEdgeColors.BLACK
+    @Volatile private var lighting = VideoLightingPreferences()
     private var stopping = false
     private var framesSeen = 0
     private var width = 0
@@ -63,6 +64,7 @@ class VideoAmbilightService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        lighting = VideoLightingPreferences.read(this)
         thread = HandlerThread("HALO-video-color-analysis").apply { start() }
         worker = Handler(thread.looper)
     }
@@ -73,7 +75,9 @@ class VideoAmbilightService : Service() {
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_REFRESH -> {
+                lighting = VideoLightingPreferences.read(this)
                 view?.configure(MusicConfiguration.read(this))
+                view?.configureVideo(lighting)
                 return START_NOT_STICKY
             }
             ACTION_START -> Unit
@@ -169,6 +173,7 @@ class VideoAmbilightService : Service() {
         }
         val drawing = ChainsawView(applicationContext).apply {
             configure(MusicConfiguration.read(this@VideoAmbilightService))
+            configureVideo(lighting)
             setVideoColors(VideoEdgeColors.BLACK)
         }
         window.addView(drawing, params)
@@ -183,7 +188,7 @@ class VideoAmbilightService : Service() {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader!!.surface, null, worker
         )
-        statusValue.value = "Selected animation running with video colors"
+        statusValue.value = "Cinematic edge lighting · accurate live screen colors"
     }
 
     private fun createReader() {
@@ -196,18 +201,19 @@ class VideoAmbilightService : Service() {
                     lastSampleAt = now
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
+                        val profile = lighting
                         val value = VideoColorSampler.sample(
-                            plane.buffer, image.width, image.height, plane.rowStride, plane.pixelStride)
-                        val response = getSharedPreferences("halo_video_settings", MODE_PRIVATE)
-                            .getFloat("response", .78f).coerceIn(.08f, 1f)
-                        colors = if (framesSeen == 0) value else VideoColorSampler.smooth(colors, value, response)
+                            plane.buffer, image.width, image.height,
+                            plane.rowStride, plane.pixelStride, profile.sampleInset)
+                        colors = if (framesSeen == 0) value else
+                            VideoColorSampler.smooth(colors, value, profile.response)
                         framesSeen++
                         val current = colors
                         main.post { if (!stopping) view?.setVideoColors(current) }
                         if (framesSeen == 15 && VideoColorSampler.isDark(current))
                             statusValue.value = "Captured picture is dark; protected videos may be unavailable"
                         else if (framesSeen > 0 && framesSeen % 40 == 0 && !VideoColorSampler.isDark(current))
-                            statusValue.value = "Selected animation matching live scene colors"
+                            statusValue.value = "Cinematic lighting · spatial colors following the scene"
                     }
                 }
             } finally { image.close() }

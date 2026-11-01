@@ -3,7 +3,7 @@ package dev.oddfoxerr.halo
 import java.nio.ByteBuffer
 import kotlin.math.max
 
-/** Four color regions matching a TV bias-light strip: top, right, bottom, left. */
+/** Screen-space colors for a narrow television-style edge-lighting strip. */
 data class VideoEdgeColors(
     val top: Int, val right: Int, val bottom: Int, val left: Int,
     /** Clockwise from the upper left: 4 top, 4 right, 4 bottom, 4 left. */
@@ -16,24 +16,28 @@ data class VideoEdgeColors(
 
 /**
  * Downsampled MediaProjection frame analysis. Operates only in RAM, never stores images.
- * Samples *inside* the video to avoid sampling HALO's own illuminated edge or letterbox borders.
+ * Samples just inside the visible frame rather than drawing colors from unrelated scene centers.
  * Input must be RGBA_8888 with the Android Image.Plane rowStride and pixelStride.
  */
 object VideoColorSampler {
     fun sample(
         data: ByteBuffer, width: Int, height: Int, rowStride: Int, pixelStride: Int,
-        inset: Float = .12f
+        inset: Float = .055f
     ): VideoEdgeColors {
         if (width < 16 || height < 16 || pixelStride < 4 || rowStride < width * pixelStride)
             return VideoEdgeColors.BLACK
-        val offset = inset.coerceIn(.06f, .25f)
+        val offset = inset.coerceIn(.03f, .13f)
         fun region(vertical: Boolean, nearStart: Boolean, zone: Int = -1): Int {
             var red = 0L; var green = 0L; var blue = 0L; var count = 0L
             // Small inner strips avoid the overlay itself, UI controls and black letterbox bars.
             for (i in 0 until 13) for (j in 0 until 5) {
-                val across = if (zone < 0) .17f + .66f * (i + .5f) / 13f
-                    else .10f + .80f * ((zone + (i + .5f) / 13f) / 4f)
-                val depth = offset + .085f * (j + .5f) / 5f
+                // Sample the actual physical segment across each side, not
+                // just the central 80% (which formerly shifted edge colors).
+                val across = if (zone < 0) .06f + .88f * (i + .5f) / 13f
+                    else (zone + (i + .5f) / 13f) / 4f
+                // Stay near displayed picture edge. The earlier 12%-20%
+                // sample depth often read unrelated center-scene colors.
+                val depth = offset + .036f * (j + .5f) / 5f
                 val x = if (vertical) across else if (nearStart) depth else 1f - depth
                 val y = if (vertical) if (nearStart) depth else 1f - depth else across
                 val px = (x * (width - 1)).toInt().coerceIn(0, width - 1)
