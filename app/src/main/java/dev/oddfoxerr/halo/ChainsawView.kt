@@ -68,6 +68,18 @@ class ChainsawView(context: Context) : View(context) {
 
     fun configureVideo(settings: VideoLightingPreferences) {
         videoLighting = settings
+        // Video lighting must follow the physical screen frame, not the
+        // calibration from a totally different music animation preset.
+        leftInset = 1.5f
+        rightInset = 1.5f
+        topInset = 1.5f
+        bottomInset = 1.5f
+        cornerRadius = 22f
+        drawTop = true
+        drawBottom = true
+        drawLeft = true
+        drawRight = true
+        geometryKey = ""
         requestFrame()
         invalidate()
     }
