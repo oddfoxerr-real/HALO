@@ -278,17 +278,13 @@ internal class ShaderEdgeEngine {
                 float db=abs(p.y-videoFrame.w);
                 // The closest physical edge dominates. Corner colors blend smoothly.
                 float weight=36.0;
-                float sl=exp(-pow(dl/weight,2.0)*1.35);
-                float sr=exp(-pow(dr/weight,2.0)*1.35);
-                float st=exp(-pow(dt/weight,2.0)*1.35);
-                float sb=exp(-pow(db/weight,2.0)*1.35);
-                // At camera cutouts all distances can be large, so normalize by
-                // the nearest side before exponentiation to prevent underflow.
+                // Normalize by the nearest side so camera rings work even
+                // when they sit far inside the screen's global bounds.
                 float nearest=min(min(dl,dr),min(dt,db));
-                sl=exp(-max(dl-nearest,0.0)/weight);
-                sr=exp(-max(dr-nearest,0.0)/weight);
-                st=exp(-max(dt-nearest,0.0)/weight);
-                sb=exp(-max(db-nearest,0.0)/weight);
+                float sl=exp(-max(dl-nearest,0.0)/weight);
+                float sr=exp(-max(dr-nearest,0.0)/weight);
+                float st=exp(-max(dt-nearest,0.0)/weight);
+                float sb=exp(-max(db-nearest,0.0)/weight);
                 float3 t=interpolateZones(top0,top1,top2,top3,x);
                 float3 r=interpolateZones(right0,right1,right2,right3,y);
                 float3 b=interpolateZones(bottom0,bottom1,bottom2,bottom3,1.0-x);
