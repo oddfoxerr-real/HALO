@@ -38,7 +38,10 @@ internal class ShaderEdgeEngine {
         primary: Int, secondary: Int, attack: Float, compact: Boolean = false,
         video: VideoEdgeColors? = null, videoFrame: RectF? = null,
         ambientMotion: Boolean = false, videoStyle: VideoLightStyle = VideoLightStyle.SELECTED,
-        videoWidthPx: Float = 30f, videoIntensity: Float = .58f): Boolean {
+        videoWidthPx: Float = 30f, videoIntensity: Float = .58f,
+        dynamicLow: Float = 0f, dynamicMid: Float = 0f,
+        dynamicHigh: Float = 0f, dynamicHit: Float = 0f,
+        dynamicForce: Float = 2.4f): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -60,6 +63,10 @@ internal class ShaderEdgeEngine {
             runtime.setIntUniform("videoStyle", videoStyle.ordinal)
             runtime.setFloatUniform("videoWidth", videoWidthPx.coerceIn(4f, 140f))
             runtime.setFloatUniform("videoIntensity", videoIntensity.coerceIn(.12f, 1f))
+            runtime.setFloatUniform("musicDynamics",
+                dynamicLow.coerceIn(0f, 1f), dynamicMid.coerceIn(0f, 1f),
+                dynamicHigh.coerceIn(0f, 1f), dynamicHit.coerceIn(0f, 1.5f))
+            runtime.setFloatUniform("dynamicForce", dynamicForce.coerceIn(.6f, 3.5f))
             if (video != null) {
                 val sampledFrame = videoFrame ?: bounds
                 runtime.setFloatUniform("videoFrame",
@@ -122,6 +129,8 @@ internal class ShaderEdgeEngine {
             uniform int design;
             uniform float compact;
             uniform float ambientMotion;
+            uniform float4 musicDynamics;
+            uniform float dynamicForce;
             // Capture replaces ONLY the colors. Shape, particles, fluid movement, glow
             // and timing remain controlled by the selected animation.
             uniform int videoMode;
@@ -351,10 +360,17 @@ internal class ShaderEdgeEngine {
             
                 float lengthPx=1.0;
                 float u=edgeParameter(px,lengthPx);
+                // Each frequency region changes a different part of the material.
+                // These levels are fed by FFT and spectral flux, never a timer.
+                float low=clamp(musicDynamics.x*dynamicForce*.9,0.0,2.2);
+                float mids=clamp(musicDynamics.y*dynamicForce*.9,0.0,2.2);
+                float highs=clamp(musicDynamics.z*dynamicForce*.9,0.0,2.2);
+                float impact=clamp(musicDynamics.w*dynamicForce,0.0,2.5);
                 float energy=clamp(harmonic(u),0.0,1.0);
-                float kick=clamp(bass+attack*.6,0.0,1.5);
-                float time=seconds*.85 + phase*.25;
-                float volume=(.32+.85*energy+.95*kick)*max(spread,.25);
+                float kick=clamp(bass+attack*.55+impact*.65,0.0,2.4);
+                float time=seconds*.85+phase*.25;
+                float volume=clamp((.18+.62*energy+.56*low+.41*mids+
+                    .26*highs+.58*impact)*max(spread,.25),.12,3.2);
                 float core=0.0, aura=0.0, sparkle=0.0;
                 float travel=time*.45;
                 float local=0.0;
@@ -517,10 +533,13 @@ internal class ShaderEdgeEngine {
                     float vy=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
                     float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
                     float sideMask=smoothstep(.03,.12,vy)*(1.0-smoothstep(.88,.97,vy));
-                    float turbulence=noise3(float3(vy*13.0,dx*.025,time*.58));
-                    float detail=noise3(float3(vy*38.0+7.0,dx*.065,time*.93));
-                    float reach=(15.0+39.0*clamp(.52+.33*turbulence+.18*detail,0.0,1.0)
-                        +32.0*energy+15.0*kick)*thicknessPx*max(spread,.4);
+                    float turbulence=noise3(float3(vy*13.0,dx*.025,time*.58+
+                        impact*.16));
+                    float detail=noise3(float3(vy*38.0+7.0,dx*.065,time*.93+
+                        highs*.22));
+                    float reach=(9.0+27.0*clamp(.52+.33*turbulence+.18*detail,0.0,1.0)
+                        +20.0*energy+16.0*low+13.0*mids+18.0*impact)
+                        *thicknessPx*max(spread,.4);
                     float tongue=1.0-smoothstep(reach*.48,max(reach,1.0),dx);
                     float filament=gaussian(dx-(reach*.34+detail*8.0*thicknessPx),6.0*thicknessPx);
                     core=(tongue*.83+filament*.35)*sideMask;
@@ -532,7 +551,8 @@ internal class ShaderEdgeEngine {
                     float row=fract(vy*62.0)-.5;
                     float audioEnergy=harmonic(fract(vy*.91+.045));
                     float oscillation=.5+.5*sin(time*2.8+vy*22.0);
-                    float barLength=(5.0+60.0*(.15+.61*audioEnergy+.22*kick+.12*oscillation))
+                    float barLength=(4.0+64.0*(.06+.68*audioEnergy+.08*oscillation+
+                        .23*low+.20*mids+.09*highs+.34*impact))
                         *thicknessPx*max(spread,.35);
                     float square=1.0-smoothstep(barLength-2.0*thicknessPx,barLength+1.0*thicknessPx,dx);
                     float mask=1.0-smoothstep(.28,.48,abs(row));
@@ -547,8 +567,10 @@ internal class ShaderEdgeEngine {
                     float dy=min(abs(px.y-frame.y),abs(px.y-frame.w));
                     float sx=sin(TAU*xf*5.0+time*.8);
                     float sy=sin(TAU*yf*4.0-time*.7);
-                    float horizontal=gaussian(dy-(5.0+sx*12.0*(.5+energy))*thicknessPx,4.0*thicknessPx);
-                    float vertical=gaussian(dx-(5.0+sy*12.0*(.5+energy))*thicknessPx,4.0*thicknessPx);
+                    float horizontal=gaussian(dy-(4.0+sx*(6.0+16.0*low+9.0*mids+
+                        7.0*impact)*(.3+energy))*thicknessPx,4.0*thicknessPx);
+                    float vertical=gaussian(dx-(4.0+sy*(6.0+15.0*mids+8.0*highs+
+                        7.0*impact)*(.3+energy))*thicknessPx,4.0*thicknessPx);
                     core=max(horizontal,vertical)*(.65+.3*energy);
                     aura=gaussian(dy,22.0*thicknessPx)*.18
                         +gaussian(dx,22.0*thicknessPx)*.18;
@@ -558,7 +580,7 @@ internal class ShaderEdgeEngine {
                     float2 c=px-frame.zw, e=px-float2(frame.x,frame.w);
                     float distance=min(min(length(a),length(b)),min(length(c),length(e)));
                     float pulseRing=17.0*thicknessPx+
-                        (5.0+9.0*kick)*thicknessPx*sin(time*1.7);
+                        (3.0+13.0*low+9.0*impact)*thicknessPx*sin(time*1.7);
                     core=gaussian(distance-pulseRing,7.0*thicknessPx)
                         +gaussian(distance,14.0*thicknessPx)*.45;
                     aura=gaussian(distance,52.0*thicknessPx)*(.34+.38*energy);
@@ -570,20 +592,29 @@ internal class ShaderEdgeEngine {
             
                 // Fix v0.13's hard angular gradient jumps: colors use physical perimeter
                 // distance with cosine interpolation, periodic at exactly u=0 and u=1.
-                float chroma=.5-.5*cos(TAU*(u-time*.035));
+                float chroma=.5-.5*cos(TAU*(u-time*.035+
+                    .045*mids-.035*highs));
                 float3 base=mix(first,second,chroma);
                 if(videoMode==1) base=sampledScreenColor(px);
-                float whiteSpark=clamp(sparkle*(.48+.45*energy+.4*kick),0.0,.85);
+                float whiteSpark=clamp(sparkle*
+                    (.12+.46*highs+.28*impact+.17*energy),0.0,.62);
                 float3 rgb=videoMode==1 ? base : mix(base,float3(1.0),whiteSpark);
                 // Glow is an integral part of the material instead of a second Canvas layer.
                 // A pronounced attack response, not an always-bright idle loop.
                 float transient=clamp(attack,0.0,1.5);
-                float musicalGain=clamp(.22+.58*energy+.50*kick+.48*transient,.18,1.4);
+                float musicalGain=clamp(.12+.42*energy+.34*low+.43*mids+
+                    .25*highs+.60*impact+.28*transient,.10,1.7);
                 // In Video Mode the motion is scene-driven, not muted by absence of
                 // Android audio capture. Keep the selected material animated.
                 if(videoMode==1) musicalGain=max(.66,musicalGain);
                 if(ambientMotion>0.5) musicalGain=max(.72,musicalGain);
-                float a=clamp((core*.77 + aura*(.10+.35*glow)+whiteSpark*.28)
+                // More reactive geometry, but without filling unrelated screen
+                // pixels. Dynamics control the existing material, not random FX.
+                float coreResponse=clamp(.65+.23*low+.30*mids+.17*highs+
+                    .40*impact,.45,2.1);
+                float auraResponse=clamp(.45+.25*low+.10*mids+.15*impact,.35,1.55);
+                float a=clamp((core*.77*coreResponse +
+                    aura*(.10+.35*glow)*auraResponse+whiteSpark*.28)
                     *brightness*musicalGain,0.0,.96);
                 float edgeFade= (design>=20 && design<=23) ? 160.0 : 92.0;
                 a*=1.0-smoothstep(40.0*max(spread,.3),edgeFade*max(spread,.3),abs(d));
