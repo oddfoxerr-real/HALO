@@ -54,6 +54,12 @@ class ChainsawView(context: Context) : View(context) {
     var drawBottom = true
     var drawLeft = true
     var drawRight = true
+    var keepAmbientMotion = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) requestFrame() else invalidate()
+        }
     private var speed = 1f
     private var beatIntensity = 1.5f
     private var shaderSeconds = 0f
@@ -205,7 +211,8 @@ class ChainsawView(context: Context) : View(context) {
             density * thickness, spread, glow, brightness,
             edgeColor, accentColor,
             (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
-            compact = true, video = videoColors, videoFrame = bounds
+            compact = true, video = videoColors, videoFrame = bounds,
+            ambientMotion = keepAmbientMotion
         ) == true
         gpuDidRender = gpuDidRender || rendered
         canvas.restore()
@@ -259,7 +266,7 @@ class ChainsawView(context: Context) : View(context) {
                 mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
                 density * thickness, spread, glow, brightness, edgeColor, accentColor,
                 (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
-                video = videoColors
+                video = videoColors, ambientMotion = keepAmbientMotion
             ) == true
             canvas.restore()
         } else {
@@ -269,6 +276,6 @@ class ChainsawView(context: Context) : View(context) {
         drawCameraEffect(canvas)
         // Static video frames still animate the user's selected material; color
         // sampling frequency never controls the GPU animation frame rate.
-        if (moving || noticePlaying || videoColors != null) requestFrame()
+        if (moving || noticePlaying || videoColors != null || keepAmbientMotion) requestFrame()
     }
 }
