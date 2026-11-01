@@ -4,9 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class AnimationCatalogueTest {
-    @Test fun onlyUserApprovedElectricArcsIsSelectable() {
-        assertEquals(listOf(EdgeMode.ELECTRIC_ARCS), EdgeMode.entries)
-        assertEquals("Electric Arcs", EdgeMode.entries.single().title)
+    @Test fun savedDesignsRoundTripWithoutFallingBackToElectric() {
+        for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
+        assertEquals(EdgeMode.entries.size, EdgeMode.entries.map { it.shaderId }.toSet().size)
+        assertEquals(0, EdgeMode.ELECTRIC_ARCS.shaderId)
     }
 
     @Test fun previousMusicPresetNamesAllMigrateToApprovedShader() {

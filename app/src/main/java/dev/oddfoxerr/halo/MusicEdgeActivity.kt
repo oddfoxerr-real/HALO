@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationManagerCompat
@@ -85,7 +86,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     val latest by rememberUpdatedState(settings)
     val runtime by MusicRuntime.state.collectAsState()
     var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
-    var demo by remember { mutableStateOf(false) }
+    var demo by remember { mutableStateOf(true) }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var revision by remember { mutableIntStateOf(0) }
     var feedback by remember { mutableStateOf<String?>(null) }
@@ -214,14 +215,16 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         when (panel) {
             MusicPanel.DESIGNS -> {
-                Text("Electric Arcs", style = MaterialTheme.typography.titleMedium)
-                Text("Restored original electric effect. The other experimental designs have been retired, not renamed. Test the real moving effect in the live phone preview above.",
+                Text("Edge animations", style = MaterialTheme.typography.titleMedium)
+                Text("Choose a design to see it move. The three minimal styles keep their light close to the edge.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                DesignTile(EdgeMode.ELECTRIC_ARCS, true, settings.color, settings.accent,
-                    Modifier.fillMaxWidth()) {
-                    save(settings.copy(mode = EdgeMode.ELECTRIC_ARCS))
-                    demo = true
+                EdgeMode.entries.forEach { design ->
+                    DesignTile(design, settings.mode == design, settings.color, settings.accent,
+                        Modifier.fillMaxWidth()) {
+                        save(settings.copy(mode = design))
+                        demo = true
+                    }
                 }
                 Text("Color Studio", style = MaterialTheme.typography.titleMedium)
                 Text("Pick any two colors with precise hue, saturation, brightness and HEX editing, or apply a ready-made gradient.",
@@ -255,7 +258,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 MusicSlider("Dynamic force", settings.dynamicForce, .6f..3.5f, "×") {
                     save(settings.copy(dynamicForce = it))
                 }
-                Text("Bass changes impact and expansion. Mids reshape the material. High notes sharpen detail. Motion accelerates on real spectral changes, without adding random flashes.",
+                Text("Bass controls reach and impact. Mids lift the light, and high notes sharpen detail. Minimal designs grow along the edge as you increase the force.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") {
@@ -359,33 +362,34 @@ private fun DesignTile(
     mode: EdgeMode, selected: Boolean, first: Int, second: Int,
     modifier: Modifier, choose: () -> Unit
 ) {
-    val group = "CLASSIC ELECTRIC LIGHT"
     Card(
         onClick = choose,
         modifier = modifier.semantics {
-            contentDescription = "${mode.title} GPU animation${if (selected) ", selected" else ""}"
+            this.selected = selected
+            contentDescription = "${mode.title}. ${mode.description}"
         },
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer
                 else MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Box(Modifier.fillMaxWidth().height(68.dp)
-                .background(
-                    Brush.linearGradient(listOf(
-                        Color(first).copy(alpha = .75f),
-                        Color(second).copy(alpha = .78f),
-                        Color(first).copy(alpha = .24f))),
-                    RoundedCornerShape(14.dp)
-                ).padding(9.dp),
-                contentAlignment = Alignment.BottomStart) {
-                Text(if (selected) "LIVE PREVIEW" else group,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall)
+        Row(Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            AndroidView(
+                factory = { EdgeDesignPreview(it) },
+                update = { it.configure(mode, first, second) },
+                modifier = Modifier.width(52.dp).height(92.dp)
+                    .background(Color.Black, RoundedCornerShape(12.dp))
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(mode.title, style = MaterialTheme.typography.titleSmall)
+                Text(mode.description, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (selected) "Selected" else "Tap to preview",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary)
             }
-            Text(mode.title, style = MaterialTheme.typography.titleSmall)
         }
     }
 }

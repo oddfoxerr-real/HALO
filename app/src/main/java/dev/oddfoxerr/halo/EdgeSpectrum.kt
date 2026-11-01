@@ -5,8 +5,11 @@ import kotlin.math.sqrt
 
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
 /** GPU-only designs. No legacy line/Canvas animation modes remain selectable. */
-enum class EdgeMode(val title: String) {
-    ELECTRIC_ARCS("Electric Arcs")
+enum class EdgeMode(val title: String, val shaderId: Int, val description: String) {
+    ELECTRIC_ARCS("Electric Arcs", 0, "Broken electric filaments with sharp, energetic movement."),
+    TWIN_PULSE("Twin Pulse", 1, "Two slim side lights stretch from the centre with the bass."),
+    LIGHT_BEADS("Light Beads", 2, "Evenly spaced points of light with a soft, musical shimmer."),
+    CORNER_TRACE("Corner Trace", 3, "Four rounded corner accents extend and settle with each beat.")
 }
 
 enum class NotificationEdgeMode(val title: String) {
@@ -42,11 +45,9 @@ object EdgeSpectrum {
     fun bass(bands: FloatArray): Float =
         if (bands.size < 4) 0f else (bands[0] + bands[1] + bands[2] + bands[3]) / 4f
 
-    /**
-     * Keep existing music installations valid. Unapproved experimental modes
-     * resolve to the one design already positively evaluated on a real phone.
-     */
-    fun mode(value: String?): EdgeMode = EdgeMode.ELECTRIC_ARCS
+    /** New choices round-trip by name; retired presets retain the v0.18.1 migration. */
+    fun mode(value: String?): EdgeMode =
+        EdgeMode.entries.firstOrNull { it.name == value } ?: EdgeMode.ELECTRIC_ARCS
 
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
