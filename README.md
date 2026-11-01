@@ -1,5 +1,39 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.15.0 — Video Ambilight + Beat Sync
+
+**Video Mode:** Select **Music → Video → Start video lighting**. HALO explicitly
+requests Android screen-sharing consent, then analyzes a small, downsampled
+RGBA frame in memory up to 30 times per second. A 16-zone sampler divides each edge into four independent color regions and averages
+the content near the top, right, bottom and left of the picture. A dedicated
+transparent AGSL video shader lights those edges using the *actual colors of the
+current scene*, with fast adjustable smoothing on scene cuts. It does not
+use album art, music FFT, or random color cycling for video lighting.
+
+The foreground service can be stopped from HALO, the system foreground
+notification or Android's screen-sharing chip. One consent approval is required
+for each new capture session on Android 14+. Choose **Entire screen** on the
+system consent dialog for full-display matching. Secure/DRM-protected players
+may provide a black or blank image; HALO does not bypass content protection.
+No screen images or frames are saved, uploaded, streamed or recorded.
+Screen capture stops when the system revokes consent or locks the screen
+where the platform enforces it.
+
+**Music beat improvements:** Existing animations now use eight actual
+spectrum groups rather than four and an independent beat-transient shader
+input. The shader's motion clock is multiplied by the Motion Speed setting,
+and Beat Impact is exposed separately from Beat Sensitivity. Capture cadence
+is increased when supported by the Android Visualizer backend, and the Studio
+displays real signal and bass meters. If a player blocks audio analysis,
+the app reports it instead of pretending to track the beat. Video Mode never
+requires microphone access; Music Mode still uses Android audio permissions.
+
+**Verification:** JVM color-sampling tests, normal Android build/lint and
+an Android emulator test covering both GPU shaders. On-device video-frame
+accuracy, overlay geometry, performance, Samsung capture policy, and the
+visually perceived bass synchronization remain subject to device testing.
+
+
 ## v0.14.0 — GPU-only animation studio
 
 The previous 15-style Canvas/AGSL mixed animation catalogue and legacy Canvas

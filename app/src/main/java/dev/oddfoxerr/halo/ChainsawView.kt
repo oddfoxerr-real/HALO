@@ -52,6 +52,14 @@ class ChainsawView(context: Context) : View(context) {
     var drawLeft = true
     var drawRight = true
     private var speed = 1f
+    private var beatIntensity = 1.5f
+    private var shaderSeconds = 0f
+    private var videoColors: VideoEdgeColors? = null
+
+    fun setVideoColors(colors: VideoEdgeColors) {
+        videoColors = colors
+        invalidate()
+    }
 
     private val density = resources.displayMetrics.density
     private val bounds = RectF()
@@ -79,6 +87,7 @@ class ChainsawView(context: Context) : View(context) {
         brightness = settings.brightness
         spread = settings.spread
         speed = settings.speed
+        beatIntensity = settings.beatIntensity
         cornerRadius = settings.corner
         leftInset = settings.leftInset
         rightInset = settings.rightInset
@@ -172,6 +181,7 @@ class ChainsawView(context: Context) : View(context) {
         }
 
         val moving = motion.advance(now, dt, speed)
+        shaderSeconds = (shaderSeconds + dt * speed).rem(3600f)
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (geometryKey != key) {
             geometryKey = key
@@ -194,18 +204,26 @@ class ChainsawView(context: Context) : View(context) {
             (drawTop || drawBottom || drawLeft || drawRight)) {
             canvas.save()
             canvas.clipPath(sides)
-            gpuDidRender = shaderEngine?.render(
-                canvas, width, height, bounds,
-                min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
-                mode, motion.bands, motion.pulse, motion.phase, now / 1000f,
-                density * thickness, spread, glow, brightness, edgeColor, accentColor
-            ) == true
+            val video = videoColors
+            gpuDidRender = if (video != null) {
+                shaderEngine?.renderVideo(canvas, width, height, bounds, video,
+                    density * thickness, spread, glow, brightness) == true
+            } else {
+                shaderEngine?.render(
+                    canvas, width, height, bounds,
+                    min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
+                    mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
+                    density * thickness, spread, glow, brightness, edgeColor, accentColor,
+                    (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f)
+                ) == true
+            }
             canvas.restore()
         } else {
             gpuDidRender = false
         }
 
-        notchRenderer.draw(canvas, this, notchSettings, edgeColor, accentColor,
+        notchRenderer.draw(canvas, this, notchSettings, videoColors?.top ?: edgeColor,
+            videoColors?.right ?: accentColor,
             brightness, glow, (motion.pulse + (motion.bands.maxOrNull() ?: 0f) * .35f).coerceIn(0f, 1f),
             motion.phase)
         if (moving || noticePlaying) requestFrame()

@@ -24,7 +24,7 @@ object NotificationEdgeOverlay {
     val isAnimating: Boolean get() = !persistent && view?.isNotificationPlaying == true
 
     fun show(context: Context, color: Long, duration: Long, keepUntilDismissed: Boolean, store: ProfileStore) {
-        if (!Settings.canDrawOverlays(context)) return
+        if (!Settings.canDrawOverlays(context) || VideoAmbilightService.isRunning) return
         val drawing = ensure(context) ?: return
         generation++
         val current = generation
@@ -39,6 +39,7 @@ object NotificationEdgeOverlay {
     }
 
     fun showStatic(context: Context, color: Long, store: ProfileStore) {
+        if (VideoAmbilightService.isRunning) return
         if (isVisible) return
         val drawing = ensure(context) ?: return
         generation++

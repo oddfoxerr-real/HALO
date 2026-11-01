@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -14,6 +15,7 @@
     <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
         <activity android:name=".MusicEdgeActivity" android:exported="false" />
         <service android:name=".MusicEdgeService" android:exported="false" android:foregroundServiceType="microphone" />
+        <service android:name=".VideoAmbilightService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <activity android:name=".PillPreviewActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
