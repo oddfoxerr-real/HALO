@@ -134,7 +134,7 @@ class VideoAmbilightService : Service() {
             @Suppress("DEPRECATION")
             display.getRealMetrics(dm)
             densityDpi = dm.densityDpi
-            val divisor = if (isPainted) 4 else 6
+            val divisor = if (isPainted) 3 else 6
             width = (dm.widthPixels / divisor).coerceAtLeast(96)
             height = (dm.heightPixels / divisor).coerceAtLeast(96)
             // Do not put the painter over the permission chooser or the first
@@ -232,7 +232,7 @@ class VideoAmbilightService : Service() {
             val image = try { source.acquireLatestImage() } catch (_: IllegalStateException) { null }
             if (image != null) try {
                 val now = SystemClock.uptimeMillis()
-                if (now - lastSampleAt >= (if (isPainted) 75L else 33L) && !stopping) {
+                if (now - lastSampleAt >= (if (isPainted) 50L else 33L) && !stopping) {
                     lastSampleAt = now
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
@@ -298,7 +298,7 @@ class VideoAmbilightService : Service() {
 
     private fun resize(fullWidth: Int, fullHeight: Int) {
         if (stopping || virtualDisplay == null || fullWidth < 16 || fullHeight < 16) return
-        val divisor = if (isPainted) 4 else 6
+        val divisor = if (isPainted) 3 else 6
         val newWidth = (fullWidth / divisor).coerceAtLeast(96)
         val newHeight = (fullHeight / divisor).coerceAtLeast(96)
         if (newWidth == width && newHeight == height) return
