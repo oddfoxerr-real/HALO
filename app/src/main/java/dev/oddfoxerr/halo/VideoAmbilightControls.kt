@@ -44,7 +44,7 @@ fun VideoAmbilightControls() {
     }
 
     Text("Video Ambilight", style = MaterialTheme.typography.titleLarge)
-    Text("Like television bias lighting: sample the actual screen image and illuminate each edge with the colors nearest that side. No audio, screenshots, or video files are stored.",
+    Text("Your selected HALO animation keeps moving while each edge and camera effect adopts the colors of the corresponding video area. The scene changes the colors, not the animation. No audio, screenshots, or video files are stored.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
 
     Text(status, color = if (VideoAmbilightService.isRunning) MaterialTheme.colorScheme.primary
@@ -72,12 +72,12 @@ fun VideoAmbilightControls() {
         response = it
         preferences.edit().putFloat("response", it).apply()
     }, valueRange = .12f..1f)
-    Text("Faster response follows cuts immediately. Lower values produce smoother transitions between shots.",
+    Text("Higher values follow scene colors faster. Lower values soften color changes while the selected animation continues at its own speed.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 
     HorizontalDivider()
     Text("How to use", style = MaterialTheme.typography.titleSmall)
-    Text("1. Tap Start, approve Android screen sharing, and select Entire screen when offered.\n2. Switch to YouTube or your video app. HALO colors the left, right, top and bottom edges independently.\n3. Stop from this panel, the HALO foreground notification, or Android's screen-sharing chip.",
+    Text("1. Choose any effect under Designs and tune its animation speed.\n2. Tap Start, approve screen sharing and select Entire screen.\n3. Switch to your video app. The chosen animation continues with 16 live scene-color zones.\n4. Stop from HALO, its notification or the system screen-sharing chip.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     Text("Protected video streams and secure screens can appear black in screen capture. HALO respects those restrictions. Screensharing stops when Android revokes the session, including device lock on supported Android versions.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
