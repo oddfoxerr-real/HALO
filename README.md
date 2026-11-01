@@ -1,5 +1,13 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.2 — Impasto palette-knife painting (reference-inspired)
+
+Misc Lab now renders a full-coverage impressionist oil painting rather than sparse semi-transparent strokes. Each live screen frame becomes broad, irregular, overlapping pigment patches with mark direction guided by object boundaries. Raised paint ridges, directional grazing light and tiny surface grooves evoke the heavy palette-knife paint shown in the user's visual references. The current Oil / Impasto mode defaults to high coverage. Brush size and Paint thickness / ridges sliders control the look independently from Music and Video Ambilight.
+
+This is a shader-based visual approximation of physical oil paint, not a Blender 3D brush simulation. Fine text becomes less legible at larger brush sizes. Captured frames are ephemeral in memory; protected surfaces and Android/Samsung capture limits still apply. The overlay never handles touch input, and Android screen-sharing consent remains mandatory.
+
+
+
 ## v0.20.1 — Stable full-screen painted brush strokes
 
 The Misc Lab painter now generates oriented, visible procedural brush marks from source-image gradients. It draws pigment as transparent strokes over the live app rather than pasting a full opaque screenshot. Full-display capture is requested on Android 14+, initial overlay creation waits for a valid frame, and black/protected captures clear stale visuals. If Samsung blocks the secure overlay from the capture source, the session stops without an endless flicker loop. Existing music/notification and cinematic video effects are unchanged. The result still requires a Galaxy A56 device review.

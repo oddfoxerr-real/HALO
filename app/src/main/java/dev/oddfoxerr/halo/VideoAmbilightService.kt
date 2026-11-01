@@ -188,7 +188,9 @@ class VideoAmbilightService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            alpha = .78f
+            // The oil painter is a fully opaque image: the former 0.78 window
+            // alpha washed away brush ridges by exposing the original below.
+            alpha = if (isPainted) 1f else .78f
             // Exclude the painter's overlay from its own MediaProjection feed.
             // Otherwise each frame would paint the previous painted frame again.
             if (isPainted) flags = flags or WindowManager.LayoutParams.FLAG_SECURE

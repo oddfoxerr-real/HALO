@@ -69,8 +69,9 @@ class PaintedScreenGpuTest {
             })
             shader.setInputShader("screen", input)
             shader.setFloatUniform("resolution", width.toFloat(), height.toFloat())
-            shader.setFloatUniform("brush", 5f)
-            shader.setFloatUniform("strength", .85f)
+            shader.setFloatUniform("brush", 48f)
+            shader.setFloatUniform("strength", 1f)
+            shader.setFloatUniform("relief", 1f)
             val paint = Paint().apply { this.shader = shader }
             for (style in PaintedStyle.entries) {
                 shader.setIntUniform("style", style.ordinal)
@@ -95,7 +96,22 @@ class PaintedScreenGpuTest {
                         val software = checkNotNull(bitmap.copy(Bitmap.Config.ARGB_8888, false))
                         try {
                             val color = software.getPixel(width / 2, height / 2)
-                            assertTrue("Painter shader rendered a transparent frame", Color.alpha(color) > 0)
+                            assertEquals("Impasto must cover the complete picture", 255, Color.alpha(color))
+                            // A constant-colour source must still show physical
+                            // pigment ridges, rather than returning a flat tint.
+                            var darkest = 255
+                            var lightest = 0
+                            for (sy in 12 until height - 12 step 13) {
+                                for (sx in 12 until width - 12 step 13) {
+                                    val px = software.getPixel(sx, sy)
+                                    assertEquals("Full-screen oil paint has holes", 255, Color.alpha(px))
+                                    val luminance = (Color.red(px) + Color.green(px) + Color.blue(px)) / 3
+                                    darkest = kotlin.math.min(darkest, luminance)
+                                    lightest = kotlin.math.max(lightest, luminance)
+                                }
+                            }
+                            assertTrue("Painted surface lacks discernible ridge lighting",
+                                lightest - darkest >= 5)
                         } finally {
                             software.recycle()
                         }
