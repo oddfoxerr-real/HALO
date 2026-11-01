@@ -65,6 +65,7 @@ class MusicEdgeService : Service() {
     private var yieldUntil = 0L
     private var yielding = false
     private var receiverRegistered = false
+    private var lastPlayingObservedAt = 0L // worker-owned: grace for transient session changes
     private var failed = false
     private val power by lazy { getSystemService(PowerManager::class.java) }
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
@@ -103,8 +104,15 @@ class MusicEdgeService : Service() {
                         MediaArtworkColor.paletteFromMetadata(controller.metadata, settings.color, settings.accent)
                     else null
                     info = MediaInfo(controller.packageName, label, palette?.primary, palette?.accent, true)
+                    lastPlayingObservedAt = SystemClock.elapsedRealtime()
                 }
             } catch (_: RuntimeException) { }
+            val previous = media.get()
+            if (info.pkg == null && permitted && previous.pkg != null &&
+                (settings.allowedSources.isEmpty() || previous.pkg in settings.allowedSources) &&
+                SystemClock.elapsedRealtime() - lastPlayingObservedAt < 2500L) {
+                info = previous
+            }
             media.set(info)
             worker.postDelayed(this, 1000L)
         }
@@ -152,9 +160,11 @@ class MusicEdgeService : Service() {
                 lastAudible != 0L && now - lastAudible < 900L)
             // Android can withhold output-mix FFT while CYN or another effect is active.
             // Do NOT hide the whole edge overlay during valid media playback.
-            val mediaFallback = awake && !quiet && sessionAllowed && info.pkg != null
+            val mediaFallback = awake && !quiet && sessionAllowed &&
+                (info.pkg != null || (!settings.onlyPlaying && settings.allowedSources.isEmpty()))
+            val noCapture = captureUnavailable || lastCapture == 0L || now - lastCapture > 1100L
             view?.apply {
-                keepAmbientMotion = mediaFallback
+                keepAmbientMotion = mediaFallback && noCapture
                 if (!showingInMusicWindow) {
                     edgeColor = info.color ?: settings.color
                     accentColor = info.accent ?: settings.accent
@@ -164,7 +174,7 @@ class MusicEdgeService : Service() {
             }
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
-                else if (mediaFallback && (captureUnavailable || now - lastCapture > 2200L))
+                else if (mediaFallback && noCapture)
                     "CYN-compatible playback lighting · beat capture unavailable, retrying"
                 else if (mediaFallback && now - lastAudible > 2200L)
                     "Playback detected · waiting for usable audio signal"
