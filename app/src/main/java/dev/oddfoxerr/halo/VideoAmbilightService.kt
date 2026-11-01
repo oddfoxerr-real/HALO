@@ -183,7 +183,7 @@ class VideoAmbilightService : Service() {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader!!.surface, null, worker
         )
-        statusValue.value = "Analyzing visible screen colors"
+        statusValue.value = "Selected animation running with video colors"
     }
 
     private fun createReader() {
@@ -207,7 +207,7 @@ class VideoAmbilightService : Service() {
                         if (framesSeen == 15 && VideoColorSampler.isDark(current))
                             statusValue.value = "Captured picture is dark; protected videos may be unavailable"
                         else if (framesSeen > 0 && framesSeen % 40 == 0 && !VideoColorSampler.isDark(current))
-                            statusValue.value = "Matching colors to the current scene"
+                            statusValue.value = "Selected animation matching live scene colors"
                     }
                 }
             } finally { image.close() }
