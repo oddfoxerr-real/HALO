@@ -1,36 +1,27 @@
 package dev.oddfoxerr.halo
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnimationCatalogueTest {
-    @Test fun onlyFourCuratedMaterialsRemain() {
-        assertEquals(listOf(
-            EdgeMode.ELECTRIC_ARCS,
-            EdgeMode.MIRROR_RAIN,
-            EdgeMode.FLAT_WAVES,
-            EdgeMode.SIDE_SPECTRUM
-        ), EdgeMode.entries)
-        assertEquals(4, EdgeMode.entries.map { it.title }.distinct().size)
-        for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
+    @Test fun onlyUserApprovedElectricArcsIsSelectable() {
+        assertEquals(listOf(EdgeMode.ELECTRIC_ARCS), EdgeMode.entries)
+        assertEquals("Electric Arcs", EdgeMode.entries.single().title)
     }
 
-    @Test fun previousSettingsMigrateToARealCurrentShader() {
-        val old = listOf(
+    @Test fun previousMusicPresetNamesAllMigrateToApprovedShader() {
+        val previousNames = listOf(
             "DOTS", "CONSTELLATION", "FIREFLIES", "METEOR", "LIQUID",
             "AURORA", "PRISM", "RIBBON", "BLOOM", "NEON", "PIXEL",
             "HALO", "SHOCKWAVE", "PLASMA", "SPARKLINE", "CRYSTAL",
             "TIDAL", "EMBER", "RADIANCE", "ORBITAL", "SIDE_FLAMES",
-            "FLAT_BARS", "STANDING_WAVES", "CORNER_AURA"
+            "FLAT_BARS", "STANDING_WAVES", "CORNER_AURA",
+            "MIRROR_RAIN", "FLAT_WAVES", "SIDE_SPECTRUM",
+            "ELECTRIC_ARCS", "WAVE", "BARS", "RAIN"
         )
-        for (name in old) {
-            assertTrue("Old mode $name must map to one of four shaders",
-                EdgeSpectrum.mode(name) in EdgeMode.entries)
+        for (name in previousNames) {
+            assertEquals("Migration for $name", EdgeMode.ELECTRIC_ARCS, EdgeSpectrum.mode(name))
         }
-        assertEquals(EdgeMode.ELECTRIC_ARCS, EdgeSpectrum.mode("SPARKLINE"))
-        assertEquals(EdgeMode.FLAT_WAVES, EdgeSpectrum.mode("AURORA"))
-        assertEquals(EdgeMode.SIDE_SPECTRUM, EdgeSpectrum.mode("BARS"))
         assertEquals(EdgeMode.ELECTRIC_ARCS, EdgeSpectrum.mode(null))
         assertEquals(EdgeMode.ELECTRIC_ARCS, EdgeSpectrum.mode("unknown"))
     }
