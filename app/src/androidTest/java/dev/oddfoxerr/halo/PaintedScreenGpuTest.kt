@@ -79,7 +79,13 @@ class PaintedScreenGpuTest {
             node.endRecording()
             renderer.setContentRoot(node)
             renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
-            val frame = checkNotNull(reader.acquireLatestImage()) { "No GPU painted frame" }
+            var received = reader.acquireLatestImage()
+            val until = android.os.SystemClock.uptimeMillis() + 2000L
+            while (received == null && android.os.SystemClock.uptimeMillis() < until) {
+                android.os.SystemClock.sleep(10L)
+                received = reader.acquireLatestImage()
+            }
+            val frame = checkNotNull(received) { "No GPU painted frame" }
             frame.use {
                 val buffer = checkNotNull(it.hardwareBuffer)
                 buffer.use { surface ->
