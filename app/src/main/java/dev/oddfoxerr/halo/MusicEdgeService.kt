@@ -30,6 +30,7 @@ class MusicEdgeService : Service() {
         private var current: MusicEdgeService? = null
         /** Play the notification in the SAME music overlay window when music is active. */
         fun showNotification(color: Int, duration: Long): Boolean {
+            if (VideoAmbilightService.isRunning) return false
             val service = current ?: return false
             val drawing = service.view ?: return false
             val validDuration = duration.coerceIn(800L, 10_000L)
@@ -168,6 +169,11 @@ class MusicEdgeService : Service() {
         if (intent?.action == ACTION_REFRESH && isRunning) { refresh(); return START_NOT_STICKY }
         if (intent?.action != ACTION_START) { stopSelf(); return START_NOT_STICKY }
         if (isRunning) { refresh(); return START_NOT_STICKY }
+        if (VideoAmbilightService.isRunning) {
+            MusicRuntime.publish(false, "Stop Video Ambilight before starting music lighting")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED || !Settings.canDrawOverlays(this)) {
             fail("Audio and overlay permission are required"); return START_NOT_STICKY
         }
