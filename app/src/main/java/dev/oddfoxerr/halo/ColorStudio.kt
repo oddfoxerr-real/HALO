@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 private val HUE_STOPS = listOf(
     0xFFFF4B4B, 0xFFFFCF45, 0xFF62E67B, 0xFF46D7EE,
     0xFF4877FF, 0xFFC45DFF, 0xFFFF4B4B
-).map(::Color)
+).map { Color(it) }
 
 private val SWATCHES = listOf(
     0xFFFFFFFF, 0xFFFF5B5B, 0xFFFF944B, 0xFFFFDA57,
