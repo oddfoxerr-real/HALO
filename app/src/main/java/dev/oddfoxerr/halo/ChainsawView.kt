@@ -64,15 +64,24 @@ class ChainsawView(context: Context) : View(context) {
     private var beatIntensity = 1.5f
     private var shaderSeconds = 0f
     private var videoColors: VideoEdgeColors? = null
+    private var videoLighting = VideoLightingPreferences()
 
-    fun setVideoColors(colors: VideoEdgeColors) {
-        // Sampling updates *colors*, not the animation selection. Scene changes
-        // provide mild transients while the regular GPU motion clock continues.
-        val signal = VideoSceneMotion.from(colors, videoColors)
-        videoColors = colors
-        motion.accept(signal.bands, signal.impact, SystemClock.uptimeMillis(), 1f)
+    fun configureVideo(settings: VideoLightingPreferences) {
+        videoLighting = settings
         requestFrame()
         invalidate()
+    }
+
+    fun setVideoColors(colors: VideoEdgeColors) {
+        // Video does not invent beat data. Cinematic glow only changes with
+        // sampled picture colors; music motion is explicitly opt-in for video.
+        if (videoLighting.style == VideoLightStyle.SELECTED) {
+            val signal = VideoSceneMotion.from(colors, videoColors)
+            motion.accept(signal.bands, signal.impact, SystemClock.uptimeMillis(), 1f)
+        }
+        videoColors = colors
+        invalidate()
+        requestFrame()
     }
 
     private val density = resources.displayMetrics.density
@@ -184,6 +193,9 @@ class ChainsawView(context: Context) : View(context) {
      * A compact particle-density uniform makes each pattern legible around a small cutout.
      */
     private fun drawCameraEffect(canvas: Canvas) {
+        // A movie does not need particles around the camera by default.
+        // Keep cutout animations only for explicitly selected video effects.
+        if (videoColors != null && videoLighting.style != VideoLightStyle.SELECTED) return
         val placement = NotchGeometry.find(this, notchSettings) ?: return
         val rect = placement.first
         if (rect.width() <= 2f || rect.height() <= 2f) return
@@ -212,7 +224,10 @@ class ChainsawView(context: Context) : View(context) {
             edgeColor, accentColor,
             (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
             compact = true, video = videoColors, videoFrame = bounds,
-            ambientMotion = keepAmbientMotion
+            ambientMotion = keepAmbientMotion,
+            videoStyle = videoLighting.style,
+            videoWidthPx = videoLighting.widthDp * density,
+            videoIntensity = videoLighting.intensity
         ) == true
         gpuDidRender = gpuDidRender || rendered
         canvas.restore()
@@ -266,7 +281,10 @@ class ChainsawView(context: Context) : View(context) {
                 mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
                 density * thickness, spread, glow, brightness, edgeColor, accentColor,
                 (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
-                video = videoColors, ambientMotion = keepAmbientMotion
+                video = videoColors, ambientMotion = keepAmbientMotion,
+                videoStyle = videoLighting.style,
+                videoWidthPx = videoLighting.widthDp * density,
+                videoIntensity = videoLighting.intensity
             ) == true
             canvas.restore()
         } else {
@@ -276,6 +294,7 @@ class ChainsawView(context: Context) : View(context) {
         drawCameraEffect(canvas)
         // Static video frames still animate the user's selected material; color
         // sampling frequency never controls the GPU animation frame rate.
-        if (moving || noticePlaying || videoColors != null || keepAmbientMotion) requestFrame()
+        if (moving || noticePlaying || keepAmbientMotion ||
+            (videoColors != null && videoLighting.style != VideoLightStyle.CINEMATIC)) requestFrame()
     }
 }
