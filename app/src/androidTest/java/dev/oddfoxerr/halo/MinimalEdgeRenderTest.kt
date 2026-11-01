@@ -12,6 +12,8 @@ import android.media.ImageReader
 import android.os.Build
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -27,6 +29,10 @@ class MinimalEdgeRenderTest {
             val quiet = render(mode, 0f)
             val soft = render(mode, .15f)
             val loud = render(mode, 1f)
+            savePreview(mode, loud, "t0")
+            val animated = render(mode, 1f, seconds = 2.9f)
+            savePreview(mode, animated, "t1")
+            animated.recycle()
             assertEquals("$mode must disappear in silence", 0L, alphaSum(quiet))
             assertTrue("$mode must respond to music", alphaSum(loud) > alphaSum(soft) * 2)
             for (y in 32 until HEIGHT - 32) {
@@ -40,6 +46,23 @@ class MinimalEdgeRenderTest {
             assertEquals(0, Color.alpha(camera.getPixel(WIDTH / 2, HEIGHT / 2)))
             camera.recycle()
         }
+        // Baseline frames for direct visual comparison: do not modify Electric Arcs.
+        val electric = render(EdgeMode.ELECTRIC_ARCS, .7f)
+        savePreview(EdgeMode.ELECTRIC_ARCS, electric, "t0")
+        electric.recycle()
+        val electricLater = render(EdgeMode.ELECTRIC_ARCS, .7f, seconds = 2.9f)
+        savePreview(EdgeMode.ELECTRIC_ARCS, electricLater, "t1")
+        electricLater.recycle()
+    }
+
+    private fun savePreview(mode: EdgeMode, bitmap: Bitmap, phase: String) {
+        val folder = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+            "halo-previews")
+        check(folder.isDirectory || folder.mkdirs()) { "Cannot create GPU preview directory" }
+        val output = File(folder, "${mode.name.lowercase()}_${phase}.png")
+        output.outputStream().use { stream ->
+            assertTrue("Could not encode $output", bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
+        }
     }
 
     private fun alphaSum(bitmap: Bitmap): Long {
@@ -48,7 +71,7 @@ class MinimalEdgeRenderTest {
         return pixels.sumOf { Color.alpha(it).toLong() }
     }
 
-    private fun render(mode: EdgeMode, level: Float, compact: Boolean = false): Bitmap {
+    private fun render(mode: EdgeMode, level: Float, compact: Boolean = false, seconds: Float = 2f): Bitmap {
         val reader = ImageReader.newInstance(WIDTH, HEIGHT, PixelFormat.RGBA_8888, 2,
             HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
         val renderer = HardwareRenderer()
@@ -63,7 +86,7 @@ class MinimalEdgeRenderTest {
                 else RectF(6f, 6f, WIDTH - 6f, HEIGHT - 6f)
             val rendered = ShaderEdgeEngine().render(canvas, WIDTH, HEIGHT, bounds,
                 if (compact) 24f else 28f, mode,
-                FloatArray(EdgeSpectrum.BAND_COUNT) { level }, level, 0f, 2f,
+                FloatArray(EdgeSpectrum.BAND_COUNT) { level }, level, 0f, seconds,
                 1f, 1f, .75f, 1f, 0xFF4CAEFF.toInt(), 0xFFB7F5FF.toInt(),
                 level * .5f, compact = compact,
                 dynamicLow = level, dynamicMid = level * .6f,
