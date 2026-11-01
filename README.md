@@ -1,5 +1,15 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.4 — Android-native image brush painter
+
+**Architecture change:** previous v0.20.3 used an AGSL RuntimeShader with procedural texture sampled directly from a low-resolution captured image; users reported that it looked like pixel art. The new optional Misc Lab mode uses a native **multi-scale textured-stamp pipeline**, informed by the image-to-brush-stroke workflow in the Blender Paint System Brush Painter filter.
+
+Each screenshot frame is sampled by a dedicated `HandlerThread` to produce persistent, position-seeded brush instructions: coarse colour mass, medium opaque strokes, and selective fine strokes. The planner calculates image gradients to rotate stamps along contours, blends nearby colour samples without crossing sharp edges, and varies individual paint thickness and colour. HALO then renders hundreds to thousands of real brush-shaped, textured deposits with Android's hardware-accelerated Canvas. Four original brush-tip bitmaps include bristle grooves, irregular edges and impasto brightness. Underpainting is smooth and scaled with bilinear filtering rather than colour-quantized blocks.
+
+This is an **independent Android implementation** of image-guided brush stamping, not a copy or runtime execution of Blender's Python add-on. No GPL source code or texture assets were copied. Source concept: [Paint System](https://github.com/natapol2547/paintsystem) (GPL-3.0). The phone's screen is still captured with user permission under Android MediaProjection; protected surfaces and Samsung overlay restrictions may still block it. To limit CPU/GPU usage, new native paint plans are produced at a maximum of about 12 frames/s, while ordinary Video Ambilight remains separate and unchanged.
+
+
+
 ## v0.20.3 — Continuous painter shader, not pixel art
 
 The user-provided Blender Paint System reference uses image-oriented brush painting, not blocky mosaics. HALO's new Android `RuntimeShader` keeps continuous source image colours, smoothes locally along image contours with colour-similarity weights, and overlays two scales of procedural brush masks whose parallel bristle grooves catch grazing light. Unlike v0.20.2, it never samples one single pigment colour for an entire grid tile or quantizes the entire image palette. Painter capture is raised to 1/3 physical resolution and bounded at approximately 20 frames per second; Video Ambilight remains unchanged. GPU instrumentation now tests for colour-gradient continuity and relief variation.
