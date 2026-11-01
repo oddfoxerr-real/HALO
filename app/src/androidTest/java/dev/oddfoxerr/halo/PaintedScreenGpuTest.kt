@@ -86,8 +86,13 @@ class PaintedScreenGpuTest {
                     val bitmap = checkNotNull(Bitmap.wrapHardwareBuffer(
                         surface, ColorSpace.get(ColorSpace.Named.SRGB)))
                     try {
-                        val color = bitmap.getPixel(width / 2, height / 2)
-                        assertTrue("Painter shader rendered a transparent frame", Color.alpha(color) > 0)
+                        val software = checkNotNull(bitmap.copy(Bitmap.Config.ARGB_8888, false))
+                        try {
+                            val color = software.getPixel(width / 2, height / 2)
+                            assertTrue("Painter shader rendered a transparent frame", Color.alpha(color) > 0)
+                        } finally {
+                            software.recycle()
+                        }
                     } finally {
                         bitmap.recycle()
                     }
