@@ -1,5 +1,31 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.17.1 — Cinematic video lighting instead of distracting music effects
+
+The default Video Ambilight mode is now **Cinematic glow**, a narrow,
+continuous, non-animated edge light inspired by television backlighting.
+It follows 16 independent screen-space picture colors and never adds
+white sparkles, roaming particles or large effect shapes over the video.
+
+**Why the previous approach failed:** sampling occurred 12-20% inside
+the frame, while the shader interpolated zones on the wrong screen
+positions and forced the active music effect into the video overlay.
+Now sampling occurs close to the physical frame (configurable), zone
+interpolation is aligned to the 1/8, 3/8, 5/8 and 7/8 section centers,
+and the video overlay has separate appearance controls.
+
+Video offers **Cinematic glow** (default), **Soft breathing** (very subtle)
+and **Selected animation** (explicit advanced opt-in, restricted to the
+edge). Video brightness, glow width and color-response speed are saved
+separately from the music controls, and settings apply during capture
+without restarting consent. Camera ring effects are disabled for the
+first two video modes.
+
+MediaProjection consent, secure-screen limitations and manufacturer
+overlays still apply. Real-device color matching requires validation;
+this is a debug-signed prerelease.
+
+
 ## v0.17.0 — CYN coexistence, improved album colors and stationary edge effects
 
 **CYN compatibility:** HALO previously hid the lighting when Android stopped
