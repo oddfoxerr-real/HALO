@@ -38,6 +38,35 @@ class VideoColorSamplerTest {
         assertTrue(green(result.right) > blue(result.right))
     }
 
+    @Test fun narrowSamplingFollowsPhysicalEdgeInsteadOfCenterScene() {
+        val width = 128
+        val height = 128
+        val bytes = ByteBuffer.allocate(width * height * 4)
+        for (y in 0 until height) for (x in 0 until width) {
+            val color = when {
+                y < 18 -> intArrayOf(220, 50, 50)
+                y >= 110 -> intArrayOf(35, 85, 220)
+                x < 18 -> intArrayOf(35, 210, 60)
+                x >= 110 -> intArrayOf(235, 210, 30)
+                else -> intArrayOf(190, 35, 175)
+            }
+            bytes.put(color[0].toByte())
+            bytes.put(color[1].toByte())
+            bytes.put(color[2].toByte())
+            bytes.put(255.toByte())
+        }
+        bytes.flip()
+        val result = VideoColorSampler.sample(bytes, width, height, width * 4, 4)
+        fun red(value: Int) = value ushr 16 and 255
+        fun green(value: Int) = value ushr 8 and 255
+        fun blue(value: Int) = value and 255
+        assertTrue("Top should match red scene edge", red(result.top) > green(result.top) * 2)
+        assertTrue("Bottom should match blue scene edge", blue(result.bottom) > red(result.bottom) * 2)
+        assertTrue("Left should match green scene edge", green(result.left) > red(result.left) * 2)
+        assertTrue("Right should match yellow scene edge", red(result.right) > blue(result.right) * 2)
+        assertEquals(16, result.zones.size)
+    }
+
     @Test fun smoothingReactsToCutsAndKeepsBlackDark() {
         val result = VideoColorSampler.smooth(VideoEdgeColors.BLACK,
             VideoEdgeColors(-0x10000, -0x10000, -0x10000, -0x10000), .5f)
