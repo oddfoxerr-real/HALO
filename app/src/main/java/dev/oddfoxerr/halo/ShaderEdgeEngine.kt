@@ -37,7 +37,8 @@ internal class ShaderEdgeEngine {
         thickness: Float, spread: Float, glow: Float, brightness: Float,
         primary: Int, secondary: Int, attack: Float, compact: Boolean = false,
         video: VideoEdgeColors? = null, videoFrame: RectF? = null,
-        ambientMotion: Boolean = false): Boolean {
+        ambientMotion: Boolean = false, videoStyle: VideoLightStyle = VideoLightStyle.SELECTED,
+        videoWidthPx: Float = 30f, videoIntensity: Float = .58f): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -56,6 +57,9 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("compact", if (compact) 1f else 0f)
             runtime.setFloatUniform("ambientMotion", if (ambientMotion) 1f else 0f)
             runtime.setIntUniform("videoMode", if (video == null) 0 else 1)
+            runtime.setIntUniform("videoStyle", videoStyle.ordinal)
+            runtime.setFloatUniform("videoWidth", videoWidthPx.coerceIn(4f, 140f))
+            runtime.setFloatUniform("videoIntensity", videoIntensity.coerceIn(.12f, 1f))
             if (video != null) {
                 val sampledFrame = videoFrame ?: bounds
                 runtime.setFloatUniform("videoFrame",
@@ -121,6 +125,9 @@ internal class ShaderEdgeEngine {
             // Capture replaces ONLY the colors. Shape, particles, fluid movement, glow
             // and timing remain controlled by the selected animation.
             uniform int videoMode;
+            uniform int videoStyle;
+            uniform float videoWidth;
+            uniform float videoIntensity;
             uniform float4 videoFrame;
             uniform float3 top0;
             uniform float3 top1;
@@ -266,10 +273,13 @@ internal class ShaderEdgeEngine {
             float3 interpolateZones(float3 a, float3 b, float3 c, float3 d, float u) {
                 // Frame sampling uses four zones along each physical screen edge,
                 // preserving colors under the corresponding content, not equal arc lengths.
-                float position=clamp((u-.20)/.60,0.0,1.0)*3.0;
-                if(position<1.0) return mix(a,b,smoothstep(0.0,1.0,position));
-                if(position<2.0) return mix(b,c,smoothstep(1.0,2.0,position));
-                return mix(c,d,smoothstep(2.0,3.0,position));
+                // Samples are centered at 1/8, 3/8, 5/8 and 7/8 of the side.
+                // The previous 20%-80% mapping misaligned colors by ~12% of
+                // the screen, especially conspicuous during moving scenes.
+                float position=clamp((u-.125)/.25,0.0,3.0);
+                if(position<1.0) return mix(a,b,position);
+                if(position<2.0) return mix(b,c,position-1.0);
+                return mix(c,d,position-2.0);
             }
             float3 sampledScreenColor(float2 p) {
                 float2 extent=max(videoFrame.zw-videoFrame.xy,float2(1.0));
@@ -313,6 +323,28 @@ internal class ShaderEdgeEngine {
             half4 main(float2 px) {
                 float d=roundedDistance(px);
                 float thicknessPx=max(.8,thickness);
+                if(videoMode==1 && videoStyle!=2) {
+                    // Cinema is a genuine edge treatment, never a giant light
+                    // blob, orbiting particle or changing white sparkle.
+                    if(d < -videoWidth*3.2 || d > 5.0) return half4(0.0);
+                    float3 scene=sampledScreenColor(px);
+                    float inside=max(-d,0.0);
+                    float outside=max(d,0.0);
+                    float core=exp(-inside/max(videoWidth*.32,1.0));
+                    float soft=exp(-inside/max(videoWidth*.78,1.0));
+                    float alpha=(.23*core+.57*soft)*videoIntensity;
+                    alpha*=1.0-smoothstep(1.0,5.0,outside);
+                    // Very dark video stays dark: never turn black into
+                    // fabricated white or make video controls glow.
+                    float light=max(scene.r,max(scene.g,scene.b));
+                    alpha*=smoothstep(.008,.085,light);
+                    if(videoStyle==1) {
+                        // A slow 5% breathing variation, not random line noise.
+                        alpha*=.95+.05*sin(seconds*1.2);
+                    }
+                    alpha=clamp(alpha,0.0,.75);
+                    return half4(half3(scene*alpha),half(alpha));
+                }
                 // Background is genuinely transparent and needs no effect processing.
                 float effectExtent=(design>=20 && design<=23) ? 155.0 : 100.0;
                 if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
@@ -542,7 +574,7 @@ internal class ShaderEdgeEngine {
                 float3 base=mix(first,second,chroma);
                 if(videoMode==1) base=sampledScreenColor(px);
                 float whiteSpark=clamp(sparkle*(.48+.45*energy+.4*kick),0.0,.85);
-                float3 rgb=mix(base,float3(1.0),whiteSpark);
+                float3 rgb=videoMode==1 ? base : mix(base,float3(1.0),whiteSpark);
                 // Glow is an integral part of the material instead of a second Canvas layer.
                 // A pronounced attack response, not an always-bright idle loop.
                 float transient=clamp(attack,0.0,1.5);
@@ -556,10 +588,14 @@ internal class ShaderEdgeEngine {
                 float edgeFade= (design>=20 && design<=23) ? 160.0 : 92.0;
                 a*=1.0-smoothstep(40.0*max(spread,.3),edgeFade*max(spread,.3),abs(d));
                 if(videoMode==1) {
-                    // Black areas of the picture must stay dark. Saturated video
-                    // colors remain the sampled colors rather than an added glow.
+                    // Even when the user explicitly opts into an animated design,
+                    // constrain it to the very edge rather than covering video.
+                    float inside=max(-d,0.0);
+                    float outside=max(d,0.0);
+                    a*=videoIntensity*.72*exp(-inside/max(videoWidth,1.0)*1.5);
+                    a*=1.0-smoothstep(1.0,5.0,outside);
                     float light=max(base.r,max(base.g,base.b));
-                    a*=smoothstep(0.005,.10,light);
+                    a*=smoothstep(.008,.085,light);
                 }
                 // RuntimeShader colors are premultiplied, preserving correct edge blending.
                 return half4(half3(rgb*a),half(a));
