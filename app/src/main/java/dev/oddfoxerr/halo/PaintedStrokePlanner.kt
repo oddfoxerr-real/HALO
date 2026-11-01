@@ -36,13 +36,15 @@ internal class PaintedStrokeFrame(
     val height: Int
 ) {
     fun dispose() {
-        if (!underpainting.isRecycled) underpainting.recycle()
+        if (underpainting !== original && !underpainting.isRecycled)
+            underpainting.recycle()
         if (!original.isRecycled) original.recycle()
     }
 }
 
 internal object PaintedStrokePlanner {
-    private const val MAX_STROKES = 2600
+    // Prevent a backlog of thousands of GPU Canvas draw calls on a mid-range phone.
+    private const val MAX_STROKES = 1600
 
     fun plan(frame: Bitmap, settings: PaintedScreenPreferences): PaintedStrokeFrame {
         require(!frame.isRecycled)
@@ -52,11 +54,11 @@ internal object PaintedStrokePlanner {
         val pixels = IntArray(w * h)
         frame.getPixels(pixels, 0, w, 0, 0, w, h)
 
-        // A smooth colour wash lives under actual opaque brush sprites, rather
-        // than a posterized cell grid. Texture detail comes from the stamps.
-        val lowW = max(24, w / 7)
-        val lowH = max(24, h / 7)
-        val underpainting = Bitmap.createScaledBitmap(frame, lowW, lowH, true)
+        // The old 1/7-resolution underpainting made the entire display look
+        // like a blurry fallback filter. Preserve the real captured image as
+        // the backing; physical-looking brush stamps remain the effect.
+        // The frame owns one bitmap, not two allocations per capture.
+        val underpainting = frame
         val marks = ArrayList<PaintDab>(2000)
         val zoom = settings.brushSize.coerceIn(.65f, 2.3f)
         val layers = floatArrayOf(31f * zoom, 19f * zoom, 12f * zoom)

@@ -1,5 +1,10 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.5 — Capture stability and stale overlay cleanup
+
+v0.20.4 intentionally stopped its capture service after 20 black frames. On a secure-overlay capture path this can happen within two seconds; the painted screen then appeared to freeze. This release replaces that shutdown counter with a capture-health state machine: black/DRM frames clear artwork, repeated black frames under an active secure overlay remove the overlay entirely and report the limitation, and the foreground capture stays alive until explicitly stopped or revoked by Android. A watchdog hides stale artwork when no new frames arrive. Only one expensive paint frame may be queued to the main thread at once, preventing an accumulating brush-render backlog. The former 1/7-resolution blurred underpainting has been replaced by a sharp backing frame. Regression tests cover black-frame policy and immediate clearing of painted layers. Protected Android content remains unavailable; full-screen capture compatibility on Samsung must be verified on the actual device.
+
+
 ## v0.20.4 — Android-native image brush painter
 
 **Architecture change:** previous v0.20.3 used an AGSL RuntimeShader with procedural texture sampled directly from a low-resolution captured image; users reported that it looked like pixel art. The new optional Misc Lab mode uses a native **multi-scale textured-stamp pipeline**, informed by the image-to-brush-stroke workflow in the Blender Paint System Brush Painter filter.
