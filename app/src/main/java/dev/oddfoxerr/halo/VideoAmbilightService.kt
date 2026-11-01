@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.view.View
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
@@ -36,12 +37,15 @@ class VideoAmbilightService : Service() {
         const val ACTION_REFRESH = "dev.oddfoxerr.halo.VIDEO_REFRESH"
         const val EXTRA_RESULT_CODE = "projection_result_code"
         const val EXTRA_RESULT_DATA = "projection_result_data"
+        const val EXTRA_PAINTED = "projection_painted"
         private const val CHANNEL = "halo_video_ambilight"
         private const val NOTICE_ID = 711
 
         private val statusValue = MutableStateFlow("Video lighting is off")
         val status = statusValue.asStateFlow()
         @Volatile var isRunning = false
+            private set
+        @Volatile var isPainted = false
             private set
     }
 
@@ -53,6 +57,8 @@ class VideoAmbilightService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var windowManager: WindowManager? = null
     private var view: ChainsawView? = null
+    private var paintedView: PaintedScreenView? = null
+    private var overlay: View? = null
     private var lastSampleAt = 0L
     private var colors = VideoEdgeColors.BLACK
     @Volatile private var lighting = VideoLightingPreferences()
@@ -76,8 +82,11 @@ class VideoAmbilightService : Service() {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_REFRESH -> {
                 lighting = VideoLightingPreferences.read(this)
-                view?.configure(MusicConfiguration.read(this))
-                view?.configureVideo(lighting)
+                if (isPainted) paintedView?.configure(PaintedScreenPreferences.read(this))
+                else {
+                    view?.configure(MusicConfiguration.read(this))
+                    view?.configureVideo(lighting)
+                }
                 return START_NOT_STICKY
             }
             ACTION_START -> Unit
@@ -98,6 +107,12 @@ class VideoAmbilightService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        isPainted = request.getBooleanExtra(EXTRA_PAINTED, false)
+        if (isPainted && Build.VERSION.SDK_INT < 33) {
+            statusValue.value = "Painted Screen requires Android 13 or newer"
+            stopSelf()
+            return START_NOT_STICKY
+        }
         try {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(CHANNEL, "HALO Video Lighting", NotificationManager.IMPORTANCE_LOW)
@@ -107,7 +122,7 @@ class VideoAmbilightService : Service() {
             } else startForeground(NOTICE_ID, notification())
 
             isRunning = true
-            statusValue.value = "Starting screen-color analysis…"
+            statusValue.value = if (isPainted) "Starting live screen painting…" else "Starting screen-color analysis…"
             // One live video mode at a time. Reusing a separate audio overlay would obscure input.
             stopService(Intent(this, MusicEdgeService::class.java))
             NotificationEdgeOverlay.dismiss()
@@ -117,8 +132,9 @@ class VideoAmbilightService : Service() {
             @Suppress("DEPRECATION")
             display.getRealMetrics(dm)
             densityDpi = dm.densityDpi
-            width = (dm.widthPixels / 6).coerceAtLeast(96)
-            height = (dm.heightPixels / 6).coerceAtLeast(96)
+            val divisor = if (isPainted) 8 else 6
+            width = (dm.widthPixels / divisor).coerceAtLeast(96)
+            height = (dm.heightPixels / divisor).coerceAtLeast(96)
             showOverlay()
 
             val manager = getSystemService(MediaProjectionManager::class.java)
@@ -168,17 +184,28 @@ class VideoAmbilightService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             alpha = .78f
+            // Exclude the painter's overlay from its own MediaProjection feed.
+            // Otherwise each frame would paint the previous painted frame again.
+            if (isPainted) flags = flags or WindowManager.LayoutParams.FLAG_SECURE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
-        val drawing = ChainsawView(applicationContext).apply {
-            configure(MusicConfiguration.read(this@VideoAmbilightService))
-            configureVideo(lighting)
-            setVideoColors(VideoEdgeColors.BLACK)
+        val drawing: View = if (isPainted) {
+            PaintedScreenView(applicationContext).also {
+                it.configure(PaintedScreenPreferences.read(this))
+                paintedView = it
+            }
+        } else {
+            ChainsawView(applicationContext).also {
+                it.configure(MusicConfiguration.read(this))
+                it.configureVideo(lighting)
+                it.setVideoColors(VideoEdgeColors.BLACK)
+                view = it
+            }
         }
         window.addView(drawing, params)
         windowManager = window
-        view = drawing
+        overlay = drawing
     }
 
     private fun startCapture(capture: MediaProjection) {
@@ -188,7 +215,8 @@ class VideoAmbilightService : Service() {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader!!.surface, null, worker
         )
-        statusValue.value = "Cinematic edge lighting · accurate live screen colors"
+        statusValue.value = if (isPainted) "Painted Screen · live, on-device brush effect" else
+            "Cinematic edge lighting · accurate live screen colors"
     }
 
     private fun createReader() {
@@ -197,23 +225,35 @@ class VideoAmbilightService : Service() {
             val image = try { source.acquireLatestImage() } catch (_: IllegalStateException) { null }
             if (image != null) try {
                 val now = SystemClock.uptimeMillis()
-                if (now - lastSampleAt >= 33L && !stopping) {
+                if (now - lastSampleAt >= (if (isPainted) 75L else 33L) && !stopping) {
                     lastSampleAt = now
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
-                        val profile = lighting
-                        val value = VideoColorSampler.sample(
-                            plane.buffer, image.width, image.height,
-                            plane.rowStride, plane.pixelStride, profile.sampleInset)
-                        colors = if (framesSeen == 0) value else
-                            VideoColorSampler.smooth(colors, value, profile.response)
-                        framesSeen++
-                        val current = colors
-                        main.post { if (!stopping) view?.setVideoColors(current) }
-                        if (framesSeen == 15 && VideoColorSampler.isDark(current))
-                            statusValue.value = "Captured picture is dark; protected videos may be unavailable"
-                        else if (framesSeen > 0 && framesSeen % 40 == 0 && !VideoColorSampler.isDark(current))
-                            statusValue.value = "Cinematic lighting · spatial colors following the scene"
+                        if (isPainted) {
+                            val bitmap = PaintedFrameDecoder.decode(
+                                plane.buffer, image.width, image.height,
+                                plane.rowStride, plane.pixelStride)
+                            framesSeen++
+                            main.post { if (!stopping) paintedView?.setFrame(bitmap) }
+                            if (framesSeen == 15 && bitmap == null)
+                                statusValue.value = "Capture is black or protected · painting paused"
+                            else if (bitmap != null && framesSeen % 40 == 0)
+                                statusValue.value = "Painted Screen · following your screen locally"
+                        } else {
+                            val profile = lighting
+                            val value = VideoColorSampler.sample(
+                                plane.buffer, image.width, image.height,
+                                plane.rowStride, plane.pixelStride, profile.sampleInset)
+                            colors = if (framesSeen == 0) value else
+                                VideoColorSampler.smooth(colors, value, profile.response)
+                            framesSeen++
+                            val current = colors
+                            main.post { if (!stopping) view?.setVideoColors(current) }
+                            if (framesSeen == 15 && VideoColorSampler.isDark(current))
+                                statusValue.value = "Captured picture is dark; protected videos may be unavailable"
+                            else if (framesSeen > 0 && framesSeen % 40 == 0 && !VideoColorSampler.isDark(current))
+                                statusValue.value = "Cinematic lighting · spatial colors following the scene"
+                        }
                     }
                 }
             } finally { image.close() }
@@ -223,8 +263,9 @@ class VideoAmbilightService : Service() {
 
     private fun resize(fullWidth: Int, fullHeight: Int) {
         if (stopping || virtualDisplay == null || fullWidth < 16 || fullHeight < 16) return
-        val newWidth = (fullWidth / 6).coerceAtLeast(96)
-        val newHeight = (fullHeight / 6).coerceAtLeast(96)
+        val divisor = if (isPainted) 8 else 6
+        val newWidth = (fullWidth / divisor).coerceAtLeast(96)
+        val newHeight = (fullHeight / divisor).coerceAtLeast(96)
         if (newWidth == width && newHeight == height) return
         width = newWidth; height = newHeight
         val old = reader
@@ -245,8 +286,9 @@ class VideoAmbilightService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("HALO Video Ambilight")
-            .setContentText("Matching screen colors locally · tap to manage")
+            .setContentTitle(if (isPainted) "HALO Painted Screen" else "HALO Video Ambilight")
+            .setContentText(if (isPainted) "Painting screen locally · tap to manage" else
+                "Matching screen colors locally · tap to manage")
             .setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause,
                 "Stop screen capture", stop).build()).build()
@@ -255,7 +297,7 @@ class VideoAmbilightService : Service() {
     override fun onDestroy() {
         stopping = true
         isRunning = false
-        if (statusValue.value != "Screen sharing ended") statusValue.value = "Video lighting is off"
+        if (statusValue.value != "Screen sharing ended") statusValue.value = "Screen effects are off"
         worker.removeCallbacksAndMessages(null)
         try { virtualDisplay?.release() } catch (_: RuntimeException) {}
         virtualDisplay = null
@@ -263,8 +305,10 @@ class VideoAmbilightService : Service() {
         reader = null
         try { projection?.stop() } catch (_: RuntimeException) {}
         projection = null
-        view?.let { try { windowManager?.removeViewImmediate(it) } catch (_: RuntimeException) {} }
-        view = null; windowManager = null
+        overlay?.let { try { windowManager?.removeViewImmediate(it) } catch (_: RuntimeException) {} }
+        paintedView?.clear()
+        view = null; paintedView = null; overlay = null; windowManager = null
+        isPainted = false
         thread.quitSafely()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

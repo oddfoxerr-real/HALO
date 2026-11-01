@@ -24,11 +24,13 @@ fun VideoAmbilightControls() {
     var profile by remember(context) { mutableStateOf(VideoLightingPreferences.read(context)) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var advanced by remember { mutableStateOf(false) }
+    val videoActive = VideoAmbilightService.isRunning && !VideoAmbilightService.isPainted
+    val paintedActive = VideoAmbilightService.isRunning && VideoAmbilightService.isPainted
 
     fun save(value: VideoLightingPreferences) {
         profile = value
         value.save(context)
-        if (VideoAmbilightService.isRunning) {
+        if (videoActive) {
             context.startService(
                 Intent(context, VideoAmbilightService::class.java)
                     .setAction(VideoAmbilightService.ACTION_REFRESH)
@@ -145,15 +147,17 @@ fun VideoAmbilightControls() {
     }
 
     HorizontalDivider()
-    Text(status, style = MaterialTheme.typography.bodyMedium,
-        color = if (VideoAmbilightService.isRunning) MaterialTheme.colorScheme.primary
+    Text(if (paintedActive) "Painted Screen currently owns the screen capture" else status,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (videoActive) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant)
 
     Button(
         onClick = {
-            if (VideoAmbilightService.isRunning) {
+            if (videoActive || paintedActive) {
                 context.stopService(Intent(context, VideoAmbilightService::class.java))
-                feedback = "Stopping screen sharing…"
+                feedback = if (paintedActive) "Painted Screen stopped. Tap Start again to grant Video Ambilight access."
+                    else "Stopping screen sharing…"
             } else if (!Settings.canDrawOverlays(context)) {
                 overlayPermission.launch(
                     Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -166,8 +170,8 @@ fun VideoAmbilightControls() {
         },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(if (VideoAmbilightService.isRunning)
-            "Stop video lighting" else "Start cinematic lighting")
+        Text(if (videoActive) "Stop video lighting" else if (paintedActive)
+            "Switch from Painted Screen" else "Start cinematic lighting")
     }
 
     feedback?.let {

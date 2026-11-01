@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,7 +126,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class HaloTab(val label: String) {
-    HOME("Home"), MUSIC("Music"), APPS("Apps"), SETTINGS("Settings")
+    HOME("Home"), MUSIC("Music"), MISC("Misc"), APPS("Apps"), SETTINGS("Settings")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,7 +155,7 @@ private fun HaloApp(
                         Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.19.0", modifier = Modifier.padding(end = 18.dp),
+                actions = { Text("v0.20.0", modifier = Modifier.padding(end = 18.dp),
                     color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
@@ -164,6 +166,7 @@ private fun HaloApp(
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.MUSIC -> Icons.Default.MusicNote
+                        HaloTab.MISC -> Icons.Default.AutoAwesome
                         HaloTab.APPS -> Icons.Default.Apps
                         HaloTab.SETTINGS -> Icons.Default.Settings
                     }
@@ -179,6 +182,17 @@ private fun HaloApp(
     ) { padding ->
         if (tab == HaloTab.MUSIC) {
             MusicStudio(Modifier.fillMaxSize().padding(padding))
+        } else if (tab == HaloTab.MISC) {
+            Column(
+                Modifier.fillMaxSize().padding(padding)
+                    .verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("Misc Lab", style = MaterialTheme.typography.headlineLarge)
+                Text("Optional creative effects. Independent from your normal notifications, music lighting and Video Ambilight.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MiscPaintedControls()
+            }
         } else {
             LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -186,7 +200,7 @@ private fun HaloApp(
             ) {
                 item { Spacer(Modifier.height(4.dp)) }
                 when (tab) {
-                    HaloTab.MUSIC -> Unit
+                    HaloTab.MUSIC, HaloTab.MISC -> Unit
                     HaloTab.HOME -> {
                         item {
                             StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->

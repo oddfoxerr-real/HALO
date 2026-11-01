@@ -1,5 +1,28 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.0 — Misc Lab: Painted Screen
+
+A separate **Misc** tab adds an opt-in, full-screen, live painterly effect:
+
+- **Oil paint**: short brush marks, simplified pigment colors and gentle contour.
+- **Watercolour**: pale washes with softer blending.
+- **Ink & paint**: reduced color palette and bold illustrated contours.
+- Adjustable strength with independent saved settings; does not change Music/Video presets.
+- Reuses Video Ambilight's existing MediaProjection foreground service and
+  explicit Android screen-sharing consent. Only one capture effect runs at a time.
+- Uses GPU RuntimeShader + low-resolution frame sampling, with a 75ms frame interval
+  for the optional painting effect (video edge lighting remains on its original path).
+- A non-interactive, secure-marked overlay avoids capturing its own painted output.
+  Hardware and One UI overlay capture behavior require device validation.
+- Protected/black capture frames clear the painting instead of displaying stale content.
+  Pixels exist only in RAM. No saved screenshots, videos, uploads or new internet permissions.
+- Live on-device rendering requires Android 13+. Screen-capture and overlay permission
+  can be revoked at any time using Android's screen-sharing indicator or HALO's stop button.
+
+The existing Video Ambilight mode remains independent and available from Music's Video panel.
+The v0.19.0 minimal edge animations and Electric Arcs are unchanged.
+
+
 ## v0.19.0 — Minimal edge animations
 
 Three new music animations join the existing Electric Arcs:
