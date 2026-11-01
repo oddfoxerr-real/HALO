@@ -85,7 +85,7 @@ fun MiscPaintedControls() {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Live brush strokes follow shapes and colors across your screen, with textured pigment instead of a flat color filter. The original apps remain visible and touchable underneath.",
+                "Thick oil-paint marks, broad colour patches and raised palette-knife ridges inspired by impasto painting. The live picture is fully repainted while taps still reach the app beneath.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text("Paint style", style = MaterialTheme.typography.titleMedium)
@@ -101,18 +101,32 @@ fun MiscPaintedControls() {
                     )
                 }
             }
-            Text("Paint strength · ${(settings.strength * 100).toInt()}%",
+            Text("Painting coverage · ${(settings.strength * 100).toInt()}%",
                 style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = settings.strength,
                 onValueChange = { save(settings.copy(strength = it)) },
                 valueRange = .35f..1f
             )
+            Text("Brush size · ${(settings.brushSize * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge)
+            Slider(
+                value = settings.brushSize,
+                onValueChange = { save(settings.copy(brushSize = it)) },
+                valueRange = .65f..2.3f
+            )
+            Text("Paint thickness / ridges · ${(settings.relief * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge)
+            Slider(
+                value = settings.relief,
+                onValueChange = { save(settings.copy(relief = it)) },
+                valueRange = .15f..1.6f
+            )
             Text(
                 when (settings.style) {
-                    PaintedStyle.OIL -> "Thick pigment, small brush strokes and gently emphasized edges."
-                    PaintedStyle.WATERCOLOR -> "Softer washed-out pigments and blended brush marks."
-                    PaintedStyle.INK -> "Posterized colors with stronger illustrated contours."
+                    PaintedStyle.OIL -> "Reference style: overlapping opaque oil daubs, broad strokes, raised palette-knife ridges and sculpted highlights."
+                    PaintedStyle.WATERCOLOR -> "Washes with softened pigment relief and less pronounced ridges."
+                    PaintedStyle.INK -> "Graphic colour planes, bolder contours and harder brush marks."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
