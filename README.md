@@ -1,5 +1,13 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.3 — Continuous painter shader, not pixel art
+
+The user-provided Blender Paint System reference uses image-oriented brush painting, not blocky mosaics. HALO's new Android `RuntimeShader` keeps continuous source image colours, smoothes locally along image contours with colour-similarity weights, and overlays two scales of procedural brush masks whose parallel bristle grooves catch grazing light. Unlike v0.20.2, it never samples one single pigment colour for an entire grid tile or quantizes the entire image palette. Painter capture is raised to 1/3 physical resolution and bounded at approximately 20 frames per second; Video Ambilight remains unchanged. GPU instrumentation now tests for colour-gradient continuity and relief variation.
+
+This is a real-time screen-capture shader approximation, not Blender's own Python image-painting add-on. No third-party GPL brush assets or source were included. Samsung secure/DRM content and system-wide overlay limitations still apply.
+
+
+
 ## v0.20.2 — Impasto palette-knife painting (reference-inspired)
 
 Misc Lab now renders a full-coverage impressionist oil painting rather than sparse semi-transparent strokes. Each live screen frame becomes broad, irregular, overlapping pigment patches with mark direction guided by object boundaries. Raised paint ridges, directional grazing light and tiny surface grooves evoke the heavy palette-knife paint shown in the user's visual references. The current Oil / Impasto mode defaults to high coverage. Brush size and Paint thickness / ridges sliders control the look independently from Music and Video Ambilight.
