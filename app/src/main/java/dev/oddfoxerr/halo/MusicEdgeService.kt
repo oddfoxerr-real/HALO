@@ -154,6 +154,7 @@ class MusicEdgeService : Service() {
             // Do NOT hide the whole edge overlay during valid media playback.
             val mediaFallback = awake && !quiet && sessionAllowed && info.pkg != null
             view?.apply {
+                keepAmbientMotion = mediaFallback
                 if (!showingInMusicWindow) {
                     edgeColor = info.color ?: settings.color
                     accentColor = info.accent ?: settings.accent
