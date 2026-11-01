@@ -14,6 +14,23 @@ android {
         versionName = "0.21.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    signingConfigs {
+        val updateKeyPath = System.getenv("HALO_UPDATE_KEYSTORE_PATH")
+        val updatePassword = System.getenv("HALO_UPDATE_STORE_PASSWORD")
+        if (!updateKeyPath.isNullOrBlank() && !updatePassword.isNullOrBlank()) {
+            create("haloUpdate") {
+                storeFile = file(updateKeyPath)
+                storePassword = updatePassword
+                keyAlias = "halo"
+                keyPassword = updatePassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfigs.findByName("haloUpdate")?.let { signingConfig = it }
+        }
+    }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
