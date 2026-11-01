@@ -134,7 +134,7 @@ fun VideoAmbilightControls() {
         Slider(
             value = profile.sampleInset,
             onValueChange = { save(profile.copy(sampleInset = it)) },
-            valueRange = .03f.. .13f
+            valueRange = 0.03f..0.13f
         )
         Text(
             "Choose how far into the image HALO samples. Closer sampling tracks border colors " +
@@ -176,9 +176,9 @@ fun VideoAmbilightControls() {
     }
     Text("How to use", style = MaterialTheme.typography.titleSmall)
     Text(
-        "1. Keep Cinematic glow selected for video.\\n" +
-            "2. Tap Start and approve Entire screen sharing.\\n" +
-            "3. Watch your video. Only the frame edges glow with their matching scene colors.\\n" +
+        "1. Keep Cinematic glow selected for video.\n" +
+            "2. Tap Start and approve Entire screen sharing.\n" +
+            "3. Watch your video. Only the frame edges glow with their matching scene colors.\n" +
             "4. Stop from HALO, the notification or Android's screen-sharing control.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
