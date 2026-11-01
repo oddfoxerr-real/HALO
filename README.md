@@ -1,5 +1,10 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.21.0 — Automatic background updates
+
+HALO now schedules Wi-Fi-only checks for GitHub Releases through WorkManager, downloads newer APKs in the background, and verifies their SHA-256 checksum, HALO package name, Android version code, and signing certificate before offering installation. Android still controls installation approval for sideloaded apps; HALO does not silently bypass the system installer. Android 13+ notification permission enables update-ready alerts. See [signing and updater setup](docs/AUTO_UPDATER.md): an encrypted, persistent signing keystore is **required** before v0.21.0 can be published and future APK updates can install over one another. Older ephemeral-debug-key installations cannot be updated with a different certificate in place.
+
+
 ## v0.20.1 — Stable full-screen painted brush strokes
 
 The Misc Lab painter now generates oriented, visible procedural brush marks from source-image gradients. It draws pigment as transparent strokes over the live app rather than pasting a full opaque screenshot. Full-display capture is requested on Android 14+, initial overlay creation waits for a valid frame, and black/protected captures clear stale visuals. If Samsung blocks the secure overlay from the capture source, the session stops without an endless flicker loop. Existing music/notification and cinematic video effects are unchanged. The result still requires a Galaxy A56 device review.
