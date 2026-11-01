@@ -446,6 +446,11 @@ internal class ShaderEdgeEngine {
                     alpha=clamp(alpha,0.0,.75);
                     return half4(half3(scene*alpha),half(alpha));
                 }
+                // The minimal materials have a strict 20-density-pixel envelope.
+                // Cull before expensive perimeter mapping, harmonic lookup and SDF
+                // evaluation. This cannot clip visible pixels: minimalLight() uses
+                // an equal or narrower limit. Keep Electric Arcs' original field.
+                if (design!=0 && abs(d)>20.0*max(pixelDensity,.5)) return half4(0.0);
                 // Background is genuinely transparent and needs no effect processing.
                 float effectExtent=105.0;
                 if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
