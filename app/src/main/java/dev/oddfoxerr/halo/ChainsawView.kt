@@ -42,7 +42,7 @@ class ChainsawView(context: Context) : View(context) {
     var glow = .75f
     var brightness = 1f
     var spread = 1f
-    var mode = EdgeMode.DOTS
+    var mode = EdgeMode.ELECTRIC_ARCS
     var edgeColor = 0xFF9A7BFF.toInt()
     var accentColor = 0xFF52E0CB.toInt()
     var cornerRadius = 32f
