@@ -215,7 +215,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("${EdgeMode.entries.size} GPU-native light designs", style = MaterialTheme.typography.titleMedium)
-                Text("Choose a moving border effect or fixed side flames, stationary bars, waves, and corner lighting. Tap to preview the real GPU animation.",
+                Text("A curated set of four original music-reactive designs. Bass changes impact, mids shape movement and treble drives detail. No more filler animations.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 EdgeMode.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -363,21 +363,10 @@ private fun DesignTile(
     modifier: Modifier, choose: () -> Unit
 ) {
     val group = when (mode) {
-        EdgeMode.DOTS, EdgeMode.CONSTELLATION, EdgeMode.FIREFLIES -> "ORBS & DOTS"
-        EdgeMode.METEOR -> "TRAVELLING LIGHT"
-        EdgeMode.LIQUID, EdgeMode.AURORA, EdgeMode.RIBBON -> "FLUID MATERIAL"
-        EdgeMode.PRISM, EdgeMode.NEON -> "OPTICAL LIGHT"
-        EdgeMode.BLOOM, EdgeMode.HALO -> "PULSE & ENERGY"
-        EdgeMode.PIXEL -> "DIGITAL CELLS"
-        EdgeMode.SHOCKWAVE, EdgeMode.RADIANCE -> "IMPACT & FLARE"
-        EdgeMode.PLASMA, EdgeMode.TIDAL -> "FLUID MOTION"
-        EdgeMode.SPARKLINE -> "ELECTRIC DISCHARGE"
-        EdgeMode.CRYSTAL -> "CRYSTAL OPTICS"
-        EdgeMode.EMBER, EdgeMode.ORBITAL -> "MOVING PARTICLES"
-        EdgeMode.SIDE_FLAMES -> "STATIONARY SIDE FIRE"
-        EdgeMode.FLAT_BARS -> "FIXED SIDE EQUALIZER"
-        EdgeMode.STANDING_WAVES -> "ANCHORED WAVES"
-        EdgeMode.CORNER_AURA -> "CORNER EFFECTS"
+        EdgeMode.ELECTRIC_ARCS -> "BRANCHED PLASMA"
+        EdgeMode.MIRROR_RAIN -> "MIRRORED LIGHT DROPLETS"
+        EdgeMode.FLAT_WAVES -> "SPECTRAL CONTOURS"
+        EdgeMode.SIDE_SPECTRUM -> "VERTICAL FFT METERS"
     }
     Card(
         onClick = choose,
