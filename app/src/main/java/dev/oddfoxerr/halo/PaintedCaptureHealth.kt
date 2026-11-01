@@ -11,7 +11,7 @@ internal enum class PaintedCaptureAction {
 
 internal class PaintedCaptureHealth {
     private var invalidFrames = 0
-    var overlayRejected: Boolean = false
+    @Volatile var overlayRejected: Boolean = false
         private set
 
     fun reset() {
