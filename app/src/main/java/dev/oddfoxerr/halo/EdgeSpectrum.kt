@@ -6,10 +6,7 @@ import kotlin.math.sqrt
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
 /** GPU-only designs. No legacy line/Canvas animation modes remain selectable. */
 enum class EdgeMode(val title: String) {
-    ELECTRIC_ARCS("Electric Arcs"),
-    MIRROR_RAIN("Mirror Rain"),
-    FLAT_WAVES("Flat Waves"),
-    SIDE_SPECTRUM("Side Spectrum")
+    ELECTRIC_ARCS("Electric Arcs")
 }
 
 enum class NotificationEdgeMode(val title: String) {
@@ -46,26 +43,10 @@ object EdgeSpectrum {
         if (bands.size < 4) 0f else (bands[0] + bands[1] + bands[2] + bands[3]) / 4f
 
     /**
-     * Existing v0.13 installs keep an appropriate GPU design after the old
-     * animation enum disappears. Never route users into removed Canvas code.
+     * Keep existing music installations valid. Unapproved experimental modes
+     * resolve to the one design already positively evaluated on a real phone.
      */
-    /**
-     * Saved v0.17 presets migrate to the closest supported visual family.
-     * Unsupported animations are removed from the catalogue and shader itself.
-     */
-    fun mode(value: String?): EdgeMode = when (value) {
-        "ELECTRIC_ARCS", "SPARKLINE", "SHOCKWAVE", "NEON", "PRISM",
-        "FIRELIES", "FIREFLIES", "SPARKS", "CHAIN" -> EdgeMode.ELECTRIC_ARCS
-        "MIRROR_RAIN", "CONSTELLATION", "METEOR", "PIXEL",
-        "DOTS", "RAIN", "COMET", "TRAIL", "TWIN", "ORBITAL",
-        "EMBER" -> EdgeMode.MIRROR_RAIN
-        "FLAT_WAVES", "LIQUID", "AURORA", "RIBBON", "TIDAL",
-        "PLASMA", "STANDING_WAVES", "WAVE", "HELIX" -> EdgeMode.FLAT_WAVES
-        "SIDE_SPECTRUM", "FLAT_BARS", "BARS", "PIXELS",
-        "BLOOM", "HALO", "SIDE_FLAMES", "RADIANCE",
-        "CRYSTAL", "CORNER_AURA", "PULSE" -> EdgeMode.SIDE_SPECTRUM
-        else -> EdgeMode.ELECTRIC_ARCS
-    }
+    fun mode(value: String?): EdgeMode = EdgeMode.ELECTRIC_ARCS
 
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
