@@ -29,7 +29,7 @@ internal class ShaderEdgeEngine {
         "left0", "left1", "left2", "left3"
     )
 
-    /** The approved electric material shares the GPU source with optional video. */
+    /** Compile the same source used for music, notifications, camera and optional video. */
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
 
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
@@ -41,7 +41,7 @@ internal class ShaderEdgeEngine {
         videoWidthPx: Float = 30f, videoIntensity: Float = .58f,
         dynamicLow: Float = 0f, dynamicMid: Float = 0f,
         dynamicHigh: Float = 0f, dynamicHit: Float = 0f,
-        dynamicForce: Float = 2.4f): Boolean {
+        dynamicForce: Float = 2.4f, pixelDensity: Float = 1f): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -56,7 +56,8 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("spread",spread)
             runtime.setFloatUniform("glow",glow)
             runtime.setFloatUniform("brightness",brightness)
-            runtime.setIntUniform("design",mode.ordinal)
+            runtime.setIntUniform("design",mode.shaderId)
+            runtime.setFloatUniform("pixelDensity",pixelDensity.coerceIn(.5f, 6f))
             runtime.setFloatUniform("compact", if (compact) 1f else 0f)
             runtime.setFloatUniform("ambientMotion", if (ambientMotion) 1f else 0f)
             runtime.setIntUniform("videoMode", if (video == null) 0 else 1)
@@ -127,6 +128,7 @@ internal class ShaderEdgeEngine {
             uniform float3 first;
             uniform float3 second;
             uniform int design;
+            uniform float pixelDensity;
             uniform float compact;
             uniform float ambientMotion;
             uniform float4 musicDynamics;
@@ -320,6 +322,96 @@ internal class ShaderEdgeEngine {
                 float z=x/max(width,.0001);
                 return exp(-2.0*z*z);
             }
+            // Analytic capsules and discs, in physical pixels. These materials have
+            // their own tightly bounded bloom and never use the electric noise field.
+            half4 minimalLight(float2 px, float d, float u, float perimeter) {
+                float unit=max(pixelDensity,.5);
+                float line=clamp(thickness,.6*unit,3.0*unit);
+                float reach=clamp(spread,.3,2.8);
+                float low=clamp(musicDynamics.x*dynamicForce*.65,0.0,1.0);
+                float mid=clamp(musicDynamics.y*dynamicForce*.65,0.0,1.0);
+                float high=clamp(musicDynamics.z*dynamicForce*.65,0.0,1.0);
+                float hit=clamp((musicDynamics.w+attack*.25)*dynamicForce*.55,0.0,1.0);
+                float level=clamp(max(max(low,mid),high)*.8+hit*.35,0.0,1.0);
+                float gain=level;
+                // A visible, gentle no-capture mode remains explicitly distinct from
+                // beat response. No timer-generated beats enter the music envelopes.
+                if(ambientMotion>.5 || videoMode==1) {
+                    float breath=.5-.5*cos(seconds*.9);
+                    gain=max(gain,.28+.06*breath);
+                    low=max(low,.10+.05*breath);
+                }
+                if(gain<.001) return half4(0.0);
+                float limit=min(20.0*unit,max(10.0*unit,line*6.0));
+                if(abs(d)>limit) return half4(0.0);
+                float2 e=max((frame.zw-frame.xy)*.5,float2(1.0));
+                float r=clamp(radius,1.0,min(e.x,e.y));
+                float h=max(2.0*(e.x-r),.001);
+                float v=max(2.0*(e.y-r),.001);
+                float arc=.5*PI*r;
+                float shapeDistance=0.0;
+                float weight=1.0;
+                float tint=.5-.5*cos(TAU*u);
+                float highlight=0.0;
+                if(design==1) {
+                    // Two anchored capsules. Low frequencies change their length,
+                    // mids lift their body, and transients give the tips a quick lift.
+                    float right=(h+arc+v*.5)/perimeter;
+                    float left=(2.0*h+3.0*arc+1.5*v)/perimeter;
+                    float along=min(periodicDistance(u,right),periodicDistance(u,left))*perimeter;
+                    float side=max(v,arc*1.6);
+                    float extension=clamp((.035+.28*low+.065*hit)*reach,.025,.39);
+                    float halfLength=side*extension;
+                    shapeDistance=length(float2(max(along-halfLength,0.0),d))-line;
+                    highlight=gaussian(along-halfLength,max(line*2.5,unit*2.0))*hit;
+                    weight=.72+.28*mid;
+                } else if(design==2) {
+                    // Fixed, evenly spaced beads; only their size and luminance
+                    // breathe. Integer count closes the seam at every aspect ratio.
+                    float count=compact>.5 ? 12.0 : clamp(floor(perimeter/(15.0*unit)),24.0,320.0);
+                    float cell=floor(u*count);
+                    float beadU=(cell+.5)/count;
+                    float along=(fract(u*count)-.5)*perimeter/count;
+                    float local=clamp(harmonic(beadU)*dynamicForce*.6,0.0,1.0);
+                    float rad=min(perimeter/count*.23,line*(.9+.55*local+.35*high));
+                    shapeDistance=length(float2(along,d))-rad;
+                    float sheen=pow(.5+.5*cos(TAU*(beadU-seconds*.025)),6.0);
+                    weight=.40+.38*local+.22*sheen;
+                    highlight=sheen*high*.26;
+                    tint=.5-.5*cos(TAU*beadU);
+                } else {
+                    // Four corner brackets, anchored to the actual rounded arcs.
+                    // No orbit or random deformation: the straight ends grow on bass.
+                    float a=(h+arc*.5)/perimeter;
+                    float b=(h+v+arc*1.5)/perimeter;
+                    float c=(2.0*h+v+arc*2.5)/perimeter;
+                    float f=(2.0*h+2.0*v+arc*3.5)/perimeter;
+                    float along=min(min(periodicDistance(u,a),periodicDistance(u,b)),
+                        min(periodicDistance(u,c),periodicDistance(u,f)))*perimeter;
+                    float straight=min(h,v);
+                    float halfLength=arc*.5+straight*clamp((.025+.14*low+.04*hit)*reach,.012,.26);
+                    // Around a circular punch-hole keep four distinct arc accents.
+                    if(compact>.5) halfLength=perimeter*(.035+.025*low+.012*hit);
+                    shapeDistance=length(float2(max(along-halfLength,0.0),d))-line;
+                    highlight=gaussian(along-halfLength,max(line*2.0,unit*2.0))*hit*.65;
+                    weight=.74+.26*mid;
+                }
+                float coverage=1.0-smoothstep(-.65,.85,shapeDistance);
+                float bloom=gaussian(max(shapeDistance,0.0),line*2.0+unit*1.5);
+                float alpha=(coverage*.80+bloom*.17*glow)*weight*brightness*gain;
+                alpha*=1.0-smoothstep(limit*.65,limit,abs(d));
+                float3 base=mix(first,second,tint);
+                if(videoMode==1) {
+                    base=sampledScreenColor(px);
+                    alpha*=videoIntensity*.72*exp(-max(-d,0.0)/max(videoWidth,1.0)*1.5);
+                    alpha*=1.0-smoothstep(1.0,5.0,max(d,0.0));
+                    alpha*=smoothstep(.008,.085,max(base.r,max(base.g,base.b)));
+                } else {
+                    base=mix(base,float3(1.0),clamp(highlight*.22,0.0,.18));
+                }
+                alpha=clamp(alpha,0.0,.9);
+                return half4(half3(base*alpha),half(alpha));
+            }
             float disc(float u,float edgeD,float count,float travel,float radial,float rad,float lengthPx) {
                 float lane=u*count-travel;
                 float cell=floor(lane);
@@ -354,12 +446,18 @@ internal class ShaderEdgeEngine {
                     alpha=clamp(alpha,0.0,.75);
                     return half4(half3(scene*alpha),half(alpha));
                 }
+                // The minimal materials have a strict 20-density-pixel envelope.
+                // Cull before expensive perimeter mapping, harmonic lookup and SDF
+                // evaluation. This cannot clip visible pixels: minimalLight() uses
+                // an equal or narrower limit. Keep Electric Arcs' original field.
+                if (design!=0 && abs(d)>20.0*max(pixelDensity,.5)) return half4(0.0);
                 // Background is genuinely transparent and needs no effect processing.
                 float effectExtent=105.0;
                 if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
             
                 float lengthPx=1.0;
                 float u=edgeParameter(px,lengthPx);
+                if(design!=0) return minimalLight(px,d,u,lengthPx);
                 // Each frequency region changes a different part of the material.
                 // These levels are fed by FFT and spectral flux, never a timer.
                 float low=clamp(musicDynamics.x*dynamicForce*.9,0.0,2.2);

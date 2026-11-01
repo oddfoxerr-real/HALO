@@ -244,7 +244,7 @@ class ChainsawView(context: Context) : View(context) {
             videoIntensity = videoLighting.intensity,
             dynamicLow = motion.dynamics.low, dynamicMid = motion.dynamics.mid,
             dynamicHigh = motion.dynamics.high, dynamicHit = motion.dynamics.hit,
-            dynamicForce = dynamicForce
+            dynamicForce = dynamicForce, pixelDensity = density
         ) == true
         gpuDidRender = gpuDidRender || rendered
         canvas.restore()
@@ -313,7 +313,7 @@ class ChainsawView(context: Context) : View(context) {
                 videoIntensity = videoLighting.intensity,
                 dynamicLow = dynamics.low, dynamicMid = dynamics.mid,
                 dynamicHigh = dynamics.high, dynamicHit = dynamics.hit,
-                dynamicForce = dynamicForce
+                dynamicForce = dynamicForce, pixelDensity = density
             ) == true
             canvas.restore()
         } else {

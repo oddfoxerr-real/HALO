@@ -1,5 +1,28 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.19.0 — Minimal edge animations
+
+Three new music animations join the existing Electric Arcs:
+
+- **Twin Pulse**: two slim side capsules extend from the centre with bass; transients accent their tips.
+- **Light Beads**: evenly spaced stationary dots breathe with the spectrum, with a slow highlight passing across them.
+- **Corner Trace**: four rounded corner brackets extend along the frame and retract with the beat.
+
+The new materials use analytic distance fields with anti-aliased edges and a bounded glow.
+Even at maximum force, they expand along the edge instead of across the screen.
+They share the music, notification, camera-ring and optional video renderer. Color Studio,
+edge calibration, sensitivity, speed and the explicitly labelled no-capture fallback remain available.
+Electric Arcs stays the default and retains its v0.18.1 geometry. Previously retired design
+names still migrate to Electric Arcs; each new design saves and restores by its own stable name.
+
+Design cards show still frames from the actual shader, and selecting one starts the live preview.
+The preview stops when its page pauses. No audio capture is needed to try the designs.
+
+Validation: Android hardware-render tests check silence, signal response, transparent content
+areas and camera geometry; the compile test covers all four shader IDs. Real Galaxy A56
+visual quality and performance remain a device check.
+
+
 ## v0.18.1 — Quality rollback: original Electric Arcs only
 
 The v0.18.0 replacement effects did not meet the visual-quality bar.

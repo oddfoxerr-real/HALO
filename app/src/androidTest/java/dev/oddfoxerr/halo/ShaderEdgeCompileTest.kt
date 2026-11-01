@@ -16,7 +16,8 @@ class ShaderEdgeCompileTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val shader = ShaderEdgeEngine().compileForTest()
             assertNotNull(shader)
-            // The single approved original Electric Arcs geometry compiles for both music and optional video.
+            // All materials compile in the same music / camera / optional-video program.
+            shader.setFloatUniform("pixelDensity", 3f)
             shader.setFloatUniform("frame", 8f, 28f, 1072f, 2372f)
             shader.setFloatUniform("videoFrame", 8f, 28f, 1072f, 2372f)
             shader.setIntUniform("videoMode", 1)
@@ -30,7 +31,7 @@ class ShaderEdgeCompileTest {
                 }
             }
             for (mode in EdgeMode.entries) {
-                shader.setIntUniform("design", mode.ordinal)
+                shader.setIntUniform("design", mode.shaderId)
                 assertNotNull(shader)
             }
             shader.setIntUniform("videoMode", 0)
