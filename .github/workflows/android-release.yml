@@ -69,6 +69,23 @@ jobs:
         with:
           gradle-version: '8.13'
 
+      - name: Restore persistent HALO update signing certificate
+        if: steps.version.outputs.publish == 'true'
+        env:
+          HALO_SIGNING_KEYSTORE_B64: ${{ secrets.HALO_SIGNING_KEYSTORE_B64 }}
+          HALO_SIGNING_PASSWORD: ${{ secrets.HALO_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HALO_SIGNING_KEYSTORE_B64" || -z "$HALO_SIGNING_PASSWORD" ]]; then
+            echo "::error::Configure HALO_SIGNING_KEYSTORE_B64 and HALO_SIGNING_PASSWORD in repository Actions secrets before releasing a self-updating APK."
+            exit 1
+          fi
+          printf '%s' "$HALO_SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/halo-updates.jks"
+          echo "HALO_UPDATE_KEYSTORE_PATH=$RUNNER_TEMP/halo-updates.jks" >> "$GITHUB_ENV"
+          echo "HALO_UPDATE_STORE_PASSWORD=$HALO_SIGNING_PASSWORD" >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/halo-updates.jks" \
+            -storepass "$HALO_SIGNING_PASSWORD" -alias halo
+
       - name: Run tests and assemble installable debug APK
         if: steps.version.outputs.publish == 'true'
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
@@ -106,4 +123,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "HALO ${RELEASE_TAG} (Debug APK)" \
             --prerelease \
-            --notes "HALO v0.20.1 fixes Painted Screen full-display capture and improves its artistic appearance. Replaces flat pixel posterization with gradient-aligned, directional textured brush marks for Oil, Watercolour and Ink styles. Uses Android 14+ default-display projection consent, starts the overlay only after valid frames, corrects sampling resolution, and clears protected/black frames to avoid stale images. A device-specific capture/secure-overlay incompatibility now stops safely rather than flickering endlessly. Existing Music, Notification and Video modes remain unchanged. Android sideloaded debug APK; on-device Samsung validation is still required."
+            --notes "HALO v0.21.0 introduces an automatic background updater using WorkManager. HALO checks official GitHub releases approximately every six hours while unmetered network and battery conditions allow, stages APKs automatically, validates SHA-256 checksum, package identity, version and current signing certificate, then asks Android for a one-time installation confirmation when ready. Silent installation is not supported for ordinary sideloaded apps. APKs are now built using a persistent release signing certificate configured through encrypted GitHub Actions secrets. Original music, notifications, camera lighting, ambilight and painted brush strokes remain unchanged."
