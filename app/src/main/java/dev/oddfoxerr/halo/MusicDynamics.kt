@@ -47,7 +47,8 @@ class MusicDynamics {
             }
             previous[i] = sample
         }
-        targetLow = max((bassSum / 6f), bass.coerceIn(0f, 1f) * .85f).coerceIn(0f, 1f)
+        val finiteBass = if (bass.isFinite()) bass.coerceIn(0f, 1f) else 0f
+        targetLow = max((bassSum / 6f), finiteBass * .85f).coerceIn(0f, 1f)
         targetMid = (midSum / 10f).coerceIn(0f, 1f)
         targetHigh = (highSum / 8f).coerceIn(0f, 1f)
         val flux = positive / previous.size
