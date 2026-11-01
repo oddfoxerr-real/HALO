@@ -232,7 +232,7 @@ class VideoAmbilightService : Service() {
             val image = try { source.acquireLatestImage() } catch (_: IllegalStateException) { null }
             if (image != null) try {
                 val now = SystemClock.uptimeMillis()
-                if (now - lastSampleAt >= (if (isPainted) 50L else 33L) && !stopping) {
+                if (now - lastSampleAt >= (if (isPainted) 85L else 33L) && !stopping) {
                     lastSampleAt = now
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
@@ -242,27 +242,38 @@ class VideoAmbilightService : Service() {
                                 plane.rowStride, plane.pixelStride)
                             framesSeen++
                             if (bitmap == null) blankPaintFrames++ else blankPaintFrames = 0
+
                             if (bitmap == null && blankPaintFrames > 20 && overlay != null) {
-                                // Some vendor screen-capture implementations treat a
-                                // secure overlay as blacking the underlying display.
-                                // Do not loop between black / painted frames forever.
                                 paintCaptureBlocked = true
-                                statusValue.value = "Samsung blocked full-screen capture under the painting overlay"
+                                statusValue.value = "Samsung blocked full-screen capture under painting overlay"
                                 main.post { if (!stopping) stopSelf() }
                             } else {
+                                // Generate oriented stamp commands on the existing
+                                // dedicated capture thread, NOT the UI thread.
+                                // This is a real multi-pass brush-painter port,
+                                // not an expensive per-pixel RuntimeShader filter.
+                                val painted = if (bitmap == null) null else try {
+                                    PaintedStrokePlanner.plan(
+                                        bitmap, PaintedScreenPreferences.read(this@VideoAmbilightService))
+                                } catch (error: RuntimeException) {
+                                    bitmap.recycle()
+                                    Log.e("HALO", "Native stroke planner failed", error)
+                                    statusValue.value = "Brush painting unavailable for captured frame"
+                                    null
+                                }
                                 main.post {
                                     if (stopping || paintCaptureBlocked) {
-                                        bitmap?.recycle()
-                                    } else if (bitmap != null) {
+                                        painted?.dispose()
+                                    } else if (painted != null) {
                                         if (overlay == null) {
                                             try { showOverlay() } catch (error: Exception) {
                                                 Log.e("HALO", "Painting overlay unavailable", error)
-                                                bitmap.recycle()
+                                                painted.dispose()
                                                 stopSelf()
                                                 return@post
                                             }
                                         }
-                                        paintedView?.setFrame(bitmap)
+                                        paintedView?.setFrame(painted)
                                         paintedView?.visibility = View.VISIBLE
                                     } else if (blankPaintFrames >= 3) {
                                         paintedView?.setFrame(null)
@@ -270,9 +281,9 @@ class VideoAmbilightService : Service() {
                                     }
                                 }
                                 if (framesSeen == 15 && bitmap == null)
-                                    statusValue.value = "Capture is protected or black · painting paused"
-                                else if (bitmap != null && framesSeen % 40 == 0)
-                                    statusValue.value = "Painterly brush strokes · full-screen live"
+                                    statusValue.value = "Capture protected or black · painting paused"
+                                else if (painted != null && framesSeen % 40 == 0)
+                                    statusValue.value = "Native canvas brush painting · live"
                             }
                         } else {
                             val profile = lighting

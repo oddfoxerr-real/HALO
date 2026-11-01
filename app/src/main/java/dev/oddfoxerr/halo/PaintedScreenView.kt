@@ -2,20 +2,22 @@ package dev.oddfoxerr.halo
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.Matrix
+import android.graphics.Color
+import android.graphics.LightingColorFilter
 import android.graphics.Paint
-import android.graphics.RuntimeShader
-import android.graphics.Shader
+import android.graphics.RectF
 import android.os.Build
 import android.util.Log
 import android.view.View
-import androidx.annotation.RequiresApi
 import java.nio.ByteBuffer
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sin
 
-/** Full-frame, locally rendered painting styles. No saved screen captures. */
+/** Existing serialized settings continue to work across HALO upgrades. */
 enum class PaintedStyle(val label: String) {
     OIL("Oil / Impasto"),
     WATERCOLOR("Watercolour"),
@@ -31,76 +33,77 @@ data class PaintedScreenPreferences(
     fun save(context: Context) {
         context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit()
             .putString("style", style.name)
-            .putFloat("strength", strength.coerceIn(.35f, 1f))
-            .putFloat("brush_size", brushSize.coerceIn(.65f, 2.3f))
-            .putFloat("relief", relief.coerceIn(.15f, 1.6f))
+            .putFloat("strength", strength.coerceIn(.35f,1f))
+            .putFloat("brush_size", brushSize.coerceIn(.65f,2.3f))
+            .putFloat("relief", relief.coerceIn(.15f,1.6f))
             .apply()
     }
 
     companion object {
         private const val STORE = "halo_painted_screen"
-
         fun read(context: Context): PaintedScreenPreferences {
-            val saved = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+            val store = context.getSharedPreferences(STORE,Context.MODE_PRIVATE)
             val style = PaintedStyle.entries.firstOrNull {
-                it.name == saved.getString("style", PaintedStyle.OIL.name)
+                it.name == store.getString("style",PaintedStyle.OIL.name)
             } ?: PaintedStyle.OIL
-            fun readValue(key: String, fallback: Float, lower: Float, upper: Float): Float {
-                val value = saved.getFloat(key, fallback)
-                return if (value.isFinite()) value.coerceIn(lower, upper) else fallback
+            fun number(key: String, default: Float, lower: Float, upper: Float): Float {
+                val value = store.getFloat(key,default)
+                return if (value.isFinite()) value.coerceIn(lower,upper) else default
             }
             return PaintedScreenPreferences(
-                style = style,
-                strength = readValue("strength", .96f, .35f, 1f),
-                brushSize = readValue("brush_size", 1.12f, .65f, 2.3f),
-                relief = readValue("relief", 1f, .15f, 1.6f)
+                style,
+                number("strength",.96f,.35f,1f),
+                number("brush_size",1.12f,.65f,2.3f),
+                number("relief",1f,.15f,1.6f)
             )
         }
     }
 }
 
-/** Copies screen pixels respecting Image.Plane padding and pixel stride. */
 internal object PaintedFrameDecoder {
     fun decode(
-        buffer: ByteBuffer, width: Int, height: Int, rowStride: Int, pixelStride: Int
+        buffer: ByteBuffer, width: Int, height: Int,
+        rowStride: Int, pixelStride: Int
     ): Bitmap? {
         if (width !in 16..1024 || height !in 16..2048 ||
             pixelStride < 4 || rowStride < width * pixelStride) return null
-        val end = (height - 1L) * rowStride + (width - 1L) * pixelStride + 3L
+        val end = (height-1L)*rowStride + (width-1L)*pixelStride + 3L
         if (end >= buffer.limit()) return null
-
         val pixels = IntArray(width * height)
-        var populated = 0
-        var luminance = 0L
+        var nonBlack = 0
         for (y in 0 until height) {
-            val offset = y * rowStride
+            val row = y * rowStride
             for (x in 0 until width) {
-                val i = offset + x * pixelStride
-                val r = buffer.get(i).toInt() and 255
-                val g = buffer.get(i + 1).toInt() and 255
-                val b = buffer.get(i + 2).toInt() and 255
-                pixels[y * width + x] = -0x1000000 or (r shl 16) or (g shl 8) or b
-                if ((x and 7) == 0 && (y and 7) == 0) {
-                    luminance += max(r, max(g, b)).toLong()
-                    populated++
-                }
+                val i = row + x * pixelStride
+                val red = buffer.get(i).toInt() and 255
+                val green = buffer.get(i+1).toInt() and 255
+                val blue = buffer.get(i+2).toInt() and 255
+                pixels[y*width+x] = Color.rgb(red,green,blue)
+                if ((x and 7)==0 && (y and 7)==0 && max(red,max(green,blue))>5)
+                    nonBlack++
             }
         }
-        // Secure / DRM windows can return black. Never leave a stale screenshot
-        // painted over another application when the capture becomes restricted.
-        if (populated == 0 || luminance < populated * 5L) return null
-        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        if (nonBlack == 0) return null
+        return Bitmap.createBitmap(pixels,width,height,Bitmap.Config.ARGB_8888)
     }
 }
 
-/** RuntimeShader-based palette-knife impasto. Touch passes through to the app. */
+/**
+ * Displays actual bitmap brush stamps drawn by Android's accelerated Canvas,
+ * NOT a RuntimeShader that pixelates a source image into coloured blocks.
+ * All compute-heavy sampling happens off the main thread in StrokePlanner.
+ */
 internal class PaintedScreenView(context: Context) : View(context) {
-    private var currentFrame: Bitmap? = null
-    private var preferences: PaintedScreenPreferences = PaintedScreenPreferences.read(context)
-    private val output = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val matrix = Matrix()
-    private var shader: RuntimeShader? = null
-    private var shaderUnavailable = false
+    private val brushes: Array<Bitmap> = Array(4) { BrushTextureFactory.create(it) }
+    private var currentFrame: PaintedStrokeFrame? = null
+    private var preferences = PaintedScreenPreferences.read(context)
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val target = RectF()
+    private val filters = object : LinkedHashMap<Int,LightingColorFilter>(256,.75f,true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int,LightingColorFilter>) =
+            size > 384
+    }
 
     init {
         setWillNotDraw(false)
@@ -109,213 +112,105 @@ internal class PaintedScreenView(context: Context) : View(context) {
         isFocusable = false
     }
 
-    fun configure(value: PaintedScreenPreferences) {
-        preferences = value
+    fun configure(settings: PaintedScreenPreferences) {
+        preferences = settings
+        filters.clear()
         invalidate()
     }
 
-    fun setFrame(frame: Bitmap?) {
-        val old = currentFrame
+    fun setFrame(frame: PaintedStrokeFrame?) {
+        val previous = currentFrame
         currentFrame = frame
         invalidate()
-        // RenderThread may be consuming the prior bitmap in a BitmapShader.
-        // A short deferred recycle avoids use-after-recycle on GPU frames.
-        if (old != null && old !== frame) {
-            postDelayed({ if (!old.isRecycled) old.recycle() }, 1000L)
+        if (previous != null && previous !== frame) {
+            // Android's RenderThread can still be sampling old brush layers.
+            postDelayed({ previous.dispose() }, 400L)
         }
     }
 
     fun clear() {
         setFrame(null)
-        output.shader = null
-        shader = null
-        invalidate()
+        filters.clear()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val frame = currentFrame ?: return
-        if (width <= 0 || height <= 0) return
-
-        // Missing hardware acceleration fails open; never draw an unprocessed,
-        // opaque screenshot over the UI.
-        if (Build.VERSION.SDK_INT < 33 || !canvas.isHardwareAccelerated || shaderUnavailable)
-            return
-
-        matrix.reset()
-        matrix.setScale(width.toFloat() / frame.width, height.toFloat() / frame.height)
-        val source = BitmapShader(frame, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        source.setLocalMatrix(matrix)
+        val data = currentFrame ?: return
+        if (data.underpainting.isRecycled) return
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 0f || h <= 0f) return
         try {
-            val effect = shader ?: RuntimeShader(SOURCE).also { shader = it }
-            effect.setInputShader("screen", source)
-            effect.setFloatUniform("resolution", width.toFloat(), height.toFloat())
-            // Pixel-grid sized colour samples caused the previous mosaic look.
-            // Brush size now controls only stroke geometry; pigment always comes
-            // from a continuous, edge-aware sample of the source image.
-            effect.setFloatUniform("brush", resources.displayMetrics.density * 7f *
-                preferences.brushSize)
-            effect.setFloatUniform("strength", preferences.strength)
-            effect.setFloatUniform("relief", preferences.relief)
-            effect.setIntUniform("style", preferences.style.ordinal)
-            output.shader = effect
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), output)
-            output.shader = null
-        } catch (failure: RuntimeException) {
-            shaderUnavailable = true
-            output.shader = null
-            Log.e("HALO", "Impasto GPU shader unavailable", failure)
+            val save = canvas.save()
+            canvas.scale(w/data.width,h/data.height)
+            val origin = RectF(0f,0f,data.width.toFloat(),data.height.toFloat())
+            backgroundPaint.alpha = 255
+            canvas.drawBitmap(data.underpainting,null,origin,backgroundPaint)
+            val extraLight = (preferences.relief * 12f).toInt().coerceIn(0,22)
+            val add = Color.rgb(extraLight,extraLight,extraLight)
+            for (dab in data.strokes) {
+                val key = dab.rgb xor (extraLight shl 24)
+                val tint = filters[key] ?: LightingColorFilter(dab.rgb,add).also {
+                    filters[key] = it
+                }
+                strokePaint.colorFilter = tint
+                strokePaint.alpha = dab.opacity
+                val snapshot = canvas.save()
+                canvas.translate(dab.x,dab.y)
+                canvas.rotate(dab.rotation)
+                target.set(-dab.length*.5f,-dab.thickness*.5f,
+                    dab.length*.5f,dab.thickness*.5f)
+                canvas.drawBitmap(brushes[dab.brush],null,target,strokePaint)
+                canvas.restoreToCount(snapshot)
+            }
+            strokePaint.colorFilter = null
+            canvas.restoreToCount(save)
+        } catch (error: RuntimeException) {
+            Log.e("HALO","Native brush stamp renderer failed",error)
+            strokePaint.colorFilter = null
         }
     }
+}
 
-    companion object {
-        @RequiresApi(33)
-        internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
-
-        // Realtime Android AGSL shader. Unlike a painterly pixelation filter,
-        // this NEVER quantizes coordinates or source colours into tile cells.
-        // The source is filtered along the local edge tangent (edge-aware
-        // brush direction), while overlapping brush-shape masks add impasto
-        // grooves and grazing-light relief. No Blender/GPL code or assets are
-        // bundled: the effect is implemented natively for Android's GPU.
-        private val SOURCE = """
-            uniform shader screen;
-            uniform float2 resolution;
-            uniform float brush;
-            uniform float strength;
-            uniform float relief;
-            uniform int style;
-
-            float hash21(float2 p) {
-                p=fract(p*float2(.1031,.1030));
-                p+=dot(p,p.yx+33.33);
-                return fract((p.x+p.y)*p.x);
+/** Four original alpha-and-height textured brush nibs; no GPL brush images copied. */
+internal object BrushTextureFactory {
+    fun create(variant: Int): Bitmap {
+        val w = 96
+        val h = 64
+        val pixels = IntArray(w*h)
+        for (y in 0 until h) for (x in 0 until w) {
+            val dx = (x+.5f-w*.5f)/(w*.5f)
+            val dy = (y+.5f-h*.5f)/(h*.5f)
+            val stretch = abs(dx)
+            val taper = max(.07f,1f-.51f*stretch.pow(2f))
+            val wave = sin(dx*13f + variant*2.1f)*.063f +
+                sin(dx*37f + dy*7f + variant*1.7f)*.026f
+            val blade = when (variant) {
+                0 -> max(stretch/.91f,abs(dy)/(taper*.88f+wave))
+                1 -> max(stretch/.83f,abs(dy)/(taper*.99f+wave))
+                2 -> max(stretch/.95f,abs(dy)/(taper*.68f+wave))
+                else -> max(stretch/.75f,abs(dy)/(taper*.84f+wave))
             }
+            val coverage = ((1.03f-blade)/.12f).coerceIn(0f,1f)
+            val bristles = sin(dy*46f + dx*4f + variant*7f)
+            val threads = sin(dy*91f - dx*13f + variant*11f)
+            val grain = random(x,y,variant)
+            val split = if (variant==2)
+                (bristles*.35f + grain*.24f).coerceIn(-.6f,.6f)
+                else bristles*.18f+threads*.08f
+            val alpha = (255f*coverage*(.85f+split*.24f)*
+                (.91f+grain*.09f)).toInt().coerceIn(0,255)
+            val height = (.74f+bristles*.13f+threads*.042f+
+                (grain-.5f)*.07f+dy*.055f).coerceIn(.35f,1f)
+            val brightness = (height*255).toInt().coerceIn(0,255)
+            pixels[y*w+x] = Color.argb(alpha,brightness,brightness,brightness)
+        }
+        return Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888)
+    }
 
-            float2 safePx(float2 p) {
-                return clamp(p,float2(.5),resolution-float2(.5));
-            }
-
-            float3 img(float2 p) {
-                return float3(screen.eval(safePx(p)).rgb);
-            }
-
-            float lightness(float3 c) {
-                return dot(c,float3(.2126,.7152,.0722));
-            }
-
-            float2 edgeFlow(float2 p,float radius) {
-                float gx=lightness(img(p+float2(radius,0.0)))-
-                         lightness(img(p-float2(radius,0.0)));
-                float gy=lightness(img(p+float2(0.0,radius)))-
-                         lightness(img(p-float2(0.0,radius)));
-                // In detailed regions, flow runs parallel to image edges.
-                // On flat colour areas, use one stable diagonal direction.
-                float2 tangent=float2(-gy,gx);
-                float magnitude=length(tangent);
-                return normalize(tangent+float2(.7,.25)*max(.08-magnitude,0.0));
-            }
-
-            float samePigment(float3 a,float3 b) {
-                float3 d=a-b;
-                return 1.0/(1.0+34.0*dot(d,d));
-            }
-
-            // A continuous stroke-colour field: samples move ALONG contours
-            // and do not cross strong edges. Crucially, no pixel / cell
-            // centre ever becomes a flat-colour tile.
-            float3 wetUnderpaint(float2 p,float2 flow,float radius,float3 original) {
-                float3 c1=img(p+flow*radius);
-                float3 c2=img(p-flow*radius);
-                float3 c3=img(p+flow*radius*.42);
-                float3 c4=img(p-flow*radius*.42);
-                float w1=samePigment(original,c1)*.52;
-                float w2=samePigment(original,c2)*.52;
-                float w3=samePigment(original,c3)*.85;
-                float w4=samePigment(original,c4)*.85;
-                float sum=1.45+w1+w2+w3+w4;
-                return (original*1.45+c1*w1+c2*w2+c3*w3+c4*w4)/sum;
-            }
-
-            // A 2D textured brush footprint; overlap comes from two
-            // independent staggered layers. The brush mask affects height
-            // and colour REFLECTION, not whether the underlying image exists.
-            // This prevents mosaic-like hard boundaries and colour blocking.
-            float3 brushMark(float2 p,float2 flow,float width,float2 offset) {
-                float2 grid=floor(p/width+offset);
-                float seed=hash21(grid+offset*13.0);
-                float2 jitter=float2(hash21(grid+float2(8.1,3.7)),
-                                     hash21(grid+float2(4.3,7.9)))-.5;
-                float2 center=(grid+.5-offset)*width+jitter*width*.28;
-                float angle=(hash21(grid+float2(21.8,7.6))-.5)*.65;
-                float2 axis=normalize(flow+float2(-flow.y,flow.x)*angle);
-                float2 normal=float2(-axis.y,axis.x);
-                float2 local=p-center;
-                float along=dot(local,axis);
-                float side=dot(local,normal);
-                float halfLong=width*(.66+.25*hash21(grid+float2(3.7,9.4)));
-                float halfWide=width*(style==1?.40:.32);
-                float tapered=1.0-.55*pow(clamp(abs(along)/halfLong,0.0,1.0),1.6);
-                float irregular=sin(along*.33+seed*12.0)*.074+
-                                 sin(along*.71+side*.15+seed*5.0)*.053;
-                float contour=max(abs(along)/halfLong,
-                                  abs(side)/(halfWide*tapered*(1.0+irregular)));
-                float footprint=1.0-smoothstep(.79,1.06,contour);
-
-                // Parallel longitudinal grooves, broken bristle edges and
-                // small palette-knife highlights imply a raised oil film.
-                float bristle=sin(side*1.75+along*.095+seed*15.0);
-                float finer=sin(side*4.5-along*.13+seed*7.0);
-                float grain=hash21(floor(p*.95)+grid*.19)-.5;
-                float fibers=bristle*.68+finer*.23+grain*.09;
-                float highSide=normal.x*(-.59)+normal.y*(-.81);
-                float bevel=(smoothstep(.72,.92,contour)-
-                             smoothstep(.92,1.05,contour))*footprint;
-                float highlight=highSide*fibers*.20+
-                                (side/max(halfWide,.1))*highSide*.12-
-                                bevel*.18;
-                float textureMask=footprint*(.90+.10*bristle);
-                return float3(textureMask,highlight*footprint,grain*footprint);
-            }
-
-            half4 main(float2 xy) {
-                float2 p=safePx(xy);
-                float3 original=img(p);
-                float radius=max(1.6,brush*.38);
-                float2 flow=edgeFlow(p,radius);
-                float3 wet=wetUnderpaint(p,flow,
-                    max(1.5,brush*(style==1?.65:.47)),original);
-
-                // Two physically different brush scales emulate long
-                // palette-knife daubs over short bristle touches.
-                float3 wide=brushMark(p,flow,max(9.0,brush*1.95),
-                                      float2(.0,.0));
-                float3 fine=brushMark(p,flow,max(5.0,brush*.85),
-                                      float2(.37,.61));
-                float coverage=clamp(wide.x*.74+fine.x*.52,0.0,1.0);
-                float reliefShade=(wide.y*.76+fine.y*.43)*relief;
-                float pigmentGrain=(wide.z+fine.z)*.08*relief;
-
-                // No posterization. Preserve subtle camera/display gradients
-                // and object silhouettes; the ART comes from the tangible
-                // stroke shading and irregular paint deposit.
-                float3 color=wet;
-                if(style==1) color=mix(color,float3(.95,.90,.83),.075);
-                if(style==2) {
-                    float contrast=abs(lightness(img(p+float2(radius,0.0)))-
-                                       lightness(img(p-float2(radius,0.0))));
-                    color*=1.0-smoothstep(.16,.53,contrast)*.18;
-                }
-                color+=float3(reliefShade+pigmentGrain)*coverage;
-                color=clamp(color,0.0,1.0);
-
-                // Strength controls painterliness, not tile opacity. Maintain
-                // full coverage while retaining enough local detail for real
-                // apps, text, faces and moving video.
-                float blend=strength*(style==1?.84:1.0);
-                float3 finalColor=mix(original,color,blend);
-                return half4(half3(finalColor),1.0);
-            }
-        """.trimIndent()
+    private fun random(x: Int,y: Int,seed: Int): Float {
+        var hash = x*374761393+y*668265263+seed*21474817
+        hash = (hash xor (hash ushr 13))*1274126177
+        return (hash and 65535)/65535f
     }
 }

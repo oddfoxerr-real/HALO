@@ -85,7 +85,7 @@ fun MiscPaintedControls() {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Live brush-texture shader: follows image edges, preserves smooth colour gradients and adds oil-paint bristle ridges. This is not a pixel-art filter; touches still reach the app beneath.",
+                "Native textured brush painter: builds real, rotated image-guided brush dabs in several passes, using custom dry-bristle and palette-knife tips. Unlike the old shader filter, each mark is stamped onto the live screen picture; touches still pass through.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text("Paint style", style = MaterialTheme.typography.titleMedium)
@@ -108,14 +108,14 @@ fun MiscPaintedControls() {
                 onValueChange = { save(settings.copy(strength = it)) },
                 valueRange = .35f..1f
             )
-            Text("Brush scale · ${(settings.brushSize * 100).toInt()}%",
+            Text("Brush length & size · ${(settings.brushSize * 100).toInt()}%",
                 style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = settings.brushSize,
                 onValueChange = { save(settings.copy(brushSize = it)) },
                 valueRange = .65f..2.3f
             )
-            Text("Stroke relief / ridges · ${(settings.relief * 100).toInt()}%",
+            Text("Impasto highlight · ${(settings.relief * 100).toInt()}%",
                 style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = settings.relief,
@@ -124,7 +124,7 @@ fun MiscPaintedControls() {
             )
             Text(
                 when (settings.style) {
-                    PaintedStyle.OIL -> "Edge-following oil strokes with continuous colour mixing, textured pigment and directional raised brush ridges."
+                    PaintedStyle.OIL -> "Multilayer oil marks using native textured brush tips and image-contour guidance, like a fast live brush-painter filter."
                     PaintedStyle.WATERCOLOR -> "Washes with softened pigment relief and less pronounced ridges."
                     PaintedStyle.INK -> "Graphic colour planes, bolder contours and harder brush marks."
                 },
