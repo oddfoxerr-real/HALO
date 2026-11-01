@@ -1,5 +1,24 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.16.1 — Video keeps the selected GPU animation
+
+**Corrected architecture:** Video Ambilight used to bypass the selected AGSL
+effect and render a separate, static color glow. That renderer is removed.
+Video now supplies 16 independently sampled screen-space colors to the
+existing GPU animation material. The active design (dots, plasma, shockwave,
+ribbons, or any of 20 modes), motion speed, thickness, glow and brightness
+remain active. Scene changes update only the appropriate physical sections.
+A gentle visual transient can follow major cuts; this is not captured audio.
+
+Video mode continues animating even when the screen image is stationary.
+The camera cutout uses the same animated material with a spatial color
+lookup against the overall display, rather than mixing unrelated edge colors.
+MediaProjection is user-consented, sampled in memory and never saved or sent;
+secure/DRM-protected video may provide an unobservable black frame.
+Actual Samsung One UI device visuals still require validation.
+
+
+
 ## v0.16.0 — 20 GPU animations + matching camera light + Color Studio
 
 Eight new original AGSL effects expand the library from 12 to 20: Shockwave,
