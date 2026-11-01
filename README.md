@@ -1,5 +1,10 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.1 — Stable full-screen painted brush strokes
+
+The Misc Lab painter now generates oriented, visible procedural brush marks from source-image gradients. It draws pigment as transparent strokes over the live app rather than pasting a full opaque screenshot. Full-display capture is requested on Android 14+, initial overlay creation waits for a valid frame, and black/protected captures clear stale visuals. If Samsung blocks the secure overlay from the capture source, the session stops without an endless flicker loop. Existing music/notification and cinematic video effects are unchanged. The result still requires a Galaxy A56 device review.
+
+
 ## v0.20.0 — Misc Lab: Painted Screen
 
 A separate **Misc** tab adds an opt-in, full-screen, live painterly effect:
