@@ -21,56 +21,22 @@ internal class ShaderEdgeEngine {
     private val firstHalf = FloatArray(4)
     private val secondHalf = FloatArray(4)
     private var shader: RuntimeShader? = null
-    private var videoShader: RuntimeShader? = null
-
-    /** Video mode is color-sampled, not an audio FFT animation. */
-    fun renderVideo(canvas: Canvas, width: Int, height: Int, bounds: RectF,
-        colors: VideoEdgeColors, thickness: Float, spread: Float, glow: Float,
-        brightness: Float): Boolean {
-        if (videoDisabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
-        return try {
-            val runtime = videoShader ?: RuntimeShader(VIDEO_SOURCE).also { videoShader = it }
-            runtime.setFloatUniform("frame", bounds.left, bounds.top, bounds.right, bounds.bottom)
-            runtime.setFloatUniform("width", (30f * thickness * spread).coerceIn(8f, 180f))
-            runtime.setFloatUniform("softness", glow.coerceIn(0f, 1f))
-            runtime.setFloatUniform("brightness", brightness.coerceIn(0f, 1f))
-            fun rgb(c: Int) = floatArrayOf(Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
-            val zoneNames = arrayOf(
-                "top0", "top1", "top2", "top3",
-                "right0", "right1", "right2", "right3",
-                "bottom0", "bottom1", "bottom2", "bottom3",
-                "left0", "left1", "left2", "left3"
-            )
-            for (index in zoneNames.indices) {
-                val fallback = when (index / 4) {
-                    0 -> colors.top; 1 -> colors.right
-                    2 -> colors.bottom; else -> colors.left
-                }
-                runtime.setFloatUniform(zoneNames[index],
-                    rgb(colors.zones.getOrNull(index) ?: fallback))
-            }
-            paint.shader = runtime
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            paint.shader = null
-            true
-        } catch (failure: RuntimeException) {
-            videoDisabled = true
-            paint.shader = null
-            Log.e("HALO", "Video edge shader failed", failure)
-            false
-        }
-    }
-
     private var disabled = false
-    private var videoDisabled = false
+    private val zoneNames = arrayOf(
+        "top0", "top1", "top2", "top3",
+        "right0", "right1", "right2", "right3",
+        "bottom0", "bottom1", "bottom2", "bottom3",
+        "left0", "left1", "left2", "left3"
+    )
 
+    /** Both normal and video modes compile the same twenty procedural GPU materials. */
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
-    internal fun compileVideoForTest(): RuntimeShader = RuntimeShader(VIDEO_SOURCE)
 
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
         thickness: Float, spread: Float, glow: Float, brightness: Float,
-        primary: Int, secondary: Int, attack: Float, compact: Boolean = false): Boolean {
+        primary: Int, secondary: Int, attack: Float, compact: Boolean = false,
+        video: VideoEdgeColors? = null, videoFrame: RectF? = null): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -87,6 +53,23 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("brightness",brightness)
             runtime.setIntUniform("design",mode.ordinal)
             runtime.setFloatUniform("compact", if (compact) 1f else 0f)
+            runtime.setIntUniform("videoMode", if (video == null) 0 else 1)
+            if (video != null) {
+                val sampledFrame = videoFrame ?: bounds
+                runtime.setFloatUniform("videoFrame",
+                    sampledFrame.left, sampledFrame.top, sampledFrame.right, sampledFrame.bottom)
+                for (index in zoneNames.indices) {
+                    val fallback = when (index / 4) {
+                        0 -> video.top
+                        1 -> video.right
+                        2 -> video.bottom
+                        else -> video.left
+                    }
+                    val color = video.zones.getOrNull(index) ?: fallback
+                    runtime.setFloatUniform(zoneNames[index],
+                        Color.red(color) / 255f, Color.green(color) / 255f, Color.blue(color) / 255f)
+                }
+            }
             java.util.Arrays.fill(frequencies,0f)
             for (i in bands.indices) {
                 val k=(i*8/max(1,bands.size)).coerceIn(0,7)
@@ -113,61 +96,6 @@ internal class ShaderEdgeEngine {
         }
     }
     private companion object {
-        private val VIDEO_SOURCE = """
-            uniform float4 frame;
-            uniform float width;
-            uniform float softness;
-            uniform float brightness;
-            uniform float3 top0;
-            uniform float3 top1;
-            uniform float3 top2;
-            uniform float3 top3;
-            uniform float3 right0;
-            uniform float3 right1;
-            uniform float3 right2;
-            uniform float3 right3;
-            uniform float3 bottom0;
-            uniform float3 bottom1;
-            uniform float3 bottom2;
-            uniform float3 bottom3;
-            uniform float3 left0;
-            uniform float3 left1;
-            uniform float3 left2;
-            uniform float3 left3;
-
-            float3 sample4(float3 a,float3 b,float3 c,float3 d,float u) {
-                float t=clamp((u-.20)/.60,0.0,1.0)*3.0;
-                if(t<1.0) return mix(a,b,smoothstep(0.0,1.0,t));
-                if(t<2.0) return mix(b,c,smoothstep(1.0,2.0,t));
-                return mix(c,d,smoothstep(2.0,3.0,t));
-            }
-            half4 main(float2 p) {
-                float dl=abs(p.x-frame.x);
-                float dr=abs(p.x-frame.z);
-                float dt=abs(p.y-frame.y);
-                float db=abs(p.y-frame.w);
-                // Inner pixels are fully transparent: skip costly 16-zone interpolation.
-                float minDistance=min(min(dl,dr),min(dt,db));
-                if(minDistance>max(width,2.0)*3.2) return half4(0.0);
-                float x=clamp((p.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
-                float y=clamp((p.y-frame.y)/max(frame.w-frame.y,1.0),0.0,1.0);
-                float w=max(width,2.0);
-                float sl=exp(-pow(dl/w,2.0)*1.35);
-                float sr=exp(-pow(dr/w,2.0)*1.35);
-                float st=exp(-pow(dt/w,2.0)*1.35);
-                float sb=exp(-pow(db/w,2.0)*1.35);
-                float3 tc=sample4(top0,top1,top2,top3,x);
-                float3 rc=sample4(right0,right1,right2,right3,y);
-                float3 bc=sample4(bottom0,bottom1,bottom2,bottom3,1.0-x);
-                float3 lc=sample4(left0,left1,left2,left3,1.0-y);
-                float total=max(sl+sr+st+sb,.00001);
-                float3 color=(sl*lc+sr*rc+st*tc+sb*bc)/total;
-                float envelope=max(max(sl,sr),max(st,sb));
-                float light=clamp(envelope*(.82+.18*softness)*brightness,0.0,.78);
-                light *= smoothstep(.0,.09,max(color.r,max(color.g,color.b)));
-                return half4(half3(color*light),half(light));
-            }
-        """.trimIndent()
         private val SOURCE = """
             
             uniform float2 resolution;
@@ -187,6 +115,26 @@ internal class ShaderEdgeEngine {
             uniform float3 second;
             uniform int design;
             uniform float compact;
+            // Capture replaces ONLY the colors. Shape, particles, fluid movement, glow
+            // and timing remain controlled by the selected animation.
+            uniform int videoMode;
+            uniform float4 videoFrame;
+            uniform float3 top0;
+            uniform float3 top1;
+            uniform float3 top2;
+            uniform float3 top3;
+            uniform float3 right0;
+            uniform float3 right1;
+            uniform float3 right2;
+            uniform float3 right3;
+            uniform float3 bottom0;
+            uniform float3 bottom1;
+            uniform float3 bottom2;
+            uniform float3 bottom3;
+            uniform float3 left0;
+            uniform float3 left1;
+            uniform float3 left2;
+            uniform float3 left3;
             
             const float PI = 3.14159265358979;
             const float TAU = 6.28318530717958;
@@ -311,6 +259,41 @@ internal class ShaderEdgeEngine {
                 if(k<6.0) return mix(audioHigh.y,audioHigh.z,t);
                 if(k<7.0) return mix(audioHigh.z,audioHigh.w,t);
                 return mix(audioHigh.w,audio.x,t);
+            }
+            float3 interpolateZones(float3 a, float3 b, float3 c, float3 d, float u) {
+                // Frame sampling uses four zones along each physical screen edge,
+                // preserving colors under the corresponding content, not equal arc lengths.
+                float position=clamp((u-.20)/.60,0.0,1.0)*3.0;
+                if(position<1.0) return mix(a,b,smoothstep(0.0,1.0,position));
+                if(position<2.0) return mix(b,c,smoothstep(1.0,2.0,position));
+                return mix(c,d,smoothstep(2.0,3.0,position));
+            }
+            float3 sampledScreenColor(float2 p) {
+                float2 extent=max(videoFrame.zw-videoFrame.xy,float2(1.0));
+                float x=clamp((p.x-videoFrame.x)/extent.x,0.0,1.0);
+                float y=clamp((p.y-videoFrame.y)/extent.y,0.0,1.0);
+                float dl=abs(p.x-videoFrame.x);
+                float dr=abs(p.x-videoFrame.z);
+                float dt=abs(p.y-videoFrame.y);
+                float db=abs(p.y-videoFrame.w);
+                // The closest physical edge dominates. Corner colors blend smoothly.
+                float weight=36.0;
+                float sl=exp(-pow(dl/weight,2.0)*1.35);
+                float sr=exp(-pow(dr/weight,2.0)*1.35);
+                float st=exp(-pow(dt/weight,2.0)*1.35);
+                float sb=exp(-pow(db/weight,2.0)*1.35);
+                // At camera cutouts all distances can be large, so normalize by
+                // the nearest side before exponentiation to prevent underflow.
+                float nearest=min(min(dl,dr),min(dt,db));
+                sl=exp(-max(dl-nearest,0.0)/weight);
+                sr=exp(-max(dr-nearest,0.0)/weight);
+                st=exp(-max(dt-nearest,0.0)/weight);
+                sb=exp(-max(db-nearest,0.0)/weight);
+                float3 t=interpolateZones(top0,top1,top2,top3,x);
+                float3 r=interpolateZones(right0,right1,right2,right3,y);
+                float3 b=interpolateZones(bottom0,bottom1,bottom2,bottom3,1.0-x);
+                float3 l=interpolateZones(left0,left1,left2,left3,1.0-y);
+                return (st*t+sr*r+sb*b+sl*l)/max(st+sr+sb+sl,.00001);
             }
             float periodicDistance(float u, float point) {
                 return abs(fract(u-point+.5)-.5);
@@ -507,15 +490,25 @@ internal class ShaderEdgeEngine {
                 // distance with cosine interpolation, periodic at exactly u=0 and u=1.
                 float chroma=.5-.5*cos(TAU*(u-time*.035));
                 float3 base=mix(first,second,chroma);
+                if(videoMode==1) base=sampledScreenColor(px);
                 float whiteSpark=clamp(sparkle*(.48+.45*energy+.4*kick),0.0,.85);
                 float3 rgb=mix(base,float3(1.0),whiteSpark);
                 // Glow is an integral part of the material instead of a second Canvas layer.
                 // A pronounced attack response, not an always-bright idle loop.
                 float transient=clamp(attack,0.0,1.5);
                 float musicalGain=clamp(.22+.58*energy+.50*kick+.48*transient,.18,1.4);
+                // In Video Mode the motion is scene-driven, not muted by absence of
+                // Android audio capture. Keep the selected material animated.
+                if(videoMode==1) musicalGain=max(.66,musicalGain);
                 float a=clamp((core*.77 + aura*(.10+.35*glow)+whiteSpark*.28)
                     *brightness*musicalGain,0.0,.96);
                 a*=1.0-smoothstep(40.0*max(spread,.3),92.0*max(spread,.3),abs(d));
+                if(videoMode==1) {
+                    // Black areas of the picture must stay dark. Saturated video
+                    // colors remain the sampled colors rather than an added glow.
+                    float light=max(base.r,max(base.g,base.b));
+                    a*=smoothstep(0.005,.10,light);
+                }
                 // RuntimeShader colors are premultiplied, preserving correct edge blending.
                 return half4(half3(rgb*a),half(a));
             }
