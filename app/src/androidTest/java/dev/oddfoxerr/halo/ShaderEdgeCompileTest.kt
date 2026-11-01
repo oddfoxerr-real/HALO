@@ -16,11 +16,13 @@ class ShaderEdgeCompileTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val shader = ShaderEdgeEngine().compileForTest()
             assertNotNull(shader)
-            // All twenty-four designs share the same plain/video shader, including side flames.
+            // Four curated electrical/wave/spectrum designs share music/video AGSL.
             shader.setFloatUniform("frame", 8f, 28f, 1072f, 2372f)
             shader.setFloatUniform("videoFrame", 8f, 28f, 1072f, 2372f)
             shader.setIntUniform("videoMode", 1)
             shader.setFloatUniform("ambientMotion", 1f)
+            shader.setFloatUniform("musicDynamics", .9f, .65f, .3f, 1f)
+            shader.setFloatUniform("dynamicForce", 2.6f)
             for (side in listOf("top", "right", "bottom", "left")) {
                 for (index in 0 until 4) {
                     shader.setFloatUniform("${side}${index}",
