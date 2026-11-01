@@ -12,6 +12,7 @@ class MusicEnvelope {
     var pulse = 0f; private set
     var phase = 0f; private set
     val motor = ChainDynamics()
+    val dynamics = MusicDynamics()
 
     fun accept(input: FloatArray, bass: Float, timeMs: Long, sensitivity: Float) {
         val gain = if (sensitivity.isFinite()) sensitivity.coerceIn(.5f, 5f) else 1f
@@ -20,14 +21,16 @@ class MusicEnvelope {
         }
         targetBass = if (bass.isFinite()) (bass * gain).coerceIn(0f, 1f) else 0f
         sampleAt = timeMs
+        dynamics.observe(targets, targetBass, timeMs)
     }
     fun clear() {
         sampleAt = Long.MIN_VALUE; targets.fill(0f); bands.fill(0f)
-        targetBass = 0f; pulse = 0f; phase = 0f; motor.reset()
+        targetBass = 0f; pulse = 0f; phase = 0f; motor.reset(); dynamics.reset()
     }
     fun advance(timeMs: Long, dt: Float, speed: Float): Boolean {
         val time = if (dt.isFinite()) dt.coerceIn(0f, .05f) else 0f
         val fresh = sampleAt != Long.MIN_VALUE && timeMs - sampleAt in 0L..300L
+        dynamics.advance(time, fresh)
         val rise = 1f - exp(-time * 22f)
         val fall = 1f - exp(-time * 8f)
         var peak = 0f
@@ -43,6 +46,6 @@ class MusicEnvelope {
         motor.step(bass, time, 1f, speed) // gain applied once, at ingestion
         val movement = (peak * .6f + pulse).coerceAtMost(1f)
         phase = (phase + time * .20f * speed * movement) % 1f
-        return peak > .003f || pulse > .003f || motor.speed > .01f
+        return peak > .003f || pulse > .003f || motor.speed > .01f || dynamics.hit > .003f
     }
 }

@@ -42,7 +42,7 @@ class ChainsawView(context: Context) : View(context) {
     var glow = .75f
     var brightness = 1f
     var spread = 1f
-    var mode = EdgeMode.DOTS
+    var mode = EdgeMode.ELECTRIC_ARCS
     var edgeColor = 0xFF9A7BFF.toInt()
     var accentColor = 0xFF52E0CB.toInt()
     var cornerRadius = 32f
@@ -62,6 +62,7 @@ class ChainsawView(context: Context) : View(context) {
         }
     private var speed = 1f
     private var beatIntensity = 1.5f
+    private var dynamicForce = 2.4f
     private var shaderSeconds = 0f
     private var videoColors: VideoEdgeColors? = null
     private var videoLighting = VideoLightingPreferences()
@@ -123,6 +124,7 @@ class ChainsawView(context: Context) : View(context) {
         spread = settings.spread
         speed = settings.speed
         beatIntensity = settings.beatIntensity
+        dynamicForce = settings.dynamicForce
         cornerRadius = settings.corner
         leftInset = settings.leftInset
         rightInset = settings.rightInset
@@ -239,7 +241,10 @@ class ChainsawView(context: Context) : View(context) {
             ambientMotion = keepAmbientMotion,
             videoStyle = videoLighting.style,
             videoWidthPx = videoLighting.widthDp * density,
-            videoIntensity = videoLighting.intensity
+            videoIntensity = videoLighting.intensity,
+            dynamicLow = motion.dynamics.low, dynamicMid = motion.dynamics.mid,
+            dynamicHigh = motion.dynamics.high, dynamicHit = motion.dynamics.hit,
+            dynamicForce = dynamicForce
         ) == true
         gpuDidRender = gpuDidRender || rendered
         canvas.restore()
@@ -262,7 +267,16 @@ class ChainsawView(context: Context) : View(context) {
         }
 
         val moving = motion.advance(now, dt, speed)
-        shaderSeconds = (shaderSeconds + dt * speed).rem(3600f)
+        val dynamics = motion.dynamics
+        // Integrate velocity, never multiply an absolute timestamp by loudness:
+        // bass transients accelerate immediately without positional jumps.
+        val audioVelocity = if (videoColors != null) 1f else {
+            val drive = dynamics.low * 2.1f + dynamics.mid * 1.2f +
+                dynamics.high * .75f + dynamics.hit * 2.5f
+            val fallback = if (keepAmbientMotion) .36f else .14f
+            (fallback + drive * dynamicForce).coerceIn(.1f, 7.5f)
+        }
+        shaderSeconds = (shaderSeconds + dt * speed * audioVelocity).rem(3600f)
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (geometryKey != key) {
             geometryKey = key
@@ -296,7 +310,10 @@ class ChainsawView(context: Context) : View(context) {
                 video = videoColors, ambientMotion = keepAmbientMotion,
                 videoStyle = videoLighting.style,
                 videoWidthPx = videoLighting.widthDp * density,
-                videoIntensity = videoLighting.intensity
+                videoIntensity = videoLighting.intensity,
+                dynamicLow = dynamics.low, dynamicMid = dynamics.mid,
+                dynamicHigh = dynamics.high, dynamicHit = dynamics.hit,
+                dynamicForce = dynamicForce
             ) == true
             canvas.restore()
         } else {

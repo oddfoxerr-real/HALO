@@ -1,5 +1,33 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.18.0 — Curated edge visualizer
+
+HALO no longer offers a crowded list of 24 music animations. The music
+catalogue now contains **four original designs** inspired by the distinct
+visualizer *categories* seen in mature edge-lighting apps. No proprietary
+animations, media or shader code are copied:
+
+- **Electric Arcs** — the retained favorite, refined as broken plasma paths
+  that ignite on actual transient attacks and trace fine treble sparks.
+- **Mirror Rain** — mirrored top/bottom arrays of moving luminous droplets;
+  each column responds to its corresponding music frequency bands.
+- **Flat Waves** — paired standing contour waves; bass expands the shape,
+  mids modulate contours, and highs sharpen edges.
+- **Side Spectrum** — fixed left/right FFT columns with independent lengths
+  driven by band energy, rather than a scrolling perimeter pattern.
+
+A standalone **MusicDynamics** envelope derives low-, mid- and high-frequency
+levels and positive spectral flux from real Android Visualizer data. Its
+speed, shape, light density and impact dynamically react to those measured
+signals. A new **Dynamic force** control tunes this response, and existing
+saved preset names automatically migrate to the nearest available design.
+
+This does not bypass Android capture restrictions: when FFT is blocked by
+another service such as CYN, the visible fallback is deliberately not
+misrepresented as beat-synced music. Cinematic video mode and its screen-color
+sampling remain separate.
+
+
 ## v0.17.1 — Cinematic video lighting instead of distracting music effects
 
 The default Video Ambilight mode is now **Cinematic glow**, a narrow,

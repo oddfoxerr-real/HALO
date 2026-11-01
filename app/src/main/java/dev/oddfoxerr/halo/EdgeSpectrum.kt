@@ -6,30 +6,10 @@ import kotlin.math.sqrt
 /** Independent of Android; deterministic FFT spectrum extraction for the edge renderers. */
 /** GPU-only designs. No legacy line/Canvas animation modes remain selectable. */
 enum class EdgeMode(val title: String) {
-    DOTS("Luminous Dots"),
-    CONSTELLATION("Constellation"),
-    FIREFLIES("Fireflies"),
-    METEOR("Meteor Shower"),
-    LIQUID("Liquid Glass"),
-    AURORA("Aurora Flow"),
-    PRISM("Chromatic Prism"),
-    RIBBON("Silk Ribbons"),
-    BLOOM("Pulse Bloom"),
-    NEON("Neon Current"),
-    PIXEL("Pixel Matrix"),
-    HALO("Halo Rings"),
-    SHOCKWAVE("Shockwave"),
-    PLASMA("Plasma Veil"),
-    SPARKLINE("Electric Arcs"),
-    CRYSTAL("Crystal Shards"),
-    TIDAL("Tidal Flow"),
-    EMBER("Ember Drift"),
-    RADIANCE("Solar Corona"),
-    ORBITAL("Orbiting Satellites"),
-    SIDE_FLAMES("Side Flames"),
-    FLAT_BARS("Flat Edge Bars"),
-    STANDING_WAVES("Standing Waves"),
-    CORNER_AURA("Corner Aura")
+    ELECTRIC_ARCS("Electric Arcs"),
+    MIRROR_RAIN("Mirror Rain"),
+    FLAT_WAVES("Flat Waves"),
+    SIDE_SPECTRUM("Side Spectrum")
 }
 
 enum class NotificationEdgeMode(val title: String) {
@@ -69,19 +49,23 @@ object EdgeSpectrum {
      * Existing v0.13 installs keep an appropriate GPU design after the old
      * animation enum disappears. Never route users into removed Canvas code.
      */
-    fun mode(value: String?): EdgeMode =
-        EdgeMode.entries.firstOrNull { it.name == value } ?: when (value) {
-            "WAVE", "HELIX" -> EdgeMode.RIBBON
-            "BARS", "PIXELS" -> EdgeMode.PIXEL
-            "TRAIL", "COMET", "TWIN" -> EdgeMode.METEOR
-            "PULSE" -> EdgeMode.BLOOM
-            "CHAIN", "SPARKS" -> EdgeMode.FIREFLIES
-            "RAIN" -> EdgeMode.CONSTELLATION
-            "AURORA" -> EdgeMode.AURORA
-            "NEON" -> EdgeMode.NEON
-            "PRISM" -> EdgeMode.PRISM
-            else -> EdgeMode.DOTS
-        }
+    /**
+     * Saved v0.17 presets migrate to the closest supported visual family.
+     * Unsupported animations are removed from the catalogue and shader itself.
+     */
+    fun mode(value: String?): EdgeMode = when (value) {
+        "ELECTRIC_ARCS", "SPARKLINE", "SHOCKWAVE", "NEON", "PRISM",
+        "FIRELIES", "FIREFLIES", "SPARKS", "CHAIN" -> EdgeMode.ELECTRIC_ARCS
+        "MIRROR_RAIN", "CONSTELLATION", "METEOR", "PIXEL",
+        "DOTS", "RAIN", "COMET", "TRAIL", "TWIN", "ORBITAL",
+        "EMBER" -> EdgeMode.MIRROR_RAIN
+        "FLAT_WAVES", "LIQUID", "AURORA", "RIBBON", "TIDAL",
+        "PLASMA", "STANDING_WAVES", "WAVE", "HELIX" -> EdgeMode.FLAT_WAVES
+        "SIDE_SPECTRUM", "FLAT_BARS", "BARS", "PIXELS",
+        "BLOOM", "HALO", "SIDE_FLAMES", "RADIANCE",
+        "CRYSTAL", "CORNER_AURA", "PULSE" -> EdgeMode.SIDE_SPECTRUM
+        else -> EdgeMode.ELECTRIC_ARCS
+    }
 
     fun notificationMode(value: String?): NotificationEdgeMode =
         NotificationEdgeMode.entries.firstOrNull { it.name == value } ?: NotificationEdgeMode.CHARACTER
