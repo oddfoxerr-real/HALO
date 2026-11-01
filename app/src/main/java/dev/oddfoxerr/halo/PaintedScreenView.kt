@@ -185,7 +185,11 @@ internal class PaintedScreenView(context: Context) : View(context) {
             uniform int style;
 
             float hash21(float2 p) {
-                return fract(sin(dot(p, float2(127.1,311.7))) * 43758.5453);
+                // Inexpensive polynomial hash instead of a per-pixel sine.
+                // RuntimeShader paints the full screen, so this matters on A56.
+                p=fract(p*float2(.1031,.1030));
+                p+=dot(p,p.yx+33.33);
+                return fract((p.x+p.y)*p.x);
             }
 
             float2 clipPx(float2 p) {
@@ -273,8 +277,9 @@ internal class PaintedScreenView(context: Context) : View(context) {
                 float gy=lum(imageColor(center+float2(0.0,radius)))-
                          lum(imageColor(center-float2(0.0,radius)));
                 float2 flow=float2(-gy,gx);
-                float angle=6.2831853*hash21(coarseId+float2(17.3,4.6));
-                float2 fallback=float2(cos(angle),sin(angle));
+                float2 fallback=normalize(float2(
+                    hash21(coarseId+float2(17.3,4.6))-.5,
+                    hash21(coarseId+float2(5.1,19.8))-.5)+float2(.001,0.0));
                 flow=normalize(flow+fallback*max(.13-length(flow),0.0));
 
                 // A fully covered underpainting is essential. The old effect
