@@ -106,6 +106,8 @@ class VideoAmbilightService : Service() {
             statusValue.value = "Starting screen-color analysis…"
             // One live video mode at a time. Reusing a separate audio overlay would obscure input.
             stopService(Intent(this, MusicEdgeService::class.java))
+            NotificationEdgeOverlay.dismiss()
+            PillHaloOverlay.dismiss()
             val display = getSystemService(WindowManager::class.java).defaultDisplay
             val dm = DisplayMetrics()
             @Suppress("DEPRECATION")
