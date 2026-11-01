@@ -1,5 +1,22 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.18.1 — Quality rollback: original Electric Arcs only
+
+The v0.18.0 replacement effects did not meet the visual-quality bar.
+HALO now exposes one approved music design: **Electric Arcs**. Its exact
+v0.17.1 spark/fracture geometry is restored; experimental Mirror Rain,
+Flat Waves and Side Spectrum are removed from the AGSL program and UI.
+
+The v0.18.0 measured low/mid/high/onset signal envelope and **Dynamic force**
+control remain available for responsiveness. Older saved presets migrate to
+Electric Arcs automatically, without losing color or other settings.
+
+New visual designs will not be added simply to increase the count.
+A visually testable effect preview, reference comparison and real-device
+review are required before extending the catalogue. Cinematic Video
+Ambilight and notification effects remain unchanged.
+
+
 ## v0.18.0 — Curated edge visualizer
 
 HALO no longer offers a crowded list of 24 music animations. The music
