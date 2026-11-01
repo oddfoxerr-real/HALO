@@ -166,7 +166,7 @@ fun MiscPaintedControls() {
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(
-                "HALO requests full-display capture so painting keeps matching the screen when changing apps. Android or Samsung can restrict sharing and protected content. Frames stay on-device in memory and are never recorded or uploaded. Stop from HALO or Android's screen-sharing indicator.",
+                "HALO needs Android full-screen sharing consent. If Samsung blocks screen pixels or the capture stops, painting clears rather than leaving an old image. HALO cannot bypass protected apps. Stop the session here or via Android; frames remain private and are never uploaded.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
