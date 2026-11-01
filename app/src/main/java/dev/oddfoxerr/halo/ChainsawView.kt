@@ -242,8 +242,8 @@ class ChainsawView(context: Context) : View(context) {
             videoStyle = videoLighting.style,
             videoWidthPx = videoLighting.widthDp * density,
             videoIntensity = videoLighting.intensity,
-            dynamicLow = dynamics.low, dynamicMid = dynamics.mid,
-            dynamicHigh = dynamics.high, dynamicHit = dynamics.hit,
+            dynamicLow = motion.dynamics.low, dynamicMid = motion.dynamics.mid,
+            dynamicHigh = motion.dynamics.high, dynamicHit = motion.dynamics.hit,
             dynamicForce = dynamicForce
         ) == true
         gpuDidRender = gpuDidRender || rendered
