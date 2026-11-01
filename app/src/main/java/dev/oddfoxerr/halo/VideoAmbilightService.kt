@@ -59,7 +59,7 @@ class VideoAmbilightService : Service() {
     private var windowManager: WindowManager? = null
     private var view: ChainsawView? = null
     private var paintedView: PaintedScreenView? = null
-    private var overlay: View? = null
+    @Volatile private var overlay: View? = null
     private var lastSampleAt = 0L
     private var colors = VideoEdgeColors.BLACK
     @Volatile private var lighting = VideoLightingPreferences()
