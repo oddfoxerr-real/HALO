@@ -254,11 +254,22 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 }
             }
             MusicPanel.TUNE -> {
-                MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") { save(settings.copy(sensitivity = it)) }
-                MusicSlider("Beat impact", settings.beatIntensity, .5f..3f, "×") { save(settings.copy(beatIntensity = it)) }
-                Text("Sensitivity changes the amount of detected audio energy. Beat impact controls how strongly the visual flashes on transients.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                MusicSlider("Motion speed", settings.speed, .25f..3f, "×") { save(settings.copy(speed = it)) }
+                Text("Spectrum-driven motion", style = MaterialTheme.typography.titleMedium)
+                MusicSlider("Dynamic force", settings.dynamicForce, .6f..3.5f, "×") {
+                    save(settings.copy(dynamicForce = it))
+                }
+                Text("Bass changes impact and expansion. Mids reshape the material. High notes sharpen detail. Motion accelerates on real spectral changes, without adding random flashes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") {
+                    save(settings.copy(sensitivity = it))
+                }
+                MusicSlider("Beat impact", settings.beatIntensity, .5f..3f, "×") {
+                    save(settings.copy(beatIntensity = it))
+                }
+                MusicSlider("Motion speed", settings.speed, .25f..3f, "×") {
+                    save(settings.copy(speed = it))
+                }
                 MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
                 MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
                 MusicSlider("Glow", settings.glow, 0f..1f, "") { save(settings.copy(glow = it)) }
@@ -339,7 +350,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Enable notification access")
             }
         }
-        Text("For YouTube screen-color matching, use the Video tab instead of Music lighting. Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. Music lighting hides when playback is silent or Android blocks capture. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
+        Text("For YouTube screen-color matching, use the Video tab instead of Music lighting. Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. When Android blocks FFT capture, HALO keeps a gentle fallback animation without pretending it is beat-synced. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
     }
