@@ -3,11 +3,13 @@ package dev.oddfoxerr.halo
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
-import android.provider.Settings
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,11 +21,21 @@ import androidx.core.content.ContextCompat
 fun VideoAmbilightControls() {
     val context = LocalContext.current
     val status by VideoAmbilightService.status.collectAsState()
-    val preferences = remember(context) {
-        context.getSharedPreferences("halo_video_settings", android.content.Context.MODE_PRIVATE)
-    }
-    var response by remember { mutableFloatStateOf(preferences.getFloat("response", .78f)) }
+    var profile by remember(context) { mutableStateOf(VideoLightingPreferences.read(context)) }
     var feedback by remember { mutableStateOf<String?>(null) }
+    var advanced by remember { mutableStateOf(false) }
+
+    fun save(value: VideoLightingPreferences) {
+        profile = value
+        value.save(context)
+        if (VideoAmbilightService.isRunning) {
+            context.startService(
+                Intent(context, VideoAmbilightService::class.java)
+                    .setAction(VideoAmbilightService.ACTION_REFRESH)
+            )
+        }
+    }
+
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val start = Intent(context, VideoAmbilightService::class.java)
@@ -34,51 +46,147 @@ fun VideoAmbilightControls() {
                 ContextCompat.startForegroundService(context, start)
                 feedback = null
             } catch (failure: RuntimeException) {
-                feedback = "Android could not start screen-color lighting: ${failure.message.orEmpty()}"
+                feedback = "Android could not start screen lighting: ${failure.message.orEmpty()}"
             }
-        } else feedback = "Screen sharing was cancelled; HALO did not capture your display."
+        } else feedback = "Screen sharing was cancelled. No frame was captured."
     }
     val overlayPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        feedback = if (Settings.canDrawOverlays(context)) "Overlay enabled. Tap Start video lighting again."
-        else "Allow display over other apps first."
+        feedback = if (Settings.canDrawOverlays(context))
+            "Overlay enabled. Tap Start video lighting again."
+        else "Enable display over other apps first."
     }
 
-    Text("Video Ambilight", style = MaterialTheme.typography.titleLarge)
-    Text("Your selected HALO animation keeps moving while each edge and camera effect adopts the colors of the corresponding video area. The scene changes the colors, not the animation. No audio, screenshots, or video files are stored.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+    Text("Video lighting", style = MaterialTheme.typography.titleLarge)
+    Text(
+        "Cinematic lighting is now separate from music effects. It follows the actual picture " +
+            "with a soft, narrow border and avoids covering the video.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 
-    Text(status, color = if (VideoAmbilightService.isRunning) MaterialTheme.colorScheme.primary
+    Text("Appearance", style = MaterialTheme.typography.titleMedium)
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        VideoLightStyle.entries.forEach { style ->
+            FilterChip(
+                selected = profile.style == style,
+                onClick = { save(profile.copy(style = style)) },
+                label = { Text(style.label) }
+            )
+        }
+    }
+
+    Text(
+        when (profile.style) {
+            VideoLightStyle.CINEMATIC ->
+                "Recommended · still, accurate scene colors with no chasing dots or particles."
+            VideoLightStyle.SOFT_PULSE ->
+                "Same narrow cinematic glow, with only a very subtle breathing motion."
+            VideoLightStyle.SELECTED ->
+                "Advanced · use the music animation with a strict narrow-edge visibility limit."
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    Text("Brightness · ${(profile.intensity * 100).toInt()}%",
+        style = MaterialTheme.typography.labelLarge)
+    Slider(
+        value = profile.intensity,
+        onValueChange = { save(profile.copy(intensity = it)) },
+        valueRange = .12f..1f
+    )
+
+    Text("Glow width · ${profile.widthDp.toInt()} dp",
+        style = MaterialTheme.typography.labelLarge)
+    Slider(
+        value = profile.widthDp,
+        onValueChange = { save(profile.copy(widthDp = it)) },
+        valueRange = 6f..36f
+    )
+    Text(
+        "A narrow border keeps the picture clear. This width only affects video lighting.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    Text("Scene response · ${(profile.response * 100).toInt()}%",
+        style = MaterialTheme.typography.labelLarge)
+    Slider(
+        value = profile.response,
+        onValueChange = { save(profile.copy(response = it)) },
+        valueRange = .12f..1f
+    )
+    Text(
+        "Higher response follows scene cuts more closely; lower response softens transitions.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    TextButton(onClick = { advanced = !advanced }) {
+        Text(if (advanced) "Hide sampling alignment" else "Advanced · sampling alignment")
+    }
+    if (advanced) {
+        Text("Capture depth · ${(profile.sampleInset * 100f).toInt()}%",
+            style = MaterialTheme.typography.labelLarge)
+        Slider(
+            value = profile.sampleInset,
+            onValueChange = { save(profile.copy(sampleInset = it)) },
+            valueRange = .03f.. .13f
+        )
+        Text(
+            "Choose how far into the image HALO samples. Closer sampling tracks border colors " +
+                "more precisely; use a deeper sample if playback controls obscure the edges.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    HorizontalDivider()
+    Text(status, style = MaterialTheme.typography.bodyMedium,
+        color = if (VideoAmbilightService.isRunning) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant)
+
     Button(
         onClick = {
             if (VideoAmbilightService.isRunning) {
                 context.stopService(Intent(context, VideoAmbilightService::class.java))
-                feedback = "Stopping video lighting…"
+                feedback = "Stopping screen sharing…"
             } else if (!Settings.canDrawOverlays(context)) {
-                overlayPermission.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${context.packageName}")))
+                overlayPermission.launch(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}"))
+                )
             } else {
                 val manager = context.getSystemService(MediaProjectionManager::class.java)
                 consent.launch(manager.createScreenCaptureIntent())
             }
         },
         modifier = Modifier.fillMaxWidth()
-    ) { Text(if (VideoAmbilightService.isRunning) "Stop video lighting" else "Start video lighting") }
+    ) {
+        Text(if (VideoAmbilightService.isRunning)
+            "Stop video lighting" else "Start cinematic lighting")
+    }
 
-    feedback?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-
-    Text("Scene response · ${(response * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-    Slider(value = response, onValueChange = {
-        response = it
-        preferences.edit().putFloat("response", it).apply()
-    }, valueRange = .12f..1f)
-    Text("Higher values follow scene colors faster. Lower values soften color changes while the selected animation continues at its own speed.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-
-    HorizontalDivider()
+    feedback?.let {
+        Text(it, color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall)
+    }
     Text("How to use", style = MaterialTheme.typography.titleSmall)
-    Text("1. Choose any effect under Designs and tune its animation speed.\n2. Tap Start, approve screen sharing and select Entire screen.\n3. Switch to your video app. The chosen animation continues with 16 live scene-color zones.\n4. Stop from HALO, its notification or the system screen-sharing chip.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    Text("Protected video streams and secure screens can appear black in screen capture. HALO respects those restrictions. Screensharing stops when Android revokes the session, including device lock on supported Android versions.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    Text(
+        "1. Keep Cinematic glow selected for video.\\n" +
+            "2. Tap Start and approve Entire screen sharing.\\n" +
+            "3. Watch your video. Only the frame edges glow with their matching scene colors.\\n" +
+            "4. Stop from HALO, the notification or Android's screen-sharing control.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Text(
+        "Protected or DRM-restricted video may appear black in Android screen capture. " +
+            "HALO never stores or uploads captured frames.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
