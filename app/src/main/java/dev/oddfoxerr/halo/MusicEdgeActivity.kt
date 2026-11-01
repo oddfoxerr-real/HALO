@@ -215,7 +215,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("${EdgeMode.entries.size} GPU-native light designs", style = MaterialTheme.typography.titleMedium)
-                Text("No legacy Canvas animations. Tap any design to play its real GPU renderer in the phone preview.",
+                Text("Choose a moving border effect or fixed side flames, stationary bars, waves, and corner lighting. Tap to preview the real GPU animation.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 EdgeMode.entries.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -248,7 +248,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                     save(settings.copy(color = first, accent = second, colorSource = EdgeColorSource.MANUAL))
                 }
                 MusicToggle("Use album colors",
-                    "Use the current cover as the main color. Your accent and manual gradient remain saved.",
+                    "Use a balanced two-color palette from the dominant artwork tones. The original manual gradient is saved.",
                     settings.colorSource == EdgeColorSource.ALBUM_ART) {
                     save(settings.copy(colorSource = if (it) EdgeColorSource.ALBUM_ART else EdgeColorSource.MANUAL))
                 }
@@ -363,6 +363,10 @@ private fun DesignTile(
         EdgeMode.SPARKLINE -> "ELECTRIC DISCHARGE"
         EdgeMode.CRYSTAL -> "CRYSTAL OPTICS"
         EdgeMode.EMBER, EdgeMode.ORBITAL -> "MOVING PARTICLES"
+        EdgeMode.SIDE_FLAMES -> "STATIONARY SIDE FIRE"
+        EdgeMode.FLAT_BARS -> "FIXED SIDE EQUALIZER"
+        EdgeMode.STANDING_WAVES -> "ANCHORED WAVES"
+        EdgeMode.CORNER_AURA -> "CORNER EFFECTS"
     }
     Card(
         onClick = choose,
