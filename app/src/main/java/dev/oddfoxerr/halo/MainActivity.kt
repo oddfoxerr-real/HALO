@@ -1,6 +1,10 @@
 package dev.oddfoxerr.halo
 
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
@@ -122,6 +126,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         permissionRevision++
+        HaloUpdater.promptOnAppOpen(this)
     }
 }
 
@@ -155,7 +160,7 @@ private fun HaloApp(
                         Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.20.1", modifier = Modifier.padding(end = 18.dp),
+                actions = { Text("v0.21.0", modifier = Modifier.padding(end = 18.dp),
                     color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
@@ -278,6 +283,35 @@ private fun HaloApp(
                         }
                         item { PermissionSection("Notification access", listenerEnabled, requestListener) }
                         item { PermissionSection("Display over apps", overlayEnabled, requestOverlay) }
+                        item {
+                            SectionCard {
+                                val requester = LocalContext.current
+                                var notificationsAllowed by remember(revision) {
+                                    mutableStateOf(Build.VERSION.SDK_INT < 33 ||
+                                        requester.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                                        PackageManager.PERMISSION_GRANTED)
+                                }
+                                val permission = rememberLauncherForActivityResult(
+                                    ActivityResultContracts.RequestPermission()) {
+                                    notificationsAllowed = it
+                                }
+                                Text("Automatic updates", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                Text("HALO checks GitHub releases in the background over Wi-Fi, verifies the APK and downloads it without needing you to check manually.",
+                                    color = Muted)
+                                Text("Android still requires approval before a sideloaded update installs.",
+                                    color = Muted, style = MaterialTheme.typography.bodySmall)
+                                Text(HaloUpdater.prefs(requester).getString("status",
+                                    "Background checking is scheduled").orEmpty(),
+                                    color = MaterialTheme.colorScheme.primary)
+                                if (!notificationsAllowed && Build.VERSION.SDK_INT >= 33) {
+                                    Button(onClick = { permission.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                                        modifier = Modifier.fillMaxWidth()) {
+                                        Text("Allow update-ready notifications")
+                                    }
+                                }
+                            }
+                        }
                         item { SectionCard { QuietHoursEditor(store) } }
                         item {
                             SectionCard {

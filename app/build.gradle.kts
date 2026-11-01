@@ -10,9 +10,26 @@ android {
         applicationId = "dev.oddfoxerr.halo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 28
-        versionName = "0.20.1"
+        versionCode = 29
+        versionName = "0.21.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    signingConfigs {
+        val updateKeyPath = System.getenv("HALO_UPDATE_KEYSTORE_PATH")
+        val updatePassword = System.getenv("HALO_UPDATE_STORE_PASSWORD")
+        if (!updateKeyPath.isNullOrBlank() && !updatePassword.isNullOrBlank()) {
+            create("haloUpdate") {
+                storeFile = file(updateKeyPath)
+                storePassword = updatePassword
+                keyAlias = "halo"
+                keyPassword = updatePassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            signingConfigs.findByName("haloUpdate")?.let { signingConfig = it }
+        }
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -33,6 +50,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
