@@ -27,7 +27,7 @@ internal class ShaderEdgeEngine {
     fun renderVideo(canvas: Canvas, width: Int, height: Int, bounds: RectF,
         colors: VideoEdgeColors, thickness: Float, spread: Float, glow: Float,
         brightness: Float): Boolean {
-        if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
+        if (videoDisabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = videoShader ?: RuntimeShader(VIDEO_SOURCE).also { videoShader = it }
             runtime.setFloatUniform("frame", bounds.left, bounds.top, bounds.right, bounds.bottom)
@@ -54,7 +54,7 @@ internal class ShaderEdgeEngine {
             paint.shader = null
             true
         } catch (failure: RuntimeException) {
-            disabled = true
+            videoDisabled = true
             paint.shader = null
             Log.e("HALO", "Video edge shader failed", failure)
             false
@@ -62,6 +62,7 @@ internal class ShaderEdgeEngine {
     }
 
     private var disabled = false
+    private var videoDisabled = false
 
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
     internal fun compileVideoForTest(): RuntimeShader = RuntimeShader(VIDEO_SOURCE)

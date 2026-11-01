@@ -1,5 +1,14 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.15.1 — Overlay ownership and GPU isolation
+
+Video Ambilight has exclusive ownership of screen-edge lighting while capturing.
+Entering Video mode dismisses existing notification and camera-pill overlays;
+starting Music during active projection is declined, and new notification
+flashes cannot claim the music window. Video shader compilation failures are
+isolated from the normal music/notification GPU pipeline. Android 14+ capture
+consent, secure-video restrictions, and device-testing caveats remain unchanged.
+
 ## v0.15.0 — Video Ambilight + Beat Sync
 
 **Video Mode:** Select **Music → Video → Start video lighting**. HALO explicitly
