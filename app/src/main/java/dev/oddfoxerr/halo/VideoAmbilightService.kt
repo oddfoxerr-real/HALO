@@ -64,6 +64,8 @@ class VideoAmbilightService : Service() {
     @Volatile private var lighting = VideoLightingPreferences()
     private var stopping = false
     private var framesSeen = 0
+    private var blankPaintFrames = 0
+    private var paintCaptureBlocked = false
     private var width = 0
     private var height = 0
     private var densityDpi = 0
@@ -132,10 +134,13 @@ class VideoAmbilightService : Service() {
             @Suppress("DEPRECATION")
             display.getRealMetrics(dm)
             densityDpi = dm.densityDpi
-            val divisor = if (isPainted) 8 else 6
+            val divisor = if (isPainted) 4 else 6
             width = (dm.widthPixels / divisor).coerceAtLeast(96)
             height = (dm.heightPixels / divisor).coerceAtLeast(96)
-            showOverlay()
+            // Do not put the painter over the permission chooser or the first
+            // capture frame. Create its secure overlay only after valid pixels
+            // arrive; this avoids capturing our own surface on session startup.
+            if (!isPainted) showOverlay()
 
             val manager = getSystemService(MediaProjectionManager::class.java)
             val capture = manager.getMediaProjection(resultCode, resultData)
@@ -215,7 +220,7 @@ class VideoAmbilightService : Service() {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader!!.surface, null, worker
         )
-        statusValue.value = if (isPainted) "Painted Screen · live, on-device brush effect" else
+        statusValue.value = if (isPainted) "Waiting for a valid screen frame…" else
             "Cinematic edge lighting · accurate live screen colors"
     }
 
@@ -234,11 +239,39 @@ class VideoAmbilightService : Service() {
                                 plane.buffer, image.width, image.height,
                                 plane.rowStride, plane.pixelStride)
                             framesSeen++
-                            main.post { if (!stopping) paintedView?.setFrame(bitmap) }
-                            if (framesSeen == 15 && bitmap == null)
-                                statusValue.value = "Capture is black or protected · painting paused"
-                            else if (bitmap != null && framesSeen % 40 == 0)
-                                statusValue.value = "Painted Screen · following your screen locally"
+                            if (bitmap == null) blankPaintFrames++ else blankPaintFrames = 0
+                            if (bitmap == null && blankPaintFrames > 20 && overlay != null) {
+                                // Some vendor screen-capture implementations treat a
+                                // secure overlay as blacking the underlying display.
+                                // Do not loop between black / painted frames forever.
+                                paintCaptureBlocked = true
+                                statusValue.value = "Samsung blocked full-screen capture under the painting overlay"
+                                main.post { if (!stopping) stopSelf() }
+                            } else {
+                                main.post {
+                                    if (stopping || paintCaptureBlocked) {
+                                        bitmap?.recycle()
+                                    } else if (bitmap != null) {
+                                        if (overlay == null) {
+                                            try { showOverlay() } catch (error: Exception) {
+                                                Log.e("HALO", "Painting overlay unavailable", error)
+                                                bitmap.recycle()
+                                                stopSelf()
+                                                return@post
+                                            }
+                                        }
+                                        paintedView?.setFrame(bitmap)
+                                        paintedView?.visibility = View.VISIBLE
+                                    } else if (blankPaintFrames >= 3) {
+                                        paintedView?.setFrame(null)
+                                        paintedView?.visibility = View.INVISIBLE
+                                    }
+                                }
+                                if (framesSeen == 15 && bitmap == null)
+                                    statusValue.value = "Capture is protected or black · painting paused"
+                                else if (bitmap != null && framesSeen % 40 == 0)
+                                    statusValue.value = "Painterly brush strokes · full-screen live"
+                            }
                         } else {
                             val profile = lighting
                             val value = VideoColorSampler.sample(
@@ -263,7 +296,7 @@ class VideoAmbilightService : Service() {
 
     private fun resize(fullWidth: Int, fullHeight: Int) {
         if (stopping || virtualDisplay == null || fullWidth < 16 || fullHeight < 16) return
-        val divisor = if (isPainted) 8 else 6
+        val divisor = if (isPainted) 4 else 6
         val newWidth = (fullWidth / divisor).coerceAtLeast(96)
         val newHeight = (fullHeight / divisor).coerceAtLeast(96)
         if (newWidth == width && newHeight == height) return
@@ -275,6 +308,8 @@ class VideoAmbilightService : Service() {
         virtualDisplay?.setSurface(reader!!.surface)
         old?.close()
         framesSeen = 0
+        blankPaintFrames = 0
+        if (isPainted) main.post { paintedView?.setFrame(null) }
     }
 
     private fun notification(): Notification {
@@ -297,7 +332,8 @@ class VideoAmbilightService : Service() {
     override fun onDestroy() {
         stopping = true
         isRunning = false
-        if (statusValue.value != "Screen sharing ended") statusValue.value = "Screen effects are off"
+        if (statusValue.value != "Screen sharing ended" && !paintCaptureBlocked)
+            statusValue.value = "Screen effects are off"
         worker.removeCallbacksAndMessages(null)
         try { virtualDisplay?.release() } catch (_: RuntimeException) {}
         virtualDisplay = null

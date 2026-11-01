@@ -111,12 +111,16 @@ internal class PaintedScreenView(context: Context) : View(context) {
     }
 
     fun setFrame(frame: Bitmap?) {
+        val old = currentFrame
         currentFrame = frame
         invalidate()
+        // RenderThread may still be sampling the previous BitmapShader.
+        // Defer recycling until the GPU has had several display frames to finish.
+        if (old != null && old !== frame) postDelayed({ if (!old.isRecycled) old.recycle() }, 1000L)
     }
 
     fun clear() {
-        currentFrame = null
+        setFrame(null)
         output.shader = null
         shader = null
         invalidate()
@@ -132,10 +136,8 @@ internal class PaintedScreenView(context: Context) : View(context) {
         source.setLocalMatrix(matrix)
 
         if (Build.VERSION.SDK_INT < 33 || !canvas.isHardwareAccelerated || shaderUnavailable) {
-            // No fake CPU brush animation. This path only preserves the captured image.
-            output.shader = source
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), output)
-            output.shader = null
+            // A plain full-screen screenshot would cover UI and cause input lag.
+            // Fail open: the original app remains visible underneath HALO.
             return
         }
         try {
@@ -168,47 +170,77 @@ internal class PaintedScreenView(context: Context) : View(context) {
             uniform float brush;
             uniform float strength;
             uniform int style;
-
-            float noise(float2 p) {
-                return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+            float hash21(float2 p) {
+                return fract(sin(dot(p,float2(127.1,311.7)))*43758.5453);
             }
-            float light(float3 c) {
-                return dot(c, float3(.2126, .7152, .0722));
+            float brightnessOf(float3 c) {
+                return dot(c,float3(.2126,.7152,.0722));
+            }
+            // Every stamp is a real elongated, tapered procedural brush mark.
+            // Local gradient rotates its bristles along the picture's features;
+            // the tile ID anchors strokes so still scenes never shimmer randomly.
+            float4 brushStroke(float2 p, float cell, float2 offset) {
+                float2 id=floor(p/cell+offset);
+                float r=hash21(id);
+                float2 center=(id+.5-offset)*cell;
+                center+=float2(hash21(id+11.7)-.5,hash21(id+28.3)-.5)*cell*.22;
+                float radius=max(cell*.35,2.0);
+                float2 dx=float2(radius,0.0);
+                float2 dy=float2(0.0,radius);
+                float gx=brightnessOf(float3(screen.eval(center+dx).rgb)) -
+                         brightnessOf(float3(screen.eval(center-dx).rgb));
+                float gy=brightnessOf(float3(screen.eval(center+dy).rgb)) -
+                         brightnessOf(float3(screen.eval(center-dy).rgb));
+                float2 orientation=float2(-gy,gx);
+                float magnitude=length(orientation);
+                float angle=6.2831853*hash21(id+5.9);
+                float2 fallback=float2(cos(angle),sin(angle));
+                float2 axis=normalize(orientation+fallback*max(.055-magnitude,0.0));
+                float2 across=float2(-axis.y,axis.x);
+                float2 q=p-center;
+                float along=dot(q,axis);
+                float side=dot(q,across);
+                float halfLength=cell*(.45+.28*hash21(id+2.3));
+                float halfWidth=cell*(style==1?.23:.16);
+                halfWidth*=.75+.45*hash21(id+4.2);
+                float taper=1.0-.42*pow(clamp(abs(along)/max(halfLength,.01),0.0,1.0),2.0);
+                float uneven=sin(along*.37+r*9.0)*.12+sin(along*.83+side*.4+r*17.0)*.075;
+                float width=halfWidth*taper*(1.0+uneven);
+                float longitudinal=1.0-smoothstep(halfLength*.65,halfLength,abs(along));
+                float lateral=1.0-smoothstep(width*.45,width,abs(side));
+                float mask=longitudinal*lateral;
+                // Multiple separated bristles with varied opacity produce actual
+                // painted filament marks, not quantized flat pixel blocks.
+                float bristle=sin(side*2.25+along*.21+r*25.0)*
+                               sin(side*4.35-along*.11+r*6.0);
+                mask*=clamp(.68+.32*bristle,0.0,1.0);
+                float grain=hash21(floor(p*.7)+id*.21);
+                mask*=.77+.23*grain;
+                float3 pigment=float3(screen.eval(center).rgb);
+                float levels=style==2?7.0:style==1?12.0:10.0;
+                pigment=floor(clamp(pigment,0.0,1.0)*levels+.5)/levels;
+                if(style==1) pigment=mix(pigment,float3(.94,.90,.85),.16);
+                float high=sin(side*1.8+along*.13);
+                pigment=clamp(pigment*(.89+.15*high),0.0,1.0);
+                if(style==2) {
+                    float outline=smoothstep(.11,.36,magnitude);
+                    pigment*=1.0-.28*outline;
+                }
+                return float4(pigment,mask);
             }
             half4 main(float2 xy) {
-                float2 p = clamp(xy, float2(0.0), resolution);
-                float cell = max(3.0, brush * (style == 1 ? 1.35 : 1.0));
-                float2 tile = floor(p / cell);
-                float random = noise(tile);
-                float rotation = random * 6.2831853;
-                float2 direction = float2(cos(rotation), sin(rotation));
-                float2 tangent = float2(-direction.y, direction.x);
-                float2 displaced = p + direction * (random - .5) * cell * .7;
-                float3 original = float3(screen.eval(p).rgb);
-                float3 pigment = float3(screen.eval(displaced).rgb) * .38;
-                pigment += float3(screen.eval(displaced + direction * cell * .6).rgb) * .19;
-                pigment += float3(screen.eval(displaced - direction * cell * .6).rgb) * .19;
-                pigment += float3(screen.eval(displaced + tangent * cell * .55).rgb) * .12;
-                pigment += float3(screen.eval(displaced - tangent * cell * .55).rgb) * .12;
-
-                float levels = style == 2 ? 5.0 : (style == 1 ? 11.0 : 8.0);
-                pigment = floor(clamp(pigment, 0.0, 1.0) * levels + .5) / levels;
-                float stroke = sin(dot(p, direction) * .75 + random * 9.0);
-                float fibers = noise(floor(p * .48)) - .5;
-                pigment *= 1.0 + (.026 * stroke + .033 * fibers) * strength;
-                if (style == 1) {
-                    // Pale washes and soft blooms.
-                    pigment = mix(pigment, float3(1.0), .095);
-                } else {
-                    float gradX = abs(light(float3(screen.eval(p + float2(cell, 0.0)).rgb)) -
-                                      light(float3(screen.eval(p - float2(cell, 0.0)).rgb)));
-                    float gradY = abs(light(float3(screen.eval(p + float2(0.0, cell)).rgb)) -
-                                      light(float3(screen.eval(p - float2(0.0, cell)).rgb)));
-                    float contour = smoothstep(.085, .27, gradX + gradY);
-                    pigment *= 1.0 - contour * (style == 2 ? .45 : .09);
-                }
-                float3 result = mix(original, clamp(pigment, 0.0, 1.0), strength);
-                return half4(half3(result), 1.0);
+                float2 p=clamp(xy,float2(0.0),resolution);
+                float base=max(7.0,brush*2.55);
+                float4 large=brushStroke(p,base,float2(.0,.0));
+                float4 detail=brushStroke(p,base*.48,float2(.36,.58));
+                float a=large.a*.80+detail.a*.42*(1.0-large.a);
+                float3 pigment=mix(large.rgb,detail.rgb,clamp(detail.a*.50,0.0,1.0));
+                // Watercolour uses thin translucent washes; oil has pronounced
+                // impasto; ink has more contrast. Transparent gaps deliberately
+                // expose the real live app and preserve its crisp text / controls.
+                float styleOpacity=style==1?.57:style==2?.90:.84;
+                a=clamp(a*strength*styleOpacity,0.0,.81);
+                return half4(half3(pigment*a),half(a));
             }
         """.trimIndent()
     }

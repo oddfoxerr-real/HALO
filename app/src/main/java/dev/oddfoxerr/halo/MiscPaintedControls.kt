@@ -3,6 +3,7 @@ package dev.oddfoxerr.halo
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -84,7 +85,7 @@ fun MiscPaintedControls() {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Turn whatever you browse into a moving painting. HALO uses the same live screen sampling as Video Ambilight, but paints over the whole picture with GPU brush texture and softened colors.",
+                "Live brush strokes follow shapes and colors across your screen, with textured pigment instead of a flat color filter. The original apps remain visible and touchable underneath.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text("Paint style", style = MaterialTheme.typography.titleMedium)
@@ -138,7 +139,9 @@ fun MiscPaintedControls() {
                                     Uri.parse("package:${context.packageName}")))
                         else -> {
                             val manager = context.getSystemService(MediaProjectionManager::class.java)
-                            permission.launch(manager.createScreenCaptureIntent())
+                            permission.launch(if (Build.VERSION.SDK_INT >= 34)
+                                manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+                            else manager.createScreenCaptureIntent())
                         }
                     }
                 },
@@ -149,7 +152,7 @@ fun MiscPaintedControls() {
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(
-                "Choose Entire screen in Android's sharing prompt. The effect is local and temporary: no photos or screen recordings are saved or uploaded. Apps that block capture cannot be painted. Stop using this card, HALO's notification or Android's screen-sharing indicator.",
+                "HALO requests full-display capture so painting keeps matching the screen when changing apps. Android or Samsung can restrict sharing and protected content. Frames stay on-device in memory and are never recorded or uploaded. Stop from HALO or Android's screen-sharing indicator.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
