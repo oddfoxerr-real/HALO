@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,8 +58,22 @@ class MusicEdgeActivity : ComponentActivity() {
 private enum class MusicPanel(val label: String) { DESIGNS("Designs"), TUNE("Tune"), VIDEO("Video"), RULES("Playback") }
 private data class MusicPalette(val name: String, val first: Long, val second: Long)
 private val palettes = listOf(
-    MusicPalette("Aurora", 0xFF9A7BFF, 0xFF52E0CB), MusicPalette("Ember", 0xFFFF684B, 0xFFFFCC65),
-    MusicPalette("Ice", 0xFF4CAEFF, 0xFFB7F5FF), MusicPalette("Rose", 0xFFED73A7, 0xFFC6A0FF)
+    MusicPalette("Aurora", 0xFF9A7BFF, 0xFF52E0CB),
+    MusicPalette("Ember", 0xFFFF684B, 0xFFFFCC65),
+    MusicPalette("Ice", 0xFF4CAEFF, 0xFFB7F5FF),
+    MusicPalette("Rose", 0xFFED73A7, 0xFFC6A0FF),
+    MusicPalette("Voltage", 0xFF21F2DC, 0xFF3D64FF),
+    MusicPalette("Solar", 0xFFFFE463, 0xFFFF6142),
+    MusicPalette("Midnight", 0xFF4D64D9, 0xFFB694FF),
+    MusicPalette("Neon", 0xFF4BFF6B, 0xFFFF4ADC),
+    MusicPalette("Ruby", 0xFFFF354A, 0xFFFF9A70),
+    MusicPalette("Ocean", 0xFF16C0EA, 0xFF3278F4),
+    MusicPalette("Mint", 0xFF8EFFE0, 0xFF3CBAAA),
+    MusicPalette("Monochrome", 0xFFFFFFFF, 0xFF8592A3),
+    MusicPalette("Cyber", 0xFF00F5FF, 0xFFFF4DD1),
+    MusicPalette("Copper", 0xFFFFAC68, 0xFFA66037),
+    MusicPalette("Violet", 0xFF6B5AFF, 0xFFD181FF),
+    MusicPalette("Lava", 0xFFFF372D, 0xFFFFC15D)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -199,7 +214,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         }
         when (panel) {
             MusicPanel.DESIGNS -> {
-                Text("12 GPU-native light designs", style = MaterialTheme.typography.titleMedium)
+                Text("${EdgeMode.entries.size} GPU-native light designs", style = MaterialTheme.typography.titleMedium)
                 Text("No legacy Canvas animations. Tap any design to play its real GPU renderer in the phone preview.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 EdgeMode.entries.chunked(2).forEach { pair ->
@@ -211,25 +226,31 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
-                Text("Palette", style = MaterialTheme.typography.titleMedium)
-                palettes.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pair.forEach { palette ->
-                            FilterChip(selected = settings.color == palette.first.toInt() && settings.accent == palette.second.toInt(),
-                                onClick = { save(settings.copy(color = palette.first.toInt(), accent = palette.second.toInt(), colorSource = EdgeColorSource.MANUAL)) },
-                                label = { Text(palette.name) }, leadingIcon = {
-                                    Box(Modifier.size(18.dp).background(Brush.linearGradient(listOf(Color(palette.first), Color(palette.second))), RoundedCornerShape(9.dp)))
-                                }, modifier = Modifier.weight(1f))
-                        }
+                Text("Color Studio", style = MaterialTheme.typography.titleMedium)
+                Text("Pick any two colors with precise hue, saturation, brightness and HEX editing, or apply a ready-made gradient.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    palettes.forEach { palette ->
+                        FilterChip(
+                            selected = settings.color == palette.first.toInt() && settings.accent == palette.second.toInt(),
+                            onClick = { save(settings.copy(color = palette.first.toInt(), accent = palette.second.toInt(), colorSource = EdgeColorSource.MANUAL)) },
+                            label = { Text(palette.name) },
+                            leadingIcon = {
+                                Box(Modifier.size(18.dp).background(
+                                    Brush.linearGradient(listOf(Color(palette.first), Color(palette.second))),
+                                    RoundedCornerShape(9.dp)))
+                            }
+                        )
                     }
                 }
-                MusicToggle("Use album colors", "Use the current cover as the main color; keep your accent as the second color.",
+                ColorStudio(settings.color, settings.accent) { first, second ->
+                    save(settings.copy(color = first, accent = second, colorSource = EdgeColorSource.MANUAL))
+                }
+                MusicToggle("Use album colors",
+                    "Use the current cover as the main color. Your accent and manual gradient remain saved.",
                     settings.colorSource == EdgeColorSource.ALBUM_ART) {
                     save(settings.copy(colorSource = if (it) EdgeColorSource.ALBUM_ART else EdgeColorSource.MANUAL))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HexColor("Main color", settings.color, Modifier.weight(1f)) { save(settings.copy(color = it, colorSource = EdgeColorSource.MANUAL)) }
-                    HexColor("Accent", settings.accent, Modifier.weight(1f)) { save(settings.copy(accent = it)) }
                 }
             }
             MusicPanel.TUNE -> {
@@ -244,7 +265,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 MusicSlider("Light spread", settings.spread, .3f..2.8f, "×") { save(settings.copy(spread = it)) }
                 HorizontalDivider()
                 Text("Camera cutout lighting", style = MaterialTheme.typography.titleMedium)
-                Text("Illuminate your real camera cutout automatically, or position a custom round/pill halo. Uses the same calibrated shape for notification edges.",
+                Text("Your camera ring now uses the exact selected GPU animation and colors, including moving particles and beat responses. Auto-detect the cutout or calibrate a custom circle/pill.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 NotchMode.entries.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -337,6 +358,11 @@ private fun DesignTile(
         EdgeMode.PRISM, EdgeMode.NEON -> "OPTICAL LIGHT"
         EdgeMode.BLOOM, EdgeMode.HALO -> "PULSE & ENERGY"
         EdgeMode.PIXEL -> "DIGITAL CELLS"
+        EdgeMode.SHOCKWAVE, EdgeMode.RADIANCE -> "IMPACT & FLARE"
+        EdgeMode.PLASMA, EdgeMode.TIDAL -> "FLUID MOTION"
+        EdgeMode.SPARKLINE -> "ELECTRIC DISCHARGE"
+        EdgeMode.CRYSTAL -> "CRYSTAL OPTICS"
+        EdgeMode.EMBER, EdgeMode.ORBITAL -> "MOVING PARTICLES"
     }
     Card(
         onClick = choose,
@@ -385,14 +411,6 @@ private fun MusicSlider(label: String, value: Float, range: ClosedFloatingPointR
         }
         Slider(value, change, valueRange = range, modifier = Modifier.semantics { contentDescription = label })
     }
-}
-@Composable
-private fun HexColor(label: String, color: Int, modifier: Modifier, change: (Int) -> Unit) {
-    var hex by remember(color) { mutableStateOf("#%06X".format(color and 0xFFFFFF)) }
-    OutlinedTextField(hex, { input ->
-        hex = input.take(7)
-        if (hex.matches(Regex("#[0-9a-fA-F]{6}"))) change((hex.drop(1).toLong(16) or 0xFF000000L).toInt())
-    }, modifier = modifier, label = { Text(label) }, singleLine = true, isError = hex.length == 7 && !hex.matches(Regex("#[0-9a-fA-F]{6}")))
 }
 @Composable
 private fun SourcePicker(selected: Set<String>, change: (Set<String>) -> Unit, close: () -> Unit) {
