@@ -39,4 +39,21 @@ jobs:
           profile: pixel_6
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            mkdir -p gpu-previews
+            for design in electric_arcs twin_pulse light_beads corner_trace; do
+              for phase in t0 t1; do
+                frame="${design}_${phase}.png"
+                adb exec-out run-as dev.oddfoxerr.halo cat "files/halo-previews/${frame}" > "gpu-previews/${frame}"
+                test -s "gpu-previews/${frame}"
+              done
+            done
+      - name: Upload actual GPU-rendered animation frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: halo-edge-gpu-previews
+          path: gpu-previews/*.png
+          if-no-files-found: warn
+          retention-days: 14
