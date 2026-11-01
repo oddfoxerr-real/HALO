@@ -14,7 +14,7 @@ import kotlin.math.sin
 /**
  * One visualizer for music and incoming notifications.
  * Removed the old stroke-based animation renderer completely: only AGSL designs render.
- * Notch lighting remains independent and opt-in.
+ * Camera lighting is opt-in and uses the same AGSL effect as the screen edges.
  */
 class ChainsawView(context: Context) : View(context) {
     private val motion = MusicEnvelope()
@@ -32,7 +32,10 @@ class ChainsawView(context: Context) : View(context) {
     private var noticeEndAt = 0L
     private var noticePersistent = false
     val isNotificationPlaying: Boolean get() = noticeEndAt > SystemClock.uptimeMillis()
-    private val notchRenderer = NotchLightRenderer()
+    private val notchMask = Path()
+    private val notchOuter = RectF()
+    private val notchInner = RectF()
+    private var notchMaskKey = ""
     private var notchSettings = ProfileStore(context).notchSettings()
 
     var thickness = 1f
@@ -164,6 +167,45 @@ class ChainsawView(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
+    /**
+     * Render precisely the selected display effect around the camera using the same shader,
+     * spectrum, palette, motion clock and intensity. Mask the physical camera opening.
+     * A compact particle-density uniform makes each pattern legible around a small cutout.
+     */
+    private fun drawCameraEffect(canvas: Canvas) {
+        val placement = NotchGeometry.find(this, notchSettings) ?: return
+        val rect = placement.first
+        if (rect.width() <= 2f || rect.height() <= 2f) return
+        val radius = min(rect.width(), rect.height()) / 2f
+        val key = "${rect.left}:${rect.top}:${rect.right}:${rect.bottom}:${placement.second}"
+        if (key != notchMaskKey) {
+            notchMaskKey = key
+            val padding = 24f * density
+            notchOuter.set(rect)
+            notchOuter.inset(-padding, -padding)
+            notchInner.set(rect)
+            notchInner.inset(1.5f * density, 1.5f * density)
+            notchMask.reset()
+            notchMask.fillType = Path.FillType.EVEN_ODD
+            notchMask.addRoundRect(notchOuter, radius + padding, radius + padding, Path.Direction.CW)
+            notchMask.addRoundRect(notchInner,
+                (radius - 1.5f * density).coerceAtLeast(1f),
+                (radius - 1.5f * density).coerceAtLeast(1f), Path.Direction.CW)
+        }
+        canvas.save()
+        canvas.clipPath(notchMask)
+        val rendered = shaderEngine?.render(
+            canvas, width, height, rect, radius, mode,
+            motion.bands, motion.pulse, motion.phase, shaderSeconds,
+            density * thickness, spread, glow, brightness,
+            videoColors?.top ?: edgeColor, videoColors?.right ?: accentColor,
+            (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
+            compact = true
+        ) == true
+        gpuDidRender = gpuDidRender || rendered
+        canvas.restore()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val now = SystemClock.uptimeMillis()
@@ -222,10 +264,7 @@ class ChainsawView(context: Context) : View(context) {
             gpuDidRender = false
         }
 
-        notchRenderer.draw(canvas, this, notchSettings, videoColors?.top ?: edgeColor,
-            videoColors?.right ?: accentColor,
-            brightness, glow, (motion.pulse + (motion.bands.maxOrNull() ?: 0f) * .35f).coerceIn(0f, 1f),
-            motion.phase)
+        drawCameraEffect(canvas)
         if (moving || noticePlaying) requestFrame()
     }
 }
