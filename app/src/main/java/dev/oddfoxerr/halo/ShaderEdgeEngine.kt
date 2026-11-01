@@ -29,7 +29,7 @@ internal class ShaderEdgeEngine {
         "left0", "left1", "left2", "left3"
     )
 
-    /** Both normal and video modes compile the same twenty procedural GPU materials. */
+    /** Curated music materials share the same GPU source as optional video light. */
     internal fun compileForTest(): RuntimeShader = RuntimeShader(SOURCE)
 
     fun render(canvas: Canvas, width: Int, height: Int, bounds: RectF, radius: Float,
@@ -355,7 +355,7 @@ internal class ShaderEdgeEngine {
                     return half4(half3(scene*alpha),half(alpha));
                 }
                 // Background is genuinely transparent and needs no effect processing.
-                float effectExtent=(design>=20 && design<=23) ? 155.0 : 100.0;
+                float effectExtent=105.0;
                 if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
             
                 float lengthPx=1.0;
@@ -377,219 +377,102 @@ internal class ShaderEdgeEngine {
                 // A punch-hole has a much shorter perimeter than the display.
                 float densityScale=mix(1.0,.20,compact);
             
-                if(design==0) { // Luminous Dots — precise circular beads travelling around corners
-                    float beads=62.0*densityScale;
-                    float dot=disc(u,d,beads,travel*13.0,0.0,2.8*thicknessPx*volume,lengthPx);
-                    core=dot;
-                    aura=gaussian(length(float2((fract(u*beads-travel*13.0)-.5)*lengthPx/beads,d)),12.0*thicknessPx*volume);
-                    sparkle=pow(dot,3.0)*(.34+.66*kick);
-                } else if(design==1) { // Constellation — drifting, scattered individual point lights
-                    float p=disc(u,d,84.0*densityScale,travel*4.4,-6.0*thicknessPx,2.2*thicknessPx,lengthPx);
-                    float q=disc(u,d,51.0*densityScale,-travel*2.7,7.0*thicknessPx,3.0*thicknessPx,lengthPx);
-                    float stars=max(p,q*.8);
-                    float twinkle=.65+.35*sin(TAU*(u*17.0-time*.7));
-                    core=stars*twinkle;
-                    aura=stars*.36+gaussian(d,18.0*thicknessPx)*.035;
-                    sparkle=pow(stars,4.0)*twinkle;
-                } else if(design==2) { // Fireflies — loose luminous orbiting orbs
-                    float a=disc(u,d,34.0*densityScale,travel*6.0,5.0*thicknessPx,3.4*thicknessPx*(1.0+energy),lengthPx);
-                    float b=disc(u,d,23.0*densityScale,-travel*4.1,-8.0*thicknessPx,2.2*thicknessPx,lengthPx);
-                    core=max(a,b*.8);
-                    aura=gaussian(d,21.0*thicknessPx)*(.04+.10*energy)+max(a,b)*.7;
-                    sparkle=pow(core,2.0)*.5;
-                } else if(design==3) { // Meteor shower — asymmetric heads plus broad fading tails
-                    float head=fract(time*.11);
-                    float tail=fract(head-u+1.0);
-                    float streak=exp(-tail*24.0)*gaussian(d,4.0*thicknessPx*(1.0+kick));
-                    float headLight=gaussian(periodicDistance(u,head)*lengthPx,6.0*thicknessPx)
-                        *gaussian(d,5.0*thicknessPx);
-                    float second=fract(head+.43);
-                    float tail2=fract(second-u+1.0);
-                    core=max(streak,exp(-tail2*35.0)*gaussian(d+4.0*thicknessPx,3.0*thicknessPx)*.6);
-                    sparkle=headLight;
-                    aura=streak*.45+headLight*.6;
-                } else if(design==4) { // Liquid Glass — organically folded reflective surface
-                    float3 domain=float3(u*8.0,d*.035,time*.19);
-                    float a=noise3(domain), b=noise3(domain*2.2+float3(1.3,2.4,3.7));
-                    float shifted=d+(a*.75+b*.25)*13.0*thicknessPx*volume;
-                    core=gaussian(shifted,3.8*thicknessPx)*(1.0+.25*energy);
-                    aura=gaussian(shifted,15.0*thicknessPx)*(.35+.25*kick);
-                    sparkle=pow(max(0.0,a*.55+b*.45),3.0)*core;
-                } else if(design==5) { // Aurora Flow — continuously evolving spectral curtains
-                    float3 domain=float3(u*7.0,d*.023,time*.13);
-                    float a=noise3(domain), b=noise3(domain*2.0+float3(2.3,1.8,4.4));
-                    float fold=d+a*20.0*thicknessPx*volume+b*8.0*thicknessPx;
-                    core=gaussian(fold,3.3*thicknessPx)*(.6+.4*energy);
-                    aura=gaussian(fold-9.0*thicknessPx,24.0*thicknessPx)*(.45+.35*kick);
-                    sparkle=pow(max(.0,a*.75+b*.25),4.0)*aura;
-                } else if(design==6) { // Chromatic Prism — three refracted optical channels
-                    float sweep=sin(TAU*(u*3.0-time*.16));
-                    float wobble=sweep*3.4*thicknessPx;
-                    float a=gaussian(d+wobble-5.0*thicknessPx,3.0*thicknessPx);
-                    float b=gaussian(d+wobble,3.2*thicknessPx);
-                    float c=gaussian(d+wobble+5.0*thicknessPx,2.8*thicknessPx);
-                    core=.48*a+.9*b+.45*c;
-                    aura=gaussian(d+wobble,20.0*thicknessPx)*.37;
-                    sparkle=b*.5;
-                } else if(design==7) { // Silk Ribbons — intertwined fluid sheets, no stroked lines
-                    float field=sin(TAU*(u*4.0-time*.22));
-                    float wave=sin(TAU*(u*7.0+time*.13)+field);
-                    float s1=d-7.0*thicknessPx-field*9.0*thicknessPx*energy;
-                    float s2=d+8.0*thicknessPx-wave*8.0*thicknessPx*(.4+energy);
-                    core=gaussian(s1,3.3*thicknessPx)+gaussian(s2,3.1*thicknessPx)*.7;
-                    aura=gaussian(s1,14.0*thicknessPx)*.3+gaussian(s2,13.0*thicknessPx)*.22;
-                    sparkle=gaussian(s1,2.0*thicknessPx)*(.2+.4*kick);
-                } else if(design==8) { // Pulse Bloom — a shockwave expands with the bass
-                    float ring=sin(d*.15/thicknessPx-time*6.0);
-                    float ridge=abs(ring);
-                    core=gaussian(d-5.0*thicknessPx*kick,3.4*thicknessPx)
-                        +pow(1.0-ridge,7.0)*gaussian(d,21.0*thicknessPx)*(.3+.7*kick);
-                    aura=gaussian(d,18.0*thicknessPx)*(.25+.5*kick);
-                    sparkle=core*.12;
-                } else if(design==9) { // Neon Current — smooth continuous luminous plasma
-                    float variation=.5+.5*sin(TAU*(u*2.0-time*.18));
-                    core=gaussian(d,3.1*thicknessPx)*(.7+.3*variation);
-                    aura=gaussian(d,18.0*thicknessPx)*(.28+.25*variation+.22*kick);
-                    sparkle=gaussian(d,1.25*thicknessPx)*variation*.25;
-                } else if(design==10) { // Pixel Matrix — individually bounded LED cells
-                    float cells=78.0*densityScale;
-                    float grid=u*cells-time*.8;
-                    float cell=fract(grid)-.5;
-                    float cellIndex=floor(grid);
-                    float band=harmonic(fract((cellIndex+.5)/cells));
-                    float dy=abs(d)-4.5*thicknessPx*(.5+band);
-                    float rectangle=max(abs(cell)*lengthPx/cells-2.5*thicknessPx,dy);
-                    core=1.0-smoothstep(-.5,1.2*thicknessPx,rectangle);
-                    aura=gaussian(rectangle,7.0*thicknessPx)*.19;
-                    sparkle=core*(.12+.30*kick);
-                } else if(design==11) { // Halo Rings — radiating concentric light
-                    float ripple=cos(d*.13/thicknessPx-time*3.6);
-                    core=gaussian(d,3.6*thicknessPx)+pow(max(0.0,ripple),12.0)
-                        *gaussian(d,26.0*thicknessPx)*(.2+.75*kick);
-                    aura=gaussian(d,26.0*thicknessPx)*(.22+.43*kick);
-                    sparkle=gaussian(d,2.1*thicknessPx)*.25;
-                } else if(design==12) { // Shockwave — fast traveling impact fronts
-                    float front=fract(u*3.0-time*(.34+kick*.12));
-                    float ridge=exp(-front*18.0)*gaussian(d-6.0*thicknessPx*kick,4.0*thicknessPx);
-                    float echo=exp(-fract(front+.37)*23.0)*gaussian(d+5.0*thicknessPx,3.0*thicknessPx);
-                    core=ridge+echo*.48+gaussian(d,2.1*thicknessPx)*.18;
-                    aura=gaussian(d,21.0*thicknessPx)*(ridge*.44+kick*.21);
-                    sparkle=pow(ridge,2.0)*.82;
-                } else if(design==13) { // Plasma Veil — turbulent volumetric folds
-                    float3 domain=float3(u*12.0,d*.063,time*.28);
-                    float warp=noise3(domain)+.4*noise3(domain*2.35+float3(8.0,2.0,4.0));
-                    float ridge=d+warp*19.0*thicknessPx*volume;
-                    core=gaussian(ridge,3.3*thicknessPx)*(.62+.48*energy);
-                    aura=gaussian(ridge+8.0*thicknessPx,20.0*thicknessPx)*(.42+.35*kick);
-                    sparkle=pow(max(warp,0.0),3.0)*gaussian(ridge,4.0*thicknessPx);
-                } else if(design==14) { // Electric Arcs — intermittent jagged discharges
-                    float cell=fract(u*(7.0*densityScale+2.0)-time*.39);
-                    float fracture=sin(u*340.0+time*18.0)*sin(u*171.0-time*11.0);
-                    float path=d+fracture*5.5*thicknessPx;
-                    float gate=pow(max(0.0,sin(TAU*(cell-.12))),5.0);
-                    core=gaussian(path,1.45*thicknessPx)*(gate*.9+.18+kick*.6);
-                    aura=gaussian(path,11.0*thicknessPx)*(gate*.30+.12*kick);
-                    sparkle=pow(gate,2.0)*gaussian(path,1.4*thicknessPx);
-                } else if(design==15) { // Crystal Shards — faceted refractions
-                    float count=32.0*densityScale;
-                    float cell=floor(u*count);
-                    float f=fract(u*count);
-                    float facet=abs(f-.5)*2.0;
-                    float tilt=(hash(float2(cell,2.0))-.5)*9.0*thicknessPx;
-                    float crystal=abs(d+tilt+facet*7.0*thicknessPx);
-                    float cut=1.0-smoothstep(.38,.49,facet);
-                    core=gaussian(crystal,2.2*thicknessPx)*cut;
-                    aura=gaussian(crystal,13.0*thicknessPx)*cut*.31;
-                    sparkle=pow(max(0.0,sin(f*PI)),6.0)*core*(.3+.5*kick);
-                } else if(design==16) { // Tidal Flow — opposing fluid currents
-                    float a=sin(TAU*(u*5.0-time*.14));
-                    float b=sin(TAU*(u*8.0+time*.11));
-                    float waveA=d-(a*11.0+3.0)*thicknessPx*(.35+energy);
-                    float waveB=d+(b*9.0+4.0)*thicknessPx*(.35+energy);
-                    core=gaussian(waveA,3.4*thicknessPx)+gaussian(waveB,3.1*thicknessPx)*.75;
-                    aura=gaussian(waveA,14.0*thicknessPx)*.34+gaussian(waveB,12.0*thicknessPx)*.27;
-                    sparkle=gaussian(waveA-waveB,3.0*thicknessPx)*core*.28;
-                } else if(design==17) { // Ember Drift — floating glowing particles with ascent
-                    float particles=27.0*densityScale;
-                    float a=disc(u,d,particles,time*4.8,7.0*thicknessPx,3.6*thicknessPx,lengthPx);
-                    float b=disc(u,d,particles*.67,time*2.6,-9.0*thicknessPx,2.8*thicknessPx,lengthPx);
-                    core=max(a,b*.72)*(.62+.4*energy);
-                    aura=gaussian(d,24.0*thicknessPx)*.09+max(a,b)*.51;
-                    sparkle=pow(core,3.0)*(.25+.6*kick);
-                } else if(design==18) { // Solar Corona — breathing turbulent solar flare
-                    float3 plasma=float3(u*19.0,d*.045,time*.26);
-                    float surge=noise3(plasma)+.6*noise3(plasma*2.5);
-                    float flame=d-(surge*.7+.3)*25.0*thicknessPx*(.4+energy);
-                    core=gaussian(flame,3.1*thicknessPx)*(.75+.4*kick);
-                    aura=gaussian(flame,24.0*thicknessPx)*(.34+.38*energy);
-                    sparkle=pow(max(surge,0.0),3.0)*core;
-                } else if(design==19) { // Orbiting Satellites — separate orbital speed and lanes
-                    float p=disc(u,d,8.0*densityScale,time*3.1,-7.0*thicknessPx,4.0*thicknessPx,lengthPx);
-                    float q=disc(u,d,5.0*densityScale,-time*1.8,9.0*thicknessPx,3.3*thicknessPx,lengthPx);
-                    core=p+q*.9+gaussian(d,1.5*thicknessPx)*.15;
-                    aura=max(p,q)*.7+gaussian(d,14.0*thicknessPx)*.08;
-                    sparkle=pow(max(p,q),3.0)*(.5+.4*kick);
-                } else if(design==20) { // Side Flames — stationary turbulent light tongues on left and right
-                    float vy=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
+                if(design==0) { // Electric Arcs: physically broken, branched plasma
+                    float fracture=sin(u*211.0+time*8.4)
+                        *sin(u*397.0-time*12.0)
+                        +.34*sin(u*703.0+time*6.0);
+                    float path=d+fracture*(3.0+3.0*mids+3.0*impact)*thicknessPx;
+                    // Arcs ignite at measured musical transients; the fine high
+                    // frequency sparks cannot wash the entire border white.
+                    float segment=sin(TAU*(u*9.0-time*.06));
+                    float gate=pow(max(0.0,segment),4.0);
+                    float discharge=(.05+.64*gate*(.22+.42*low+.38*mids
+                        +.36*highs+.85*impact));
+                    float branch=d-fracture*(5.0+2.0*highs)*thicknessPx
+                        +sin(u*135.0+time*5.5)*4.0*thicknessPx;
+                    core=gaussian(path,1.8*thicknessPx)*discharge
+                        +gaussian(branch,1.05*thicknessPx)*gate*
+                        (.08+.25*highs+.25*impact);
+                    aura=gaussian(path,12.0*thicknessPx)*discharge*.45;
+                    sparkle=gaussian(path,1.0*thicknessPx)*gate*highs*.46;
+                } else if(design==1) { // Mirror Rain: paired top/bottom light droplets
+                    float xn=clamp((px.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
+                    float top=max(px.y-frame.y,0.0);
+                    float bottom=max(frame.w-px.y,0.0);
+                    float cell=floor(xn*52.0);
+                    float offset=abs(fract(xn*52.0)-.5)
+                        *max(frame.z-frame.x,1.0)/52.0;
+                    float band=harmonic(fract((cell+.5)/52.0));
+                    float power=clamp(.12+.86*band+.35*low+.28*mids
+                        +.26*impact,0.0,2.0);
+                    float depth=(5.0+31.0*power)*thicknessPx*max(spread,.38);
+                    float delay=hash(float2(cell,4.0));
+                    float glide=fract(time*(.11+.04*highs)+delay);
+                    float head=2.5*thicknessPx+glide*depth;
+                    float stem=exp(-max(top,0.0)/max(depth,1.0));
+                    float glowTop=gaussian(top-head,2.5*thicknessPx)
+                        +stem*.24;
+                    float glowBottom=gaussian(bottom-head,2.5*thicknessPx)
+                        +exp(-bottom/max(depth,1.0))*.24;
+                    float dotWidth=1.0-smoothstep(1.5*thicknessPx,
+                        4.8*thicknessPx,offset);
+                    float mask=smoothstep(.01,.055,xn)*
+                        (1.0-smoothstep(.945,.99,xn));
+                    core=max(glowTop,glowBottom)*dotWidth*power*mask;
+                    aura=max(gaussian(top,9.0*thicknessPx),
+                        gaussian(bottom,9.0*thicknessPx))
+                        *dotWidth*.18*mask;
+                    sparkle=max(gaussian(top-head,1.4*thicknessPx),
+                        gaussian(bottom-head,1.4*thicknessPx))
+                        *dotWidth*highs*.30*mask;
+                } else if(design==2) { // Flat Waves: mirrored standing-wave contours
+                    float xn=clamp((px.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
+                    float top=max(px.y-frame.y,0.0);
+                    float bottom=max(frame.w-px.y,0.0);
+                    float tonal=harmonic(xn);
+                    float wave=sin(TAU*xn*3.0+time*.37)
+                        +.30*sin(TAU*xn*7.0-time*.24);
+                    float amp=(3.0+11.0*low+15.0*mids+
+                        9.0*highs+16.0*impact)*thicknessPx;
+                    float crestTop=6.0*thicknessPx+wave*amp*.70;
+                    float crestBottom=6.0*thicknessPx-wave*amp*.70;
+                    float radiusPx=(2.4+1.4*highs)*thicknessPx;
+                    float f= (.15+.55*tonal+.18*mids+.17*impact);
+                    core=(gaussian(top-crestTop,radiusPx)
+                        +gaussian(bottom-crestBottom,radiusPx)) * f;
+                    aura=(gaussian(top-crestTop,12.0*thicknessPx)
+                        +gaussian(bottom-crestBottom,12.0*thicknessPx))
+                        *(.13+.18*low)*f;
+                    sparkle=(gaussian(top-crestTop,1.4*thicknessPx)
+                        +gaussian(bottom-crestBottom,1.4*thicknessPx))
+                        *highs*.17;
+                } else if(design==3) { // Side Spectrum: genuine side-anchored FFT columns
+                    float yn=clamp((px.y-frame.y)/max(frame.w-frame.y,1.0),0.0,1.0);
                     float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
-                    float sideMask=smoothstep(.03,.12,vy)*(1.0-smoothstep(.88,.97,vy));
-                    float turbulence=noise3(float3(vy*13.0,dx*.025,time*.58+
-                        impact*.16));
-                    float detail=noise3(float3(vy*38.0+7.0,dx*.065,time*.93+
-                        highs*.22));
-                    float reach=(9.0+27.0*clamp(.52+.33*turbulence+.18*detail,0.0,1.0)
-                        +20.0*energy+16.0*low+13.0*mids+18.0*impact)
-                        *thicknessPx*max(spread,.4);
-                    float tongue=1.0-smoothstep(reach*.48,max(reach,1.0),dx);
-                    float filament=gaussian(dx-(reach*.34+detail*8.0*thicknessPx),6.0*thicknessPx);
-                    core=(tongue*.83+filament*.35)*sideMask;
-                    aura=gaussian(dx,34.0*thicknessPx*spread)*(.33+.27*energy)*sideMask;
-                    sparkle=filament*.25*sideMask;
-                } else if(design==21) { // Flat Edge Bars — fixed left/right spectrum columns
-                    float vy=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
-                    float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
-                    float row=fract(vy*62.0)-.5;
-                    float audioEnergy=harmonic(fract(vy*.91+.045));
-                    float oscillation=.5+.5*sin(time*2.8+vy*22.0);
-                    float barLength=(4.0+64.0*(.06+.68*audioEnergy+.08*oscillation+
-                        .23*low+.20*mids+.09*highs+.34*impact))
+                    float barIndex=floor(yn*48.0);
+                    float col=fract(yn*48.0);
+                    float band=harmonic(fract((barIndex+.5)/48.0));
+                    // Mirrored band assignment: low frequencies occupy the
+                    // lower quarter of each side, high notes the upper quarter.
+                    float response=clamp(band*.88+.12*low+
+                        .20*mids+.15*impact,0.0,1.55);
+                    float reach=(2.0+57.0*response)
                         *thicknessPx*max(spread,.35);
-                    float square=1.0-smoothstep(barLength-2.0*thicknessPx,barLength+1.0*thicknessPx,dx);
-                    float mask=1.0-smoothstep(.28,.48,abs(row));
-                    float verticalMask=smoothstep(.03,.11,vy)*(1.0-smoothstep(.89,.97,vy));
-                    core=square*mask*verticalMask;
-                    aura=gaussian(dx,16.0*thicknessPx)*mask*verticalMask*.22;
-                    sparkle=square*pow(mask,4.0)*(.11+.29*kick)*verticalMask;
-                } else if(design==22) { // Standing Waves — four fixed-edge breathing sheets
-                    float xf=clamp((px.x-frame.x)/max(1.0,frame.z-frame.x),0.0,1.0);
-                    float yf=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
-                    float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
-                    float dy=min(abs(px.y-frame.y),abs(px.y-frame.w));
-                    float sx=sin(TAU*xf*5.0+time*.8);
-                    float sy=sin(TAU*yf*4.0-time*.7);
-                    float horizontal=gaussian(dy-(4.0+sx*(6.0+16.0*low+9.0*mids+
-                        7.0*impact)*(.3+energy))*thicknessPx,4.0*thicknessPx);
-                    float vertical=gaussian(dx-(4.0+sy*(6.0+15.0*mids+8.0*highs+
-                        7.0*impact)*(.3+energy))*thicknessPx,4.0*thicknessPx);
-                    core=max(horizontal,vertical)*(.65+.3*energy);
-                    aura=gaussian(dy,22.0*thicknessPx)*.18
-                        +gaussian(dx,22.0*thicknessPx)*.18;
-                    sparkle=max(horizontal,vertical)*(.18+.26*kick);
-                } else if(design==23) { // Corner Aura — fixed pulsing four-corner optical blooms
-                    float2 a=px-frame.xy, b=px-float2(frame.z,frame.y);
-                    float2 c=px-frame.zw, e=px-float2(frame.x,frame.w);
-                    float distance=min(min(length(a),length(b)),min(length(c),length(e)));
-                    float pulseRing=17.0*thicknessPx+
-                        (3.0+13.0*low+9.0*impact)*thicknessPx*sin(time*1.7);
-                    core=gaussian(distance-pulseRing,7.0*thicknessPx)
-                        +gaussian(distance,14.0*thicknessPx)*.45;
-                    aura=gaussian(distance,52.0*thicknessPx)*(.34+.38*energy);
-                    sparkle=gaussian(distance-pulseRing,3.0*thicknessPx)*(.25+.5*kick);
+                    float face=1.0-smoothstep(reach-2.0*thicknessPx,
+                        reach+1.3*thicknessPx,dx);
+                    float separation=1.0-smoothstep(.32,.46,
+                        abs(col-.5));
+                    float sideFade=smoothstep(.015,.06,yn)*
+                        (1.0-smoothstep(.94,.985,yn));
+                    core=face*separation*sideFade;
+                    aura=gaussian(dx,11.0*thicknessPx)
+                        *separation*sideFade*.15*response;
+                    sparkle=face*separation*sideFade*
+                        highs*smoothstep(.3,.8,response)*.20;
                 } else {
-                    core=gaussian(d,3.0*thicknessPx);
-                    aura=gaussian(d,12.0*thicknessPx)*.2;
+                    core=gaussian(d,2.0*thicknessPx)*.1;
                 }
-            
+
                 // Fix v0.13's hard angular gradient jumps: colors use physical perimeter
                 // distance with cosine interpolation, periodic at exactly u=0 and u=1.
                 float chroma=.5-.5*cos(TAU*(u-time*.035+
@@ -616,7 +499,7 @@ internal class ShaderEdgeEngine {
                 float a=clamp((core*.77*coreResponse +
                     aura*(.10+.35*glow)*auraResponse+whiteSpark*.28)
                     *brightness*musicalGain,0.0,.96);
-                float edgeFade= (design>=20 && design<=23) ? 160.0 : 92.0;
+                float edgeFade=110.0;
                 a*=1.0-smoothstep(40.0*max(spread,.3),edgeFade*max(spread,.3),abs(d));
                 if(videoMode==1) {
                     // Even when the user explicitly opts into an animated design,
