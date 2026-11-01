@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import java.util.concurrent.atomic.AtomicBoolean
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.DisplayMetrics
@@ -65,7 +66,21 @@ class VideoAmbilightService : Service() {
     private var stopping = false
     private var framesSeen = 0
     private var blankPaintFrames = 0
-    private var paintCaptureBlocked = false
+    private val paintHealth = PaintedCaptureHealth()
+    private val frameQueued = AtomicBoolean(false)
+    @Volatile private var lastUsablePaintFrameAt = 0L
+    private val painterWatchdog = object : Runnable {
+        override fun run() {
+            if (!stopping && isPainted) {
+                val now = SystemClock.uptimeMillis()
+                if (overlay != null && now - lastUsablePaintFrameAt > 2300L) {
+                    hidePaintLayer()
+                    statusValue.value = "Painting paused: no fresh screen frames from Android"
+                }
+                main.postDelayed(this, 1200L)
+            }
+        }
+    }
     private var width = 0
     private var height = 0
     private var densityDpi = 0
@@ -110,6 +125,9 @@ class VideoAmbilightService : Service() {
             return START_NOT_STICKY
         }
         isPainted = request.getBooleanExtra(EXTRA_PAINTED, false)
+        paintHealth.reset()
+        frameQueued.set(false)
+        lastUsablePaintFrameAt = SystemClock.uptimeMillis()
         if (isPainted && Build.VERSION.SDK_INT < 33) {
             statusValue.value = "Painted Screen requires Android 13 or newer"
             stopSelf()
@@ -140,7 +158,7 @@ class VideoAmbilightService : Service() {
             // Do not put the painter over the permission chooser or the first
             // capture frame. Create its secure overlay only after valid pixels
             // arrive; this avoids capturing our own surface on session startup.
-            if (!isPainted) showOverlay()
+            if (!isPainted) showOverlay() else main.postDelayed(painterWatchdog, 1200L)
 
             val manager = getSystemService(MediaProjectionManager::class.java)
             val capture = manager.getMediaProjection(resultCode, resultData)
@@ -237,53 +255,86 @@ class VideoAmbilightService : Service() {
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
                         if (isPainted) {
-                            val bitmap = PaintedFrameDecoder.decode(
-                                plane.buffer, image.width, image.height,
-                                plane.rowStride, plane.pixelStride)
-                            framesSeen++
-                            if (bitmap == null) blankPaintFrames++ else blankPaintFrames = 0
-
-                            if (bitmap == null && blankPaintFrames > 20 && overlay != null) {
-                                paintCaptureBlocked = true
-                                statusValue.value = "Samsung blocked full-screen capture under painting overlay"
-                                main.post { if (!stopping) stopSelf() }
-                            } else {
-                                // Generate oriented stamp commands on the existing
-                                // dedicated capture thread, NOT the UI thread.
-                                // This is a real multi-pass brush-painter port,
-                                // not an expensive per-pixel RuntimeShader filter.
-                                val painted = if (bitmap == null) null else try {
-                                    PaintedStrokePlanner.plan(
-                                        bitmap, PaintedScreenPreferences.read(this@VideoAmbilightService))
+                            // A valid first frame followed by black frames is
+                            // common when FLAG_SECURE masks the painter layer.
+                            // The old 20-frame counter stopped the whole
+                            // MediaProjection service after roughly 2 seconds.
+                            if (!paintHealth.overlayRejected) {
+                                val bitmap = try {
+                                    PaintedFrameDecoder.decode(
+                                        plane.buffer, image.width, image.height,
+                                        plane.rowStride, plane.pixelStride)
                                 } catch (error: RuntimeException) {
-                                    bitmap.recycle()
-                                    Log.e("HALO", "Native stroke planner failed", error)
-                                    statusValue.value = "Brush painting unavailable for captured frame"
+                                    Log.e("HALO", "Paint capture decode failed", error)
                                     null
                                 }
-                                main.post {
-                                    if (stopping || paintCaptureBlocked) {
-                                        painted?.dispose()
-                                    } else if (painted != null) {
-                                        if (overlay == null) {
-                                            try { showOverlay() } catch (error: Exception) {
-                                                Log.e("HALO", "Painting overlay unavailable", error)
-                                                painted.dispose()
-                                                stopSelf()
-                                                return@post
+                                framesSeen++
+                                val decision = paintHealth.observe(
+                                    bitmap != null, overlay != null)
+                                when (decision) {
+                                    PaintedCaptureAction.DISABLE_OVERLAY -> {
+                                        bitmap?.recycle()
+                                        // Secure full-display overlays can poison
+                                        // Samsung's own MediaProjection feed. Once
+                                        // demonstrated, disable just the painting
+                                        // layer. Never leave an old screenshot on
+                                        // top or restart it in an infinite loop.
+                                        statusValue.value =
+                                            "Painting unavailable: Android blocks capture under the overlay"
+                                        main.post { disablePaintOverlay() }
+                                    }
+                                    PaintedCaptureAction.CLEAR -> {
+                                        bitmap?.recycle()
+                                        main.post { if (!stopping) hidePaintLayer() }
+                                    }
+                                    PaintedCaptureAction.KEEP -> bitmap?.recycle()
+                                    PaintedCaptureAction.PRESENT -> {
+                                        lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+                                        if (bitmap != null) {
+                                            if (!frameQueued.compareAndSet(false, true)) {
+                                                bitmap.recycle()
+                                            } else {
+                                                // Only one expensive paint plan
+                                                // may wait for the UI thread.
+                                                // All intermediate frames are
+                                                // dropped, never queued.
+                                                val painted = try {
+                                                    PaintedStrokePlanner.plan(
+                                                        bitmap,
+                                                        PaintedScreenPreferences.read(
+                                                            this@VideoAmbilightService))
+                                                } catch (error: Exception) {
+                                                    bitmap.recycle()
+                                                    Log.e("HALO", "Native brush renderer failed", error)
+                                                    statusValue.value = "Painting frame failed"
+                                                    null
+                                                }
+                                                main.post {
+                                                    try {
+                                                        if (stopping || paintHealth.overlayRejected) {
+                                                            painted?.dispose()
+                                                        } else if (painted != null) {
+                                                            if (overlay == null) {
+                                                                try { showOverlay() }
+                                                                catch (error: Exception) {
+                                                                    Log.e("HALO", "Overlay rejected", error)
+                                                                    painted.dispose()
+                                                                    statusValue.value = "Painting overlay not permitted"
+                                                                    disablePaintOverlay()
+                                                                    return@post
+                                                                }
+                                                            }
+                                                            paintedView?.setFrame(painted)
+                                                            paintedView?.visibility = View.VISIBLE
+                                                        }
+                                                    } finally { frameQueued.set(false) }
+                                                }
+                                                if (painted != null && framesSeen % 40 == 0)
+                                                    statusValue.value = "Native brush painting · live"
                                             }
                                         }
-                                        paintedView?.setFrame(painted)
-                                        paintedView?.visibility = View.VISIBLE
-                                    } else if (blankPaintFrames >= 3) {
-                                        paintedView?.setFrame(null)
-                                        paintedView?.visibility = View.INVISIBLE
                                     }
                                 }
-                                if (framesSeen == 15 && bitmap == null)
-                                    statusValue.value = "Capture protected or black · painting paused"
-                                else if (painted != null && framesSeen % 40 == 0)
-                                    statusValue.value = "Native canvas brush painting · live"
                             }
                         } else {
                             val profile = lighting
@@ -322,7 +373,33 @@ class VideoAmbilightService : Service() {
         old?.close()
         framesSeen = 0
         blankPaintFrames = 0
-        if (isPainted) main.post { paintedView?.setFrame(null) }
+        if (isPainted) {
+            paintHealth.reset()
+            lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+            main.post { hidePaintLayer() }
+        }
+    }
+
+    /** The screen must never retain a stale painted screenshot. */
+    private fun hidePaintLayer() {
+        paintedView?.setFrame(null)
+        paintedView?.visibility = View.INVISIBLE
+    }
+
+    /** Pause only the unsafe visual overlay, retain MediaProjection status. */
+    private fun disablePaintOverlay() {
+        if (stopping) return
+        hidePaintLayer()
+        overlay?.let { attached ->
+            try { windowManager?.removeViewImmediate(attached) }
+            catch (error: RuntimeException) {
+                Log.w("HALO", "Overlay removal failed", error)
+            }
+        }
+        paintedView?.clear()
+        paintedView = null
+        overlay = null
+        windowManager = null
     }
 
     private fun notification(): Notification {
@@ -345,8 +422,16 @@ class VideoAmbilightService : Service() {
     override fun onDestroy() {
         stopping = true
         isRunning = false
-        if (statusValue.value != "Screen sharing ended" && !paintCaptureBlocked)
+        frameQueued.set(false)
+        main.removeCallbacks(painterWatchdog)
+        // Hide the entire painting surface before releasing capture, so
+        // MediaProjection cannot leave stale pixels visible after stop.
+        hidePaintLayer()
+        if (statusValue.value != "Screen sharing ended" &&
+            !statusValue.value.startsWith("Painting unavailable") &&
+            !statusValue.value.startsWith("Painting overlay")) {
             statusValue.value = "Screen effects are off"
+        }
         worker.removeCallbacksAndMessages(null)
         try { virtualDisplay?.release() } catch (_: RuntimeException) {}
         virtualDisplay = null
