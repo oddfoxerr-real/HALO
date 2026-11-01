@@ -6,8 +6,8 @@ import org.junit.Test
 
 class AnimationCatalogueTest {
     @Test fun onlyNewGpuModesAreSelectable() {
-        assertEquals(20, EdgeMode.entries.size)
-        assertEquals(20, EdgeMode.entries.map { it.title }.distinct().size)
+        assertEquals(24, EdgeMode.entries.size)
+        assertEquals(24, EdgeMode.entries.map { it.title }.distinct().size)
         assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode(null))
         assertEquals(EdgeMode.DOTS, EdgeSpectrum.mode("unknown"))
         for (mode in EdgeMode.entries) assertEquals(mode, EdgeSpectrum.mode(mode.name))
@@ -23,7 +23,9 @@ class AnimationCatalogueTest {
             EdgeMode.NEON, EdgeMode.PIXEL, EdgeMode.HALO
         )
         assertEquals(original, EdgeMode.entries.take(12))
-        assertEquals(8, EdgeMode.entries.drop(12).size)
+        assertEquals(12, EdgeMode.entries.drop(12).size)
+        assertEquals(listOf(EdgeMode.SIDE_FLAMES, EdgeMode.FLAT_BARS,
+            EdgeMode.STANDING_WAVES, EdgeMode.CORNER_AURA), EdgeMode.entries.takeLast(4))
     }
 
     @Test fun oldSavedModesMigrateWithoutSelectingOldRenderers() {
