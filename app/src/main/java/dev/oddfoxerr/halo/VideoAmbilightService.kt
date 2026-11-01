@@ -168,7 +168,8 @@ class VideoAmbilightService : Service() {
                 override fun onStop() {
                     main.post {
                         if (!stopping) {
-                            statusValue.value = "Screen sharing ended"
+                            hidePaintLayer()
+                            statusValue.value = "Android ended screen sharing · restart from HALO"
                             stopSelf()
                         }
                     }
@@ -400,6 +401,12 @@ class VideoAmbilightService : Service() {
         paintedView = null
         overlay = null
         windowManager = null
+        try {
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTICE_ID, notification())
+        } catch (error: RuntimeException) {
+            Log.w("HALO", "Could not update capture notification", error)
+        }
     }
 
     private fun notification(): Notification {
@@ -412,8 +419,13 @@ class VideoAmbilightService : Service() {
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle(if (isPainted) "HALO Painted Screen" else "HALO Video Ambilight")
-            .setContentText(if (isPainted) "Painting screen locally · tap to manage" else
-                "Matching screen colors locally · tap to manage")
+            .setContentText(
+                when {
+                    isPainted && paintHealth.overlayRejected ->
+                        "Painting paused: Android blocked capture · tap to manage"
+                    isPainted -> "Painting screen locally · tap to manage"
+                    else -> "Matching screen colors locally · tap to manage"
+                })
             .setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause,
                 "Stop screen capture", stop).build()).build()
@@ -427,7 +439,7 @@ class VideoAmbilightService : Service() {
         // Hide the entire painting surface before releasing capture, so
         // MediaProjection cannot leave stale pixels visible after stop.
         hidePaintLayer()
-        if (statusValue.value != "Screen sharing ended" &&
+        if (!statusValue.value.startsWith("Android ended screen sharing") &&
             !statusValue.value.startsWith("Painting unavailable") &&
             !statusValue.value.startsWith("Painting overlay")) {
             statusValue.value = "Screen effects are off"
