@@ -91,6 +91,41 @@ class PaintedScreenGpuTest {
         }
     }
 
+    @Test fun protectedFramesDoNotShutDownPaintingService() {
+        val guard=PaintedCaptureHealth()
+        assertEquals(PaintedCaptureAction.PRESENT,guard.observe(true,false))
+        assertEquals(PaintedCaptureAction.KEEP,guard.observe(false,true))
+        assertEquals(PaintedCaptureAction.CLEAR,guard.observe(false,true))
+        repeat(5) {
+            assertEquals(PaintedCaptureAction.CLEAR,guard.observe(false,true))
+        }
+        assertEquals(PaintedCaptureAction.DISABLE_OVERLAY,guard.observe(false,true))
+        assertTrue(guard.overlayRejected)
+        assertEquals(PaintedCaptureAction.CLEAR,guard.observe(true,false))
+        guard.reset()
+        assertEquals(PaintedCaptureAction.PRESENT,guard.observe(true,false))
+    }
+
+    @Test fun clearingPainterErasesStaleFrameImmediately() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val image=Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        image.eraseColor(Color.rgb(120,60,40))
+        val planned=PaintedStrokePlanner.plan(image,PaintedScreenPreferences())
+        val painter=PaintedScreenView(context)
+        painter.layout(0,0,120,240)
+        painter.setFrame(planned)
+        val before=Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        painter.draw(android.graphics.Canvas(before))
+        assertEquals(255,Color.alpha(before.getPixel(80,120)))
+        painter.clear()
+        val after=Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        painter.draw(android.graphics.Canvas(after))
+        assertEquals("Stale brush overlay survived clear",0,
+            Color.alpha(after.getPixel(80,120)))
+        before.recycle()
+        after.recycle()
+    }
+
     private fun render(source:Bitmap,style:PaintedStyle):Bitmap {
         val context=InstrumentationRegistry.getInstrumentation().targetContext
         val preferences=PaintedScreenPreferences(style=style,strength=.96f,relief=1.1f)
