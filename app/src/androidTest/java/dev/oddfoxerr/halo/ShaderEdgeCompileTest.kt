@@ -16,7 +16,7 @@ class ShaderEdgeCompileTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val shader = ShaderEdgeEngine().compileForTest()
             assertNotNull(shader)
-            // Four curated electrical/wave/spectrum designs share music/video AGSL.
+            // The single approved original Electric Arcs geometry compiles for both music and optional video.
             shader.setFloatUniform("frame", 8f, 28f, 1072f, 2372f)
             shader.setFloatUniform("videoFrame", 8f, 28f, 1072f, 2372f)
             shader.setIntUniform("videoMode", 1)
