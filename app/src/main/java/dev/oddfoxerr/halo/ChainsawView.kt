@@ -60,7 +60,12 @@ class ChainsawView(context: Context) : View(context) {
     private var videoColors: VideoEdgeColors? = null
 
     fun setVideoColors(colors: VideoEdgeColors) {
+        // Sampling updates *colors*, not the animation selection. Scene changes
+        // provide mild transients while the regular GPU motion clock continues.
+        val signal = VideoSceneMotion.from(colors, videoColors)
         videoColors = colors
+        motion.accept(signal.bands, signal.impact, SystemClock.uptimeMillis(), 1f)
+        requestFrame()
         invalidate()
     }
 
@@ -198,9 +203,9 @@ class ChainsawView(context: Context) : View(context) {
             canvas, width, height, rect, radius, mode,
             motion.bands, motion.pulse, motion.phase, shaderSeconds,
             density * thickness, spread, glow, brightness,
-            videoColors?.top ?: edgeColor, videoColors?.right ?: accentColor,
+            edgeColor, accentColor,
             (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
-            compact = true
+            compact = true, video = videoColors, videoFrame = bounds
         ) == true
         gpuDidRender = gpuDidRender || rendered
         canvas.restore()
@@ -246,25 +251,24 @@ class ChainsawView(context: Context) : View(context) {
             (drawTop || drawBottom || drawLeft || drawRight)) {
             canvas.save()
             canvas.clipPath(sides)
-            val video = videoColors
-            gpuDidRender = if (video != null) {
-                shaderEngine?.renderVideo(canvas, width, height, bounds, video,
-                    density * thickness, spread, glow, brightness) == true
-            } else {
-                shaderEngine?.render(
-                    canvas, width, height, bounds,
-                    min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
-                    mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
-                    density * thickness, spread, glow, brightness, edgeColor, accentColor,
-                    (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f)
-                ) == true
-            }
+            // Use the SAME GPU material for video, music, notifications and the
+            // camera cutout. Only the palette source differs in video mode.
+            gpuDidRender = shaderEngine?.render(
+                canvas, width, height, bounds,
+                min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
+                mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
+                density * thickness, spread, glow, brightness, edgeColor, accentColor,
+                (motion.motor.kick * beatIntensity).coerceIn(0f, 1.5f),
+                video = videoColors
+            ) == true
             canvas.restore()
         } else {
             gpuDidRender = false
         }
 
         drawCameraEffect(canvas)
-        if (moving || noticePlaying) requestFrame()
+        // Static video frames still animate the user's selected material; color
+        // sampling frequency never controls the GPU animation frame rate.
+        if (moving || noticePlaying || videoColors != null) requestFrame()
     }
 }
