@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -12,7 +16,17 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+    <application android:name=".HaloApplication" android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+        <activity android:name=".HaloUpdateInstallActivity" android:exported="false" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="dev.oddfoxerr.halo.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/halo_update_paths" />
+        </provider>
         <activity android:name=".MusicEdgeActivity" android:exported="false" />
         <service android:name=".MusicEdgeService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".VideoAmbilightService" android:exported="false" android:foregroundServiceType="mediaProjection" />
