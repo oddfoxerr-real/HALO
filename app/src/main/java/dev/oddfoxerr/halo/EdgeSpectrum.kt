@@ -25,7 +25,11 @@ enum class EdgeMode(val title: String) {
     TIDAL("Tidal Flow"),
     EMBER("Ember Drift"),
     RADIANCE("Solar Corona"),
-    ORBITAL("Orbiting Satellites")
+    ORBITAL("Orbiting Satellites"),
+    SIDE_FLAMES("Side Flames"),
+    FLAT_BARS("Flat Edge Bars"),
+    STANDING_WAVES("Standing Waves"),
+    CORNER_AURA("Corner Aura")
 }
 
 enum class NotificationEdgeMode(val title: String) {

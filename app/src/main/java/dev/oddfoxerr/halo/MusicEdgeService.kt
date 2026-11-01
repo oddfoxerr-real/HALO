@@ -43,7 +43,8 @@ class MusicEdgeService : Service() {
         }
     }
     private data class AudioFrame(val bands: FloatArray, val bass: Float, val at: Long)
-    private data class MediaInfo(val pkg: String? = null, val title: String = "", val color: Int? = null, val permission: Boolean = false)
+    private data class MediaInfo(val pkg: String? = null, val title: String = "", val color: Int? = null,
+        val accent: Int? = null, val permission: Boolean = false)
     private val main = Handler(Looper.getMainLooper())
     private lateinit var thread: HandlerThread
     private lateinit var worker: Handler
@@ -53,6 +54,8 @@ class MusicEdgeService : Service() {
     @Volatile private var enabledCapture = false
     @Volatile private var config = MusicConfiguration()
     private var visualizer: Visualizer? = null // worker-owned
+    @Volatile private var captureUnavailable = false
+    private var retryScheduled = false // worker-owned
     private var view: ChainsawView? = null
     private var manager: WindowManager? = null
     private var lastCapture = 0L
@@ -62,6 +65,7 @@ class MusicEdgeService : Service() {
     private var yieldUntil = 0L
     private var yielding = false
     private var receiverRegistered = false
+    private var lastPlayingObservedAt = 0L // worker-owned: grace for transient session changes
     private var failed = false
     private val power by lazy { getSystemService(PowerManager::class.java) }
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
@@ -96,10 +100,19 @@ class MusicEdgeService : Service() {
                 if (controller != null) {
                     val label = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(controller.packageName, 0)).toString() }
                         catch (_: Exception) { controller.packageName }
-                    info = MediaInfo(controller.packageName, label,
-                        if (settings.colorSource == EdgeColorSource.ALBUM_ART) MediaArtworkColor.fromMetadata(controller.metadata, settings.color) else null, true)
+                    val palette = if (settings.colorSource == EdgeColorSource.ALBUM_ART)
+                        MediaArtworkColor.paletteFromMetadata(controller.metadata, settings.color, settings.accent)
+                    else null
+                    info = MediaInfo(controller.packageName, label, palette?.primary, palette?.accent, true)
+                    lastPlayingObservedAt = SystemClock.elapsedRealtime()
                 }
             } catch (_: RuntimeException) { }
+            val previous = media.get()
+            if (info.pkg == null && permitted && previous.pkg != null &&
+                (settings.allowedSources.isEmpty() || previous.pkg in settings.allowedSources) &&
+                SystemClock.elapsedRealtime() - lastPlayingObservedAt < 2500L) {
+                info = previous
+            }
             media.set(info)
             worker.postDelayed(this, 1000L)
         }
@@ -145,14 +158,26 @@ class MusicEdgeService : Service() {
             val reason = MusicVisibility.reason(awake, !keyguard.isKeyguardLocked, quiet, notification,
                 sessionAllowed, lastCapture != 0L && now - lastCapture < 700L,
                 lastAudible != 0L && now - lastAudible < 900L)
+            // Android can withhold output-mix FFT while CYN or another effect is active.
+            // Do NOT hide the whole edge overlay during valid media playback.
+            val mediaFallback = awake && !quiet && sessionAllowed &&
+                (info.pkg != null || (!settings.onlyPlaying && settings.allowedSources.isEmpty()))
+            val noCapture = captureUnavailable || lastCapture == 0L || now - lastCapture > 1100L
             view?.apply {
-                if (!showingInMusicWindow) edgeColor = info.color ?: settings.color
-                visibility = if (showingInMusicWindow || reason == null) View.VISIBLE else View.INVISIBLE
+                keepAmbientMotion = mediaFallback && noCapture
+                if (!showingInMusicWindow) {
+                    edgeColor = info.color ?: settings.color
+                    accentColor = info.accent ?: settings.accent
+                }
+                visibility = if (showingInMusicWindow || reason == null || mediaFallback)
+                    View.VISIBLE else View.INVISIBLE
             }
             val permissionNeeded = !info.permission && (settings.onlyPlaying || settings.allowedSources.isNotEmpty())
             MusicRuntime.publish(true, if (permissionNeeded) "Enable notification access to detect your music player"
-                else if (reason == null && now - lastAudible > 2200L)
-                    "Playback detected, but no usable audio signal (player may block capture)"
+                else if (mediaFallback && noCapture)
+                    "CYN-compatible playback lighting · beat capture unavailable, retrying"
+                else if (mediaFallback && now - lastAudible > 2200L)
+                    "Playback detected · waiting for usable audio signal"
                 else reason ?: "Live music lighting · tracking beats",
                 info.title, lastSignalLevel, lastBassLevel)
             main.postDelayed(this, if (awake) 40L else 500L)
@@ -166,9 +191,12 @@ class MusicEdgeService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_REFRESH && isRunning) { refresh(); return START_NOT_STICKY }
-        if (intent?.action != ACTION_START) { stopSelf(); return START_NOT_STICKY }
-        if (isRunning) { refresh(); return START_NOT_STICKY }
+        if (intent?.action == ACTION_REFRESH && isRunning) { refresh(); return START_STICKY }
+        if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
+        // A sticky foreground service may restart with a null Intent after Android
+        // reclaims the process. Explicit stop still always terminates it.
+        if (intent?.action != ACTION_START && intent != null) { stopSelf(); return START_NOT_STICKY }
+        if (isRunning) { refresh(); return START_STICKY }
         if (VideoAmbilightService.isRunning) {
             MusicRuntime.publish(false, "Stop Video Ambilight before starting music lighting")
             stopSelf()
@@ -208,23 +236,12 @@ class MusicEdgeService : Service() {
                 addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
             }, ContextCompat.RECEIVER_NOT_EXPORTED)
             receiverRegistered = true
-            worker.post {
-                if (!closing) try {
-                    val source = Visualizer(0)
-                    visualizer = source
-                    val range = Visualizer.getCaptureSizeRange()
-                    check(source.setCaptureSize(1024.coerceIn(range.first(), range.last())) == Visualizer.SUCCESS)
-                    check(source.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
-                    check(source.setDataCaptureListener(captureListener, Visualizer.getMaxCaptureRate().coerceAtMost(60000), false, true) == Visualizer.SUCCESS)
-                    // Capture starts only when visibility/media rules permit it.
-                    if (enabledCapture) check(source.setEnabled(true) == Visualizer.SUCCESS)
-                } catch (_: RuntimeException) { main.post { fail("Android could not open device audio · try another player and restart") } }
-            }
+            worker.post { initializeVisualizer() }
             worker.post(mediaPoll)
             NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
             main.post(tick)
         } catch (_: Exception) { fail("Android could not start music lighting · check permissions") }
-        return START_NOT_STICKY
+        return START_STICKY
     }
     private fun refresh() {
         config = MusicConfiguration.read(this)
@@ -232,6 +249,37 @@ class MusicEdgeService : Service() {
         // Keep the current captured audio spectrum; changing visual settings must
         // not clear the beat detector or restart audio playback capture.
     }
+    /** Worker-owned. Retry transient output-mix contention without tearing down HALO. */
+    private fun initializeVisualizer() {
+        if (closing || visualizer != null) return
+        var candidate: Visualizer? = null
+        try {
+            candidate = Visualizer(0)
+            val range = Visualizer.getCaptureSizeRange()
+            check(candidate.setCaptureSize(1024.coerceIn(range.first(), range.last())) == Visualizer.SUCCESS)
+            check(candidate.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED) == Visualizer.SUCCESS)
+            check(candidate.setDataCaptureListener(captureListener,
+                Visualizer.getMaxCaptureRate().coerceAtMost(60000), false, true) == Visualizer.SUCCESS)
+            if (enabledCapture) check(candidate.setEnabled(true) == Visualizer.SUCCESS)
+            visualizer = candidate
+            captureUnavailable = false
+        } catch (_: RuntimeException) {
+            try { candidate?.release() } catch (_: RuntimeException) {}
+            visualizer = null
+            captureUnavailable = true
+            scheduleCaptureRetry()
+        }
+    }
+
+    private fun scheduleCaptureRetry() {
+        if (closing || retryScheduled) return
+        retryScheduled = true
+        worker.postDelayed({
+            retryScheduled = false
+            if (!closing) initializeVisualizer()
+        }, 4500L)
+    }
+
     private fun setCapture(enabled: Boolean) {
         if (enabled == enabledCapture) return
         enabledCapture = enabled
@@ -241,9 +289,21 @@ class MusicEdgeService : Service() {
             view?.clearSignal()
         }
         worker.post {
-            if (!closing) try {
-                visualizer?.let { check(it.setEnabled(enabledCapture) == Visualizer.SUCCESS) }
-            } catch (_: RuntimeException) { main.post { fail("Audio analysis disconnected · restart music lighting") } }
+            if (closing) return@post
+            val engine = visualizer
+            if (engine == null) {
+                if (enabledCapture) initializeVisualizer()
+                return@post
+            }
+            try {
+                check(engine.setEnabled(enabledCapture) == Visualizer.SUCCESS)
+                captureUnavailable = false
+            } catch (_: RuntimeException) {
+                try { engine.release() } catch (_: RuntimeException) {}
+                visualizer = null
+                captureUnavailable = true
+                scheduleCaptureRetry()
+            }
         }
     }
     private fun fail(message: String) {

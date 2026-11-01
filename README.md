@@ -1,5 +1,29 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.17.0 — CYN coexistence, improved album colors and stationary edge effects
+
+**CYN compatibility:** HALO previously hid the lighting when Android stopped
+delivering output-mix FFT frames and terminated its service after some capture
+errors. Now an active media session keeps the selected animation visible;
+audio capture automatically retries on a worker thread without killing
+the overlay. Brief media-session gaps are tolerated, and Android may restart
+a reclaimed foreground service when its restrictions allow. Effects only
+claim beat synchronisation when actual capture data is available.
+
+**Twenty-four designs:** Four new non-chasing AGSL effects are Side Flames
+(side-anchored rising/flickering light), Flat Edge Bars (stationary left/right
+frequency bars), Standing Waves (anchored breathing edge sheets), and Corner
+Aura (pulsing corner effects). Prior effect IDs remain stable.
+
+**Album-art palette:** HALO samples multiple regions of the cover, groups
+the dominant hues and derives a balanced two-color palette instead of choosing
+one oversaturated pixel. Low-information artwork falls back to existing
+manual colors, which remain saved.
+
+Physical-device validation with CYN on Samsung/One UI is still needed.
+This does not bypass Android audio capture or secure-video restrictions.
+
+
 ## v0.16.1 — Video keeps the selected GPU animation
 
 **Corrected architecture:** Video Ambilight used to bypass the selected AGSL

@@ -36,7 +36,8 @@ internal class ShaderEdgeEngine {
         mode: EdgeMode, bands: FloatArray, bass: Float, phase: Float, seconds: Float,
         thickness: Float, spread: Float, glow: Float, brightness: Float,
         primary: Int, secondary: Int, attack: Float, compact: Boolean = false,
-        video: VideoEdgeColors? = null, videoFrame: RectF? = null): Boolean {
+        video: VideoEdgeColors? = null, videoFrame: RectF? = null,
+        ambientMotion: Boolean = false): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -53,6 +54,7 @@ internal class ShaderEdgeEngine {
             runtime.setFloatUniform("brightness",brightness)
             runtime.setIntUniform("design",mode.ordinal)
             runtime.setFloatUniform("compact", if (compact) 1f else 0f)
+            runtime.setFloatUniform("ambientMotion", if (ambientMotion) 1f else 0f)
             runtime.setIntUniform("videoMode", if (video == null) 0 else 1)
             if (video != null) {
                 val sampledFrame = videoFrame ?: bounds
@@ -115,6 +117,7 @@ internal class ShaderEdgeEngine {
             uniform float3 second;
             uniform int design;
             uniform float compact;
+            uniform float ambientMotion;
             // Capture replaces ONLY the colors. Shape, particles, fluid movement, glow
             // and timing remain controlled by the selected animation.
             uniform int videoMode;
@@ -311,7 +314,8 @@ internal class ShaderEdgeEngine {
                 float d=roundedDistance(px);
                 float thicknessPx=max(.8,thickness);
                 // Background is genuinely transparent and needs no effect processing.
-                if(abs(d)>max(48.0,thicknessPx*spread*100.0)) return half4(0.0);
+                float effectExtent=(design>=20 && design<=23) ? 155.0 : 100.0;
+                if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
             
                 float lengthPx=1.0;
                 float u=edgeParameter(px,lengthPx);
@@ -477,6 +481,56 @@ internal class ShaderEdgeEngine {
                     core=p+q*.9+gaussian(d,1.5*thicknessPx)*.15;
                     aura=max(p,q)*.7+gaussian(d,14.0*thicknessPx)*.08;
                     sparkle=pow(max(p,q),3.0)*(.5+.4*kick);
+                } else if(design==20) { // Side Flames — stationary turbulent light tongues on left and right
+                    float vy=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
+                    float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
+                    float sideMask=smoothstep(.03,.12,vy)*(1.0-smoothstep(.88,.97,vy));
+                    float turbulence=noise3(float3(vy*13.0,dx*.025,time*.58));
+                    float detail=noise3(float3(vy*38.0+7.0,dx*.065,time*.93));
+                    float reach=(15.0+39.0*clamp(.52+.33*turbulence+.18*detail,0.0,1.0)
+                        +32.0*energy+15.0*kick)*thicknessPx*max(spread,.4);
+                    float tongue=1.0-smoothstep(reach*.48,max(reach,1.0),dx);
+                    float filament=gaussian(dx-(reach*.34+detail*8.0*thicknessPx),6.0*thicknessPx);
+                    core=(tongue*.83+filament*.35)*sideMask;
+                    aura=gaussian(dx,34.0*thicknessPx*spread)*(.33+.27*energy)*sideMask;
+                    sparkle=filament*.25*sideMask;
+                } else if(design==21) { // Flat Edge Bars — fixed left/right spectrum columns
+                    float vy=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
+                    float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
+                    float row=fract(vy*62.0)-.5;
+                    float audioEnergy=harmonic(fract(vy*.91+.045));
+                    float oscillation=.5+.5*sin(time*2.8+vy*22.0);
+                    float barLength=(5.0+60.0*(.15+.61*audioEnergy+.22*kick+.12*oscillation))
+                        *thicknessPx*max(spread,.35);
+                    float square=1.0-smoothstep(barLength-2.0*thicknessPx,barLength+1.0*thicknessPx,dx);
+                    float mask=1.0-smoothstep(.28,.48,abs(row));
+                    float verticalMask=smoothstep(.03,.11,vy)*(1.0-smoothstep(.89,.97,vy));
+                    core=square*mask*verticalMask;
+                    aura=gaussian(dx,16.0*thicknessPx)*mask*verticalMask*.22;
+                    sparkle=square*pow(mask,4.0)*(.11+.29*kick)*verticalMask;
+                } else if(design==22) { // Standing Waves — four fixed-edge breathing sheets
+                    float xf=clamp((px.x-frame.x)/max(1.0,frame.z-frame.x),0.0,1.0);
+                    float yf=clamp((px.y-frame.y)/max(1.0,frame.w-frame.y),0.0,1.0);
+                    float dx=min(abs(px.x-frame.x),abs(px.x-frame.z));
+                    float dy=min(abs(px.y-frame.y),abs(px.y-frame.w));
+                    float sx=sin(TAU*xf*5.0+time*.8);
+                    float sy=sin(TAU*yf*4.0-time*.7);
+                    float horizontal=gaussian(dy-(5.0+sx*12.0*(.5+energy))*thicknessPx,4.0*thicknessPx);
+                    float vertical=gaussian(dx-(5.0+sy*12.0*(.5+energy))*thicknessPx,4.0*thicknessPx);
+                    core=max(horizontal,vertical)*(.65+.3*energy);
+                    aura=gaussian(dy,22.0*thicknessPx)*.18
+                        +gaussian(dx,22.0*thicknessPx)*.18;
+                    sparkle=max(horizontal,vertical)*(.18+.26*kick);
+                } else if(design==23) { // Corner Aura — fixed pulsing four-corner optical blooms
+                    float2 a=px-frame.xy, b=px-float2(frame.z,frame.y);
+                    float2 c=px-frame.zw, e=px-float2(frame.x,frame.w);
+                    float distance=min(min(length(a),length(b)),min(length(c),length(e)));
+                    float pulseRing=17.0*thicknessPx+
+                        (5.0+9.0*kick)*thicknessPx*sin(time*1.7);
+                    core=gaussian(distance-pulseRing,7.0*thicknessPx)
+                        +gaussian(distance,14.0*thicknessPx)*.45;
+                    aura=gaussian(distance,52.0*thicknessPx)*(.34+.38*energy);
+                    sparkle=gaussian(distance-pulseRing,3.0*thicknessPx)*(.25+.5*kick);
                 } else {
                     core=gaussian(d,3.0*thicknessPx);
                     aura=gaussian(d,12.0*thicknessPx)*.2;
@@ -496,9 +550,11 @@ internal class ShaderEdgeEngine {
                 // In Video Mode the motion is scene-driven, not muted by absence of
                 // Android audio capture. Keep the selected material animated.
                 if(videoMode==1) musicalGain=max(.66,musicalGain);
+                if(ambientMotion>0.5) musicalGain=max(.72,musicalGain);
                 float a=clamp((core*.77 + aura*(.10+.35*glow)+whiteSpark*.28)
                     *brightness*musicalGain,0.0,.96);
-                a*=1.0-smoothstep(40.0*max(spread,.3),92.0*max(spread,.3),abs(d));
+                float edgeFade= (design>=20 && design<=23) ? 160.0 : 92.0;
+                a*=1.0-smoothstep(40.0*max(spread,.3),edgeFade*max(spread,.3),abs(d));
                 if(videoMode==1) {
                     // Black areas of the picture must stay dark. Saturated video
                     // colors remain the sampled colors rather than an added glow.
