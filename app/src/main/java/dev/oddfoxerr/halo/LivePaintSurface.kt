@@ -159,11 +159,19 @@ internal class BrushCanvasPainter {
                 canvas.drawBitmap(frame.underpainting, null, rect, backdrop)
             }
             val relief = (settings.relief * 12f).toInt().coerceIn(0, 22)
-            val glow = Color.rgb(relief, relief, relief)
+            val light = if (includeBackground) relief else 25 + relief
+            val glow = Color.rgb(light, light, light)
             for (dab in frame.strokes) {
-                val key = dab.rgb xor (relief shl 24)
+                // Original mask luminance is around 0.75. Neutralize it in
+                // live mode so overlapping bristles don't darken the display.
+                val pigment = if (includeBackground) dab.rgb else Color.rgb(
+                    (Color.red(dab.rgb) * 1.18f).toInt().coerceIn(0, 255),
+                    (Color.green(dab.rgb) * 1.18f).toInt().coerceIn(0, 255),
+                    (Color.blue(dab.rgb) * 1.18f).toInt().coerceIn(0, 255)
+                )
+                val key = pigment xor (light shl 24)
                 paint.colorFilter = filters[key]
-                    ?: LightingColorFilter(dab.rgb, glow).also { filters[key] = it }
+                    ?: LightingColorFilter(pigment, glow).also { filters[key] = it }
                 // One intentionally translucent brush pass is composited
                 // over the existing phone screen. Do not redraw opaque
                 // screenshots over the entire screen.
