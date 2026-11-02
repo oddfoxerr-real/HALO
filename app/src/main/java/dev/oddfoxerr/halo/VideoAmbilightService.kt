@@ -100,6 +100,17 @@ class VideoAmbilightService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Hard safety gate: older versions launched an opaque system-wide
+        // screen-copy SurfaceView. On Samsung it darkened the display and
+        // prevented interactions with unrelated applications. Never start
+        // this mode, even from an old notification or stale launch Intent.
+        if (intent?.action == ACTION_START &&
+            intent.getBooleanExtra(EXTRA_PAINTED, false)) {
+            statusValue.value =
+                "Full-screen painting is disabled: use the safe in-app preview."
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_REFRESH -> {
