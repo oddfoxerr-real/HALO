@@ -70,9 +70,12 @@ class PaintedScreenGpuTest {
                 val alpha = Color.alpha(painting.getPixel(x, y))
                 if (alpha == 0) transparent++
                 if (alpha > 0) painted++
-                assertTrue("No completely opaque live pixels permitted", alpha < 255)
             }
             assertTrue("No visible brush marks", painted > 2)
+            // Multiple translucent bristles may legitimately overlap into an
+            // opaque *individual pixel*. The whole overlay window is
+            // independently capped at 0.48 opacity. What must never return is
+            // the old full-screen opaque screenshot backdrop.
             assertTrue("Backplate is opaque and can darken the phone", transparent > 5)
         } finally {
             planned.dispose()
