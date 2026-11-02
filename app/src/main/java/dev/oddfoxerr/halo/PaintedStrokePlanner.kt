@@ -44,7 +44,7 @@ internal class PaintedStrokeFrame(
 
 internal object PaintedStrokePlanner {
     // Prevent a backlog of thousands of GPU Canvas draw calls on a mid-range phone.
-    private const val MAX_STROKES = 1600
+    private const val MAX_STROKES = 1200
 
     fun plan(frame: Bitmap, settings: PaintedScreenPreferences): PaintedStrokeFrame {
         require(!frame.isRecycled)
@@ -68,12 +68,19 @@ internal object PaintedStrokePlanner {
             val spacing = layers[layer]
             val xCount = (w / spacing).toInt() + 2
             val yCount = (h / spacing).toInt() + 2
+            // Reserve stroke capacity for EACH pass. The old cap exhausted
+            // itself drawing the upper rows before detail strokes could reach
+            // the bottom half of a tall phone display.
+            val layerBudget = intArrayOf(210, 370, 620)[layer]
+            val acceptance = (layerBudget.toFloat() /
+                ((xCount + 1L) * (yCount + 1L)).toFloat()).coerceIn(0f, 1f)
             val phaseX = if (layer == 1) .44f else if (layer == 2) .19f else 0f
             val phaseY = if (layer == 1) .26f else if (layer == 2) .61f else 0f
 
             for (row in 0..yCount) for (col in 0..xCount) {
                 if (marks.size >= MAX_STROKES) break
                 val seed = hash(col, row, layer + 9)
+                if (hashUnit(seed + 211) > acceptance) continue
                 val x = ((col + phaseX + .5f) * spacing +
                     (hashUnit(seed + 13) - .5f) * spacing * .61f)
                     .coerceIn(0f, (w - 1).toFloat())
