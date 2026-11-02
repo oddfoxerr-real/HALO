@@ -39,6 +39,7 @@ class VideoAmbilightService : Service() {
         const val EXTRA_RESULT_CODE = "projection_result_code"
         const val EXTRA_RESULT_DATA = "projection_result_data"
         const val EXTRA_PAINTED = "projection_painted"
+        const val EXTRA_SAFE_LIVE = "projection_safe_transparent_pigment_only"
         private const val CHANNEL = "halo_video_ambilight"
         private const val NOTICE_ID = 711
 
@@ -100,14 +101,13 @@ class VideoAmbilightService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Hard safety gate: older versions launched an opaque system-wide
-        // screen-copy SurfaceView. On Samsung it darkened the display and
-        // prevented interactions with unrelated applications. Never start
-        // this mode, even from an old notification or stale launch Intent.
+        // Refuse any old intent. Only HALO\'s new explicitly consented
+        // translucent TextureView session may start global pigment overlays.
         if (PaintingSafetyGate.rejectProjectionStart(
-                intent?.action, intent?.getBooleanExtra(EXTRA_PAINTED, false) == true)) {
-            statusValue.value =
-                "Full-screen painting is disabled: use the safe in-app preview."
+                intent?.action,
+                intent?.getBooleanExtra(EXTRA_PAINTED, false) == true,
+                intent?.getBooleanExtra(EXTRA_SAFE_LIVE, false) == true)) {
+            statusValue.value = "Previous unsafe painting requests are disabled"
             stopSelf()
             return START_NOT_STICKY
         }
@@ -233,8 +233,8 @@ class VideoAmbilightService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                (if (isPainted) 0 else WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS),
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -243,10 +243,10 @@ class VideoAmbilightService : Service() {
             // Keep the live painter below the touch-obscuring threshold.
             // The brush SURFACE is still fully painted; window blending
             // allows underlying apps to remain interactive.
-            alpha = if (isPainted) .78f else .78f
-            // Unlike older builds, only SurfaceView is secure; the transparent
-            // WindowManager overlay itself is intentionally NOT FLAG_SECURE.
-            // Full-window security could redact the entire capture on Samsung.
+            alpha = if (isPainted) PaintingSafetyGate.MAX_LIVE_OVERLAY_ALPHA else .78f
+            // Live pigment comes from a non-secure TextureView, not a separate
+            // compositor SurfaceView. The phone UI remains physically behind
+            // a mostly transparent window, with all touch input passed through.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
@@ -304,8 +304,8 @@ class VideoAmbilightService : Service() {
                                 PaintedCaptureAction.DISABLE_OVERLAY -> {
                                     bitmap?.recycle()
                                     statusValue.value =
-                                        "Android temporarily blocked live screen capture"
-                                    main.post { disablePaintOverlay() }
+                                        "Painting stopped: Android blocked screen capture"
+                                    main.post { stopSelf() }
                                 }
                                 PaintedCaptureAction.CLEAR -> {
                                     bitmap?.recycle()
