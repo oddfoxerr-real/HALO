@@ -1,5 +1,10 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.7 diagnostic candidate — isolate capture versus renderer stalls
+
+v0.20.6 still reproduced the user's "first painted frame then freezes" error on Samsung. This candidate is intentionally **not represented as a confirmed fix**. Its ImageReader callback now decodes and hands off the newest frame to a **separate paint thread**. Slow brush planning or GPU surface locks no longer block frame acquisition. Latest-frame replacement uses a single slot and discards older unpainted frames. The user can run **Misc → Painted Screen → Test capture without overlay** (grants fresh full-display MediaProjection permission), switch between apps, then return and tap **Copy diagnostic report**. It reports counters for capture callbacks, non-black frames, changed images, black frames, painted frames, dropped frames, render errors and resizes; it stores no image data or app contents. Compare capture-only with actual painting to determine if Samsung redacts the stream when a secure painting surface is added. Real-time device behaviour must be verified before announcing a fix or enabling the feature by default.
+
+
 ## v0.20.6 — Isolated secure SurfaceView for live painting
 
 **Issue:** prior builds painted into a fully secure `TYPE_APPLICATION_OVERLAY` window while trying to recapture the underlying screen. On some devices the overlay excludes or blacks out the entire display capture after the first frame. Additionally, the normal View/RenderThread pipeline could lag behind worker-generated brush plans.
