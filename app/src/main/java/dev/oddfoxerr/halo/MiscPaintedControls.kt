@@ -1,10 +1,15 @@
 package dev.oddfoxerr.halo
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -33,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -44,8 +50,8 @@ import kotlinx.coroutines.withContext
  * shaders into unrelated application windows. The full-screen screen-copy
  * overlay blocked touches and altered brightness on Samsung devices.
  *
- * This component deliberately NEVER creates a system overlay or starts
- * MediaProjection. The image-guided brush engine remains inside HALO's UI.
+ * The historical opaque SurfaceView is forbidden. Live painting uses a
+ * newly consented, translucent TextureView with touch-through opacity.
  */
 @Composable
 fun MiscPaintedControls() {
@@ -56,6 +62,37 @@ fun MiscPaintedControls() {
         mutableStateOf(PaintedScreenPreferences.read(context))
     }
     var photo by remember { mutableStateOf<Uri?>(null) }
+    var liveFeedback by remember { mutableStateOf<String?>(null) }
+    val otherVideo = VideoAmbilightService.isRunning &&
+        !VideoAmbilightService.isPainted
+    val screenPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val intent = Intent(context, VideoAmbilightService::class.java)
+                .setAction(VideoAmbilightService.ACTION_START)
+                .putExtra(VideoAmbilightService.EXTRA_PAINTED, true)
+                .putExtra(VideoAmbilightService.EXTRA_SAFE_LIVE, true)
+                .putExtra(VideoAmbilightService.EXTRA_RESULT_CODE, result.resultCode)
+                .putExtra(VideoAmbilightService.EXTRA_RESULT_DATA, result.data)
+            try {
+                ContextCompat.startForegroundService(context, intent)
+                liveFeedback = null
+            } catch (error: RuntimeException) {
+                liveFeedback = "Live painting could not start: " +
+                    (error.message ?: "Android restricted the overlay")
+            }
+        } else {
+            liveFeedback = "Screen sharing permission was not granted."
+        }
+    }
+    val overlayPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        liveFeedback = if (Settings.canDrawOverlays(context))
+            "Permission granted. Tap Start live painting again."
+        else "Display-over-other-apps permission is needed."
+    }
     var artwork by remember { mutableStateOf<PaintedStrokeFrame?>(null) }
     var message by remember {
         mutableStateOf("Choose a photo to preview real textured brush strokes.")
@@ -110,21 +147,59 @@ fun MiscPaintedControls() {
         ) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "System-wide painting is disabled for safety: its overlay blocked touches and darkened the display on Samsung. The real brush engine remains available here on your own photos, without affecting other apps.",
+                "Live painting uses a transparent, touch-through pigment layer. The real screen stays visible beneath it rather than being replaced by a dark duplicate. You can also paint a photo directly in HALO.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            if (unsafeSession) {
-                Text(
-                    "An older painting session is active. Stop it immediately.",
-                    color = MaterialTheme.colorScheme.error
-                )
-                Button(onClick = {
-                    context.stopService(Intent(context, VideoAmbilightService::class.java))
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Stop full-screen painting")
-                }
+            Text("Live painting", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (unsafeSession) captureStatus else
+                    "Transparent brush marks only. Android's screen-sharing indicator and HALO's Stop notification remain available.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = {
+                    when {
+                        unsafeSession -> context.startService(
+                            Intent(context, VideoAmbilightService::class.java)
+                                .setAction(VideoAmbilightService.ACTION_STOP)
+                        )
+                        otherVideo -> {
+                            context.startService(
+                                Intent(context, VideoAmbilightService::class.java)
+                                    .setAction(VideoAmbilightService.ACTION_STOP)
+                            )
+                            liveFeedback = "Video Ambilight stopped. Tap Start again."
+                        }
+                        Build.VERSION.SDK_INT < 33 ->
+                            liveFeedback = "Live painting requires Android 13 or newer."
+                        !Settings.canDrawOverlays(context) ->
+                            overlayPermission.launch(
+                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:" + context.packageName))
+                            )
+                        else -> {
+                            val manager = context.getSystemService(
+                                MediaProjectionManager::class.java)
+                            val request = if (Build.VERSION.SDK_INT >= 34)
+                                manager.createScreenCaptureIntent(
+                                    MediaProjectionConfig.createConfigForDefaultDisplay()
+                                ) else manager.createScreenCaptureIntent()
+                            screenPermission.launch(request)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (unsafeSession) "Stop live painting" else if (otherVideo)
+                    "Stop Video Ambilight" else "Start live painting")
             }
+            liveFeedback?.let {
+                Text(it, color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Text("Photo painting preview", style = MaterialTheme.typography.titleMedium)
 
             Button(
                 onClick = { choosePhoto.launch("image/*") },
@@ -195,7 +270,7 @@ fun MiscPaintedControls() {
                 message = "Choose a photo to preview real textured brush strokes."
             }) { Text("Clear preview") }
             Text(
-                "This preview uses your selected image locally. It never requests screen sharing or display-over-other-apps permission, and it never uploads the photo.",
+                "The photo preview processes images locally. Live painting needs Android screen-sharing consent and stops from HALO or the notification. Protected contents may not appear; no frames are uploaded.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -1,15 +1,24 @@
 package dev.oddfoxerr.halo
 
 /**
- * Safety invariant: an untrusted full-screen Android overlay must never
- * replace the phone display to imitate a global shader. Samsung/Android may
- * block underlying app touches and darken the screen. Painting is allowed
- * only inside HALO's own activity using user-selected images.
+ * Legacy full-screen painting must never restart from an old notification,
+ * stale launch intent, or third-party invocation.
+ *
+ * Only a new user-consented, safe compositor session may start: it uses
+ * TextureView + translucent brush strokes, with no opaque captured backdrop
+ * and never creates the secure SurfaceView that obstructed phone controls.
  */
 internal object PaintingSafetyGate {
-    const val FULLSCREEN_PAINTING_ALLOWED = false
+    const val LIVE_TEXTURE_VIEW_ENABLED = true
+    const val MAX_LIVE_OVERLAY_ALPHA = .48f
 
-    fun rejectProjectionStart(action: String?, painted: Boolean): Boolean =
-        !FULLSCREEN_PAINTING_ALLOWED &&
-            action == VideoAmbilightService.ACTION_START && painted
+    fun rejectProjectionStart(
+        action: String?,
+        painted: Boolean,
+        safeCompositorRequested: Boolean = false
+    ): Boolean = painted && action == VideoAmbilightService.ACTION_START &&
+        !(LIVE_TEXTURE_VIEW_ENABLED && safeCompositorRequested)
+
+    fun isTouchThroughOpacity(alpha: Float): Boolean =
+        alpha.isFinite() && alpha >= 0f && alpha <= MAX_LIVE_OVERLAY_ALPHA
 }
