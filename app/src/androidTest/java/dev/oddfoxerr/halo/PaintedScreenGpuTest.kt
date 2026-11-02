@@ -126,6 +126,68 @@ class PaintedScreenGpuTest {
         after.recycle()
     }
 
+    @Test fun blockedPainterAutomaticallyRetriesWhenCapturableAppReturns() {
+        val controller=PaintedCaptureHealth()
+        assertEquals(PaintedCaptureAction.PRESENT,controller.observe(true,false,1000L))
+        for (i in 1..7) controller.observe(false,true,1000L+i*100L)
+        assertEquals(PaintedCaptureAction.DISABLE_OVERLAY,
+            controller.observe(false,true,1800L))
+        assertTrue(controller.overlayRejected)
+        for (i in 1..5) {
+            assertEquals(PaintedCaptureAction.CLEAR,
+                controller.observe(true,false,2500L+i*50L))
+        }
+        assertTrue("Must respect cooldown before reattaching",controller.overlayRejected)
+        assertEquals(PaintedCaptureAction.PRESENT,
+            controller.observe(true,false,10000L))
+        assertTrue("Recovery did not clear the rejection latch",!controller.overlayRejected)
+    }
+
+    @Test fun nativeHardwarePainterRendersMultipleDistinctFrames() {
+        val painter = BrushCanvasPainter()
+        val first = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        first.eraseColor(Color.rgb(210,45,36))
+        val second = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        second.eraseColor(Color.rgb(20,145,215))
+        val settings = PaintedScreenPreferences(strength=1f)
+        val a = PaintedStrokePlanner.plan(first,settings)
+        val b = PaintedStrokePlanner.plan(second,settings)
+        val front = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        val back = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        try {
+            painter.draw(android.graphics.Canvas(front),a,settings,120,240)
+            painter.draw(android.graphics.Canvas(back),b,settings,120,240)
+            val colourA = front.getPixel(60,120)
+            val colourB = back.getPixel(60,120)
+            assertEquals(255,Color.alpha(colourA))
+            assertEquals(255,Color.alpha(colourB))
+            val difference = kotlin.math.abs(Color.red(colourA)-Color.red(colourB)) +
+                kotlin.math.abs(Color.green(colourA)-Color.green(colourB)) +
+                kotlin.math.abs(Color.blue(colourA)-Color.blue(colourB))
+            assertTrue("Painter froze after initial frame; output did not change",difference>180)
+        } finally {
+            a.dispose()
+            b.dispose()
+            front.recycle()
+            back.recycle()
+            painter.release()
+        }
+    }
+
+    @Test fun brushPassesCoverBothTopAndBottomWithoutExhaustingFrameBudget() {
+        val original = Bitmap.createBitmap(360,780,Bitmap.Config.ARGB_8888)
+        original.eraseColor(Color.rgb(125,120,75))
+        val frame = PaintedStrokePlanner.plan(original,PaintedScreenPreferences())
+        try {
+            assertTrue("Brush plan missing",frame.strokes.size>400)
+            assertTrue("Too many UI brush stamps",frame.strokes.size<=1200)
+            assertTrue("No strokes in upper region",frame.strokes.any{ it.y<160f })
+            assertTrue("No strokes near lower edge",frame.strokes.any{ it.y>620f })
+            assertTrue("Only coarse strokes planned",
+                frame.strokes.map{it.thickness.toInt()}.distinct().size>12)
+        } finally { frame.dispose() }
+    }
+
     private fun render(source:Bitmap,style:PaintedStyle):Bitmap {
         val context=InstrumentationRegistry.getInstrumentation().targetContext
         val preferences=PaintedScreenPreferences(style=style,strength=.96f,relief=1.1f)
