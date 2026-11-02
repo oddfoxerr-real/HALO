@@ -104,7 +104,8 @@ internal class LivePaintSurface(context: Context) : SurfaceView(context), Surfac
         if (!ready || !holder.surface.isValid) return
         var canvas: Canvas? = null
         try {
-            canvas = holder.lockCanvas()
+            canvas = if (Build.VERSION.SDK_INT >= 26) holder.lockHardwareCanvas()
+                else holder.lockCanvas()
             canvas?.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         } catch (error: RuntimeException) {
             Log.w(tag, "Could not clear secure paint surface", error)
