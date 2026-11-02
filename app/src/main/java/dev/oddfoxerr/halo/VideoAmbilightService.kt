@@ -59,6 +59,7 @@ class VideoAmbilightService : Service() {
     private var windowManager: WindowManager? = null
     private var view: ChainsawView? = null
     @Volatile private var livePaintSurface: LivePaintSurface? = null
+    private var paintDispatcher: LatestPaintDispatcher? = null
     @Volatile private var paintSettings = PaintedScreenPreferences()
     private var fpsWindowStarted = 0L
     private var fpsFrames = 0
@@ -76,9 +77,10 @@ class VideoAmbilightService : Service() {
         override fun run() {
             if (!stopping && isPainted) {
                 val now = SystemClock.uptimeMillis()
-                if (overlay != null && now - lastUsablePaintFrameAt > 2300L) {
-                    worker.post { livePaintSurface?.clearSurface() }
-                    statusValue.value = "Painting paused: screen capture stopped delivering frames"
+                if (overlay != null && now - lastUsablePaintFrameAt > 4000L) {
+                    // An unchanged screen can legitimately emit no new frames.
+                    // Do not erase the one correctly rendered painting.
+                    statusValue.value = "Painting active · no new screen changes"
                 }
                 main.postDelayed(this, 1200L)
             }
@@ -164,7 +166,19 @@ class VideoAmbilightService : Service() {
             // Do not put the painter over the permission chooser or the first
             // capture frame. Create its secure overlay only after valid pixels
             // arrive; this avoids capturing our own surface on session startup.
-            if (!isPainted) showOverlay() else main.postDelayed(painterWatchdog, 1200L)
+            if (!isPainted) showOverlay() else {
+                paintDispatcher = LatestPaintDispatcher(
+                    surface = { livePaintSurface },
+                    preferences = { paintSettings },
+                    onRendered = { count, fps ->
+                        framesRendered = count
+                        lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+                        statusValue.value = "Live painting · %.1f fps · %d frames".format(
+                            java.util.Locale.US, fps, count)
+                    }
+                )
+                main.postDelayed(painterWatchdog, 1200L)
+            }
 
             val manager = getSystemService(MediaProjectionManager::class.java)
             val capture = manager.getMediaProjection(resultCode, resultData)
@@ -252,7 +266,7 @@ class VideoAmbilightService : Service() {
     }
 
     private fun createReader() {
-        val created = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+        val created = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3)
         created.setOnImageAvailableListener({ source ->
             val image = try { source.acquireLatestImage() } catch (_: IllegalStateException) { null }
             if (image != null) try {
@@ -262,85 +276,51 @@ class VideoAmbilightService : Service() {
                     val plane = image.planes.firstOrNull()
                     if (plane != null) {
                         if (isPainted) {
-                            // SurfaceView has its own secure layer. The parent
-                            // application overlay window stays transparent, so
-                            // the compositor can exclude only the brush layer.
-                                val bitmap = try {
-                                    PaintedFrameDecoder.decode(
-                                        plane.buffer, image.width, image.height,
-                                        plane.rowStride, plane.pixelStride)
-                                } catch (failure: RuntimeException) {
-                                    Log.e("HALO", "Screen capture decode failed", failure)
-                                    null
+                            // MediaProjection acquisition must be independent
+                            // of brush planning and hardware Canvas drawing.
+                            // ImageReader will stall if this callback is blocked
+                            // for multiple rendered frames.
+                            val bitmap = try {
+                                PaintedFrameDecoder.decode(
+                                    plane.buffer, image.width, image.height,
+                                    plane.rowStride, plane.pixelStride)
+                            } catch (error: RuntimeException) {
+                                Log.e("HALO", "Screen capture decode failed", error)
+                                null
+                            }
+                            framesSeen++
+                            when (paintHealth.observe(bitmap != null, overlay != null)) {
+                                PaintedCaptureAction.DISABLE_OVERLAY -> {
+                                    bitmap?.recycle()
+                                    statusValue.value =
+                                        "Android temporarily blocked live screen capture"
+                                    main.post { disablePaintOverlay() }
                                 }
-                                framesSeen++
-                                when (paintHealth.observe(bitmap != null, overlay != null)) {
-                                    PaintedCaptureAction.DISABLE_OVERLAY -> {
-                                        bitmap?.recycle()
-                                        statusValue.value =
-                                            "Live painter paused: secure surface blocks capture; probing recovery"
-                                        main.post { disablePaintOverlay() }
-                                    }
-                                    PaintedCaptureAction.CLEAR -> {
-                                        bitmap?.recycle()
-                                        livePaintSurface?.clearSurface()
-                                    }
-                                    PaintedCaptureAction.KEEP -> bitmap?.recycle()
-                                    PaintedCaptureAction.PRESENT -> {
-                                        if (bitmap != null) {
-                                            lastUsablePaintFrameAt = SystemClock.uptimeMillis()
-                                            if (overlay == null) {
-                                                bitmap.recycle()
-                                                main.post {
-                                                    if (!stopping && overlay == null)
-                                                        try { showOverlay() }
-                                                        catch (error: Exception) {
-                                                            Log.e("HALO", "Live surface attach rejected", error)
-                                                            statusValue.value = "Android rejected live painting overlay"
-                                                        }
-                                                }
-                                            } else {
-                                                val frame = try {
-                                                    PaintedStrokePlanner.plan(bitmap, paintSettings)
-                                                } catch (error: Exception) {
-                                                    bitmap.recycle()
-                                                    Log.e("HALO", "Live brush frame planning failed", error)
-                                                    statusValue.value = "Brush painter frame processing failed"
-                                                    null
-                                                }
-                                                if (frame != null) {
-                                                    // Render directly on the dedicated
-                                                    // secure Surface's hardware canvas.
-                                                    // No queue of thousands of UI draw
-                                                    // calls, View.invalidate or snapshot
-                                                    // bitmaps waiting on the main thread.
-                                                    val presented = livePaintSurface?.present(
-                                                        frame, paintSettings) ?: run {
-                                                            frame.dispose()
-                                                            false
-                                                        }
-                                                    if (presented) {
-                                                        framesRendered++
-                                                        fpsFrames++
-                                                        val presentedAt = SystemClock.uptimeMillis()
-                                                        lastUsablePaintFrameAt = presentedAt
-                                                        val elapsed = presentedAt - fpsWindowStarted
-                                                        if (elapsed >= 2000L) {
-                                                            val framesPerSecond = fpsFrames * 1000f /
-                                                                elapsed.coerceAtLeast(1L)
-                                                            statusValue.value =
-                                                                "Live paint · %.1f fps · %d frames".format(
-                                                                    java.util.Locale.US,
-                                                                    framesPerSecond, framesRendered)
-                                                            fpsFrames = 0
-                                                            fpsWindowStarted = presentedAt
-                                                        }
+                                PaintedCaptureAction.CLEAR -> {
+                                    bitmap?.recycle()
+                                    paintDispatcher?.clear()
+                                }
+                                PaintedCaptureAction.KEEP -> bitmap?.recycle()
+                                PaintedCaptureAction.PRESENT -> {
+                                    if (bitmap != null) {
+                                        lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+                                        if (overlay == null) {
+                                            bitmap.recycle()
+                                            main.post {
+                                                if (!stopping && overlay == null) {
+                                                    try { showOverlay() }
+                                                    catch (error: Exception) {
+                                                        Log.e("HALO", "Live overlay rejected", error)
+                                                        statusValue.value = "Live overlay is not permitted"
                                                     }
                                                 }
                                             }
+                                        } else {
+                                            paintDispatcher?.submit(bitmap) ?: bitmap.recycle()
                                         }
                                     }
                                 }
+                            }
                         } else {
                             val profile = lighting
                             val value = VideoColorSampler.sample(
@@ -381,7 +361,7 @@ class VideoAmbilightService : Service() {
         if (isPainted) {
             paintHealth.reset()
             lastUsablePaintFrameAt = SystemClock.uptimeMillis()
-            livePaintSurface?.clearSurface()
+            paintDispatcher?.clear()
         }
     }
 
@@ -389,7 +369,7 @@ class VideoAmbilightService : Service() {
     private fun hidePaintLayer() {
         // SurfaceHolder drawing belongs to the capture worker. Its secure
         // contents are cleared there instead of mutating a View's bitmap on UI.
-        worker.post { livePaintSurface?.clearSurface() }
+        paintDispatcher?.clear()
     }
 
     /** Pause only the unsafe visual overlay, retain MediaProjection status. */
@@ -404,10 +384,7 @@ class VideoAmbilightService : Service() {
         }
         val previous = livePaintSurface
         livePaintSurface = null
-        worker.post {
-            previous?.clearSurface()
-            previous?.release()
-        }
+        previous?.let { paintDispatcher?.retireSurface(it) }
         overlay = null
         windowManager = null
         try {
@@ -462,7 +439,8 @@ class VideoAmbilightService : Service() {
         overlay?.let { try { windowManager?.removeViewImmediate(it) } catch (_: RuntimeException) {} }
         val previousSurface = livePaintSurface
         livePaintSurface = null
-        worker.post { previousSurface?.release() }
+        paintDispatcher?.close(previousSurface)
+        paintDispatcher = null
         view = null; overlay = null; windowManager = null
         isPainted = false
         thread.quitSafely()

@@ -44,7 +44,7 @@ internal class PaintedStrokeFrame(
 
 internal object PaintedStrokePlanner {
     // Prevent a backlog of thousands of GPU Canvas draw calls on a mid-range phone.
-    private const val MAX_STROKES = 1200
+    private const val MAX_STROKES = 750
 
     fun plan(frame: Bitmap, settings: PaintedScreenPreferences): PaintedStrokeFrame {
         require(!frame.isRecycled)
@@ -71,7 +71,7 @@ internal object PaintedStrokePlanner {
             // Reserve stroke capacity for EACH pass. The old cap exhausted
             // itself drawing the upper rows before detail strokes could reach
             // the bottom half of a tall phone display.
-            val layerBudget = intArrayOf(210, 370, 620)[layer]
+            val layerBudget = intArrayOf(150, 240, 370)[layer]
             val acceptance = (layerBudget.toFloat() /
                 ((xCount + 1L) * (yCount + 1L)).toFloat()).coerceIn(0f, 1f)
             val phaseX = if (layer == 1) .44f else if (layer == 2) .19f else 0f
@@ -97,8 +97,12 @@ internal object PaintedStrokePlanner {
                 val magnitude = sqrt(horizontal * horizontal + vertical * vertical)
                 // Near strong boundaries, short detail marks preserve forms.
                 // Otherwise longer brush marks can be grouped into big swaths.
+                // This detail-pass skip MUST use independent random bits.
+                // seed+91 and seed+211 shared their low 16 bits so accepted
+                // cells almost always failed the detail pass, leaving just
+                // ~3 fine strokes across a whole phone frame.
                 if (layer == 2 && magnitude < .055f &&
-                    hashUnit(seed + 91) < .51f) continue
+                    hashUnit(hash(col + 173, row - 67, layer + 71)) < .51f) continue
 
                 val rotation = if (magnitude > .018f)
                     atan2(-horizontal, vertical) * (180.0 / PI).toFloat()
