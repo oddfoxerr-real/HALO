@@ -74,13 +74,23 @@ class VideoAmbilightService : Service() {
     private var blankPaintFrames = 0
     private val paintHealth = PaintedCaptureHealth()
     @Volatile private var lastUsablePaintFrameAt = 0L
+    @Volatile private var lastPresentedPaintFrameAt = 0L
     private val painterWatchdog = object : Runnable {
         override fun run() {
             if (!stopping && isPainted) {
                 val now = SystemClock.uptimeMillis()
+                if (overlay != null &&
+                    framesSeen >= 10 &&
+                    now - lastUsablePaintFrameAt < 1500L &&
+                    now - lastPresentedPaintFrameAt > 6500L) {
+                    // Capture keeps moving, but rendering has stopped. Never
+                    // leave a stale full-display overlay indefinitely.
+                    statusValue.value = "Painting stopped: frame compositor stalled"
+                    stopSelf()
+                    return
+                }
                 if (overlay != null && now - lastUsablePaintFrameAt > 4000L) {
-                    // An unchanged screen can legitimately emit no new frames.
-                    // Do not erase the one correctly rendered painting.
+                    // A static display can legitimately emit no new frames.
                     statusValue.value = "Painting active · no new screen changes"
                 }
                 main.postDelayed(this, 1200L)
@@ -147,6 +157,7 @@ class VideoAmbilightService : Service() {
         fpsFrames = 0
         fpsWindowStarted = SystemClock.uptimeMillis()
         lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+        lastPresentedPaintFrameAt = SystemClock.uptimeMillis()
         if (isPainted && Build.VERSION.SDK_INT < 33) {
             statusValue.value = "Painted Screen requires Android 13 or newer"
             stopSelf()
@@ -183,7 +194,7 @@ class VideoAmbilightService : Service() {
                     preferences = { paintSettings },
                     onRendered = { count, fps ->
                         framesRendered = count
-                        lastUsablePaintFrameAt = SystemClock.uptimeMillis()
+                        lastPresentedPaintFrameAt = SystemClock.uptimeMillis()
                         statusValue.value = "Live painting · %.1f fps · %d frames".format(
                             java.util.Locale.US, fps, count)
                     }
