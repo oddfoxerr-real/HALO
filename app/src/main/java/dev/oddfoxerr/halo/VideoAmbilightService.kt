@@ -80,9 +80,12 @@ class VideoAmbilightService : Service() {
         override fun run() {
             if (!stopping && isPainted) {
                 val now = SystemClock.uptimeMillis()
-                if (overlay != null && now - lastUsablePaintFrameAt > 2300L) {
-                    paintDispatcher?.clear()
-                    statusValue.value = "Painting paused: screen capture stopped delivering frames"
+                if (overlay != null && now - lastUsablePaintFrameAt > 4000L) {
+                    // MediaProjection can deliver only changed display frames.
+                    // A static screen is NOT a capture failure. Keep the last
+                    // valid artwork; only black frames or onStop clear it.
+                    statusValue.value =
+                        "No new screen changes · keeping last painted frame"
                 }
                 main.postDelayed(this, 1200L)
             }
