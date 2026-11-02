@@ -20,6 +20,24 @@ import java.nio.ByteBuffer
 
 @RunWith(AndroidJUnit4::class)
 class PaintedScreenGpuTest {
+    @Test fun systemWidePainterIsRejectedBeforeAnyOverlayOrProjectionStarts() {
+        assertTrue(
+            "A full-screen painting overlay must never block the phone again",
+            PaintingSafetyGate.rejectProjectionStart(
+                VideoAmbilightService.ACTION_START, true)
+        )
+        assertTrue(
+            "Other capture modes must remain available",
+            !PaintingSafetyGate.rejectProjectionStart(
+                VideoAmbilightService.ACTION_START, false)
+        )
+        assertTrue(
+            "Refresh must not unexpectedly be blocked",
+            !PaintingSafetyGate.rejectProjectionStart(
+                VideoAmbilightService.ACTION_REFRESH, true)
+        )
+    }
+
     @Test fun rgbaDecoderRespectsRowStrideAndBlackPrivacy() {
         val width=16
         val height=16
