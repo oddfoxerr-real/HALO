@@ -126,6 +126,23 @@ class PaintedScreenGpuTest {
         after.recycle()
     }
 
+    @Test fun blockedPainterAutomaticallyRetriesWhenCapturableAppReturns() {
+        val controller=PaintedCaptureHealth()
+        assertEquals(PaintedCaptureAction.PRESENT,controller.observe(true,false,1000L))
+        for (i in 1..7) controller.observe(false,true,1000L+i*100L)
+        assertEquals(PaintedCaptureAction.DISABLE_OVERLAY,
+            controller.observe(false,true,1800L))
+        assertTrue(controller.overlayRejected)
+        for (i in 1..5) {
+            assertEquals(PaintedCaptureAction.CLEAR,
+                controller.observe(true,false,2500L+i*50L))
+        }
+        assertTrue("Must respect cooldown before reattaching",controller.overlayRejected)
+        assertEquals(PaintedCaptureAction.PRESENT,
+            controller.observe(true,false,10000L))
+        assertTrue("Recovery did not clear the rejection latch",!controller.overlayRejected)
+    }
+
     @Test fun nativeHardwarePainterRendersMultipleDistinctFrames() {
         val painter = BrushCanvasPainter()
         val first = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
