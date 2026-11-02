@@ -1,5 +1,17 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.9 — Transparent live painting instead of screen duplication
+
+The v0.20.7 painter copied an entire screen image into a secure full-screen `SurfaceView` before stamping strokes, and it could darken the screen or block controls on Samsung One UI. v0.20.8 disabled that unsafe approach entirely.
+
+The new opt-in **Misc → Painted Screen → Start live painting** uses a *non-secure, non-opaque* `TextureView` within exactly one `TYPE_APPLICATION_OVERLAY` window with `FLAG_NOT_TOUCHABLE` and a deliberately capped window alpha of 0.48. **The painter never redraws the captured screen as an opaque background.** It draws only translucent, luminosity-balanced textured brush strokes, so Android's real apps remain visible and retain touch input. An emergency Stop action is available in the HALO foreground notification. The Android capture worker does not wait on GPU drawing, and black/redacted captures clear the pigment and terminate rather than create a black screen.
+
+Older painted-start intents without the new opt-in token remain blocked. Local photo-preview painting still exists. Video Ambilight, music and notifications are unchanged.
+
+This is **not Android system shader injection**: the brush pigments are composited as an overlay. It cannot change protected app pixels or guarantee exclusion of its own overlay from MediaProjection on every Samsung build. Android emulator tests can validate transparency, opacity policy and brush output but cannot verify One UI's compositor or actual pass-through behaviour on a Galaxy A56. No claim of fully reproduced Blender Paint System geometry is made.
+
+
+
 ## v0.20.8 — Phone safety first: no system-wide Painted Screen overlay
 
 The prior system-wide painter is **disabled**. Reports on Galaxy A56 showed it could block all touches and darken the display. The former mechanism duplicated the entire captured screen at 78% overlay alpha and drew opaque strokes onto it; Android's untrusted full-screen overlay restrictions and Samsung's compositor make this unsafe, and it is not a system shader. The service now refuses any legacy painted launch intent, even from an old external launcher. **Video Ambilight and other HALO modes are preserved.**
