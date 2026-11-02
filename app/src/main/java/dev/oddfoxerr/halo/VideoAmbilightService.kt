@@ -104,8 +104,8 @@ class VideoAmbilightService : Service() {
         // screen-copy SurfaceView. On Samsung it darkened the display and
         // prevented interactions with unrelated applications. Never start
         // this mode, even from an old notification or stale launch Intent.
-        if (intent?.action == ACTION_START &&
-            intent.getBooleanExtra(EXTRA_PAINTED, false)) {
+        if (PaintingSafetyGate.rejectProjectionStart(
+                intent?.action, intent?.getBooleanExtra(EXTRA_PAINTED, false) == true)) {
             statusValue.value =
                 "Full-screen painting is disabled: use the safe in-app preview."
             stopSelf()
