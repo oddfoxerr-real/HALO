@@ -143,6 +143,32 @@ class PaintedScreenGpuTest {
         assertTrue("Recovery did not clear the rejection latch",!controller.overlayRejected)
     }
 
+    @Test fun captureDiagnosticsDistinguishNewFramesFromStalledDisplay() {
+        val previous = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        val newer = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
+        previous.eraseColor(Color.rgb(120,90,50))
+        newer.eraseColor(Color.rgb(30,130,210))
+        try {
+            PaintCaptureMetrics.begin(true)
+            PaintCaptureMetrics.onFrame(previous)
+            PaintCaptureMetrics.onFrame(previous)
+            PaintCaptureMetrics.onFrame(newer)
+            PaintCaptureMetrics.onFrame(null)
+            PaintCaptureMetrics.onPainted(true)
+            val report=PaintCaptureMetrics.current()
+            assertTrue(report, report.contains("Capture callbacks: 4"))
+            assertTrue(report, report.contains("Valid: 3"))
+            assertTrue(report, report.contains("Black: 1"))
+            assertTrue(report, report.contains("Changed: 1"))
+            assertTrue(report, report.contains("Painted: 1"))
+            PaintCaptureMetrics.onEvent("MediaProjection.onStop()")
+            assertTrue(PaintCaptureMetrics.current().contains("MediaProjection.onStop()"))
+        } finally {
+            previous.recycle()
+            newer.recycle()
+        }
+    }
+
     @Test fun nativeHardwarePainterRendersMultipleDistinctFrames() {
         val painter = BrushCanvasPainter()
         val first = Bitmap.createBitmap(120,240,Bitmap.Config.ARGB_8888)
