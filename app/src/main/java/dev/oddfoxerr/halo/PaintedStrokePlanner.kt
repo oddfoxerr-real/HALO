@@ -97,8 +97,12 @@ internal object PaintedStrokePlanner {
                 val magnitude = sqrt(horizontal * horizontal + vertical * vertical)
                 // Near strong boundaries, short detail marks preserve forms.
                 // Otherwise longer brush marks can be grouped into big swaths.
+                // This detail-pass skip MUST use independent random bits.
+                // seed+91 and seed+211 shared their low 16 bits so accepted
+                // cells almost always failed the detail pass, leaving just
+                // ~3 fine strokes across a whole phone frame.
                 if (layer == 2 && magnitude < .055f &&
-                    hashUnit(seed + 91) < .51f) continue
+                    hashUnit(hash(col + 173, row - 67, layer + 71)) < .51f) continue
 
                 val rotation = if (magnitude > .018f)
                     atan2(-horizontal, vertical) * (180.0 / PI).toFloat()
