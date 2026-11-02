@@ -60,6 +60,8 @@ class VideoAmbilightService : Service() {
     private var view: ChainsawView? = null
     @Volatile private var livePaintSurface: LivePaintSurface? = null
     @Volatile private var paintSettings = PaintedScreenPreferences()
+    private var fpsWindowStarted = 0L
+    private var fpsFrames = 0
     @Volatile private var framesRendered = 0L
     @Volatile private var overlay: View? = null
     private var lastSampleAt = 0L
@@ -129,6 +131,8 @@ class VideoAmbilightService : Service() {
         paintHealth.reset()
         paintSettings = PaintedScreenPreferences.read(this)
         framesRendered = 0L
+        fpsFrames = 0
+        fpsWindowStarted = SystemClock.uptimeMillis()
         lastUsablePaintFrameAt = SystemClock.uptimeMillis()
         if (isPainted && Build.VERSION.SDK_INT < 33) {
             statusValue.value = "Painted Screen requires Android 13 or newer"
@@ -315,11 +319,20 @@ class VideoAmbilightService : Service() {
                                                         }
                                                     if (presented) {
                                                         framesRendered++
-                                                        lastUsablePaintFrameAt =
-                                                            SystemClock.uptimeMillis()
-                                                        if (framesRendered % 20L == 0L)
+                                                        fpsFrames++
+                                                        val presentedAt = SystemClock.uptimeMillis()
+                                                        lastUsablePaintFrameAt = presentedAt
+                                                        val elapsed = presentedAt - fpsWindowStarted
+                                                        if (elapsed >= 2000L) {
+                                                            val framesPerSecond = fpsFrames * 1000f /
+                                                                elapsed.coerceAtLeast(1L)
                                                             statusValue.value =
-                                                                "Live brush painting · ${framesRendered} updated frames"
+                                                                "Live paint · %.1f fps · %d frames".format(
+                                                                    java.util.Locale.US,
+                                                                    framesPerSecond, framesRendered)
+                                                            fpsFrames = 0
+                                                            fpsWindowStarted = presentedAt
+                                                        }
                                                     }
                                                 }
                                             }
