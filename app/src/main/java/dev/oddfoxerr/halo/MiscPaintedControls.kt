@@ -1,6 +1,8 @@
 package dev.oddfoxerr.halo
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjectionConfig
@@ -41,9 +43,12 @@ import androidx.core.content.ContextCompat
 fun MiscPaintedControls() {
     val context = LocalContext.current
     val status by VideoAmbilightService.status.collectAsState()
+    val diagnostics by PaintCaptureMetrics.report.collectAsState()
+    var probeNext by remember { mutableStateOf(false) }
     var settings by remember(context) { mutableStateOf(PaintedScreenPreferences.read(context)) }
     var feedback by remember { mutableStateOf<String?>(null) }
     val active = VideoAmbilightService.isRunning && VideoAmbilightService.isPainted
+    val probeActive = active && VideoAmbilightService.isProbeOnly
     val otherCapture = VideoAmbilightService.isRunning && !VideoAmbilightService.isPainted
 
     fun save(value: PaintedScreenPreferences) {
@@ -62,6 +67,7 @@ fun MiscPaintedControls() {
             val intent = Intent(context, VideoAmbilightService::class.java)
                 .setAction(VideoAmbilightService.ACTION_START)
                 .putExtra(VideoAmbilightService.EXTRA_PAINTED, true)
+                .putExtra(VideoAmbilightService.EXTRA_PROBE_ONLY, probeNext)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_CODE, result.resultCode)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_DATA, result.data)
             try {
@@ -152,6 +158,7 @@ fun MiscPaintedControls() {
                                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                     Uri.parse("package:${context.packageName}")))
                         else -> {
+                            probeNext = false
                             val manager = context.getSystemService(MediaProjectionManager::class.java)
                             permission.launch(if (Build.VERSION.SDK_INT >= 34)
                                 manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
@@ -161,8 +168,46 @@ fun MiscPaintedControls() {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (active) "Stop Painted Screen" else if (otherCapture)
+                Text(if (active) "Stop screen test" else if (otherCapture)
                     "Switch from Video lighting" else "Start Painted Screen")
+            }
+            Text("Capture diagnostics", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Test screen capture without any painting overlay. Switch between apps for 10 seconds, return here and compare the frame counters. This distinguishes capture failures from renderer failures.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = {
+                    when {
+                        active -> context.stopService(
+                            Intent(context, VideoAmbilightService::class.java))
+                        otherCapture -> feedback = "Stop Video Ambilight before testing capture."
+                        else -> {
+                            probeNext = true
+                            val manager = context.getSystemService(MediaProjectionManager::class.java)
+                            permission.launch(
+                                if (Build.VERSION.SDK_INT >= 34)
+                                    manager.createScreenCaptureIntent(
+                                        MediaProjectionConfig.createConfigForDefaultDisplay())
+                                else manager.createScreenCaptureIntent()
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (active) "Stop capture and keep diagnostic report"
+                    else "Test capture without overlay")
+            }
+            Text(diagnostics, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = {
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("HALO capture diagnostic", PaintCaptureMetrics.current()))
+                feedback = "Capture diagnostics copied (counters only, no screenshots)."
+            }) {
+                Text("Copy diagnostic report")
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(
