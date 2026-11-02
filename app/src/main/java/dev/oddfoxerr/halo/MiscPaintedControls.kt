@@ -34,7 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -75,6 +77,8 @@ fun MiscPaintedControls() {
 
     LaunchedEffect(photo, settings) {
         val selected = photo ?: return@LaunchedEffect
+        // Repainting is costly; cancel/restart only after a slider settles.
+        delay(180L)
         message = "Painting your selected image…"
         try {
             val frame = withContext(Dispatchers.Default) {
@@ -88,6 +92,8 @@ fun MiscPaintedControls() {
             }
             artwork = frame
             message = "Preview ready · original colours, textured brush layers"
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             message = "Could not paint image: " + (error.message ?: "unsupported picture")
         }
