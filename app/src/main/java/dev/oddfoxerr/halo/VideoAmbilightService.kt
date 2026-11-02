@@ -67,7 +67,7 @@ class VideoAmbilightService : Service() {
     private var lastSampleAt = 0L
     private var colors = VideoEdgeColors.BLACK
     @Volatile private var lighting = VideoLightingPreferences()
-    private var stopping = false
+    @Volatile private var stopping = false
     private var framesSeen = 0
     private var blankPaintFrames = 0
     private val paintHealth = PaintedCaptureHealth()
