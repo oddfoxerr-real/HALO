@@ -1,5 +1,12 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.7 — Continuous live painter frame acquisition
+
+The previous painted screen could render the first image and then stall: the `ImageReader` listener both captured new frames and generated hundreds of brush stamps + waited on `SurfaceHolder.lockHardwareCanvas`, preventing it from releasing new images promptly. MediaProjection output can stop when the ImageReader producer is not drained. The painter now runs on a **separate dedicated thread** and receives only the latest captured bitmap via a single-slot handoff; old frames are recycled, the capture callback closes images promptly, and rendering lag never grows into a backlog. The stroke budget is reduced to preserve mobile performance while retaining all brush passes. A static-screen watchdog now preserves a valid image instead of clearing it. This is the regular release; development diagnostics from the separate draft branch are not included.
+
+System-wide screen paint still requires Android's explicit MediaProjection permission. Samsung's handling of secure surfaces and protected content may limit which apps can be captured; this code does not circumvent those restrictions.
+
+
 ## v0.20.6 — Isolated secure SurfaceView for live painting
 
 **Issue:** prior builds painted into a fully secure `TYPE_APPLICATION_OVERLAY` window while trying to recapture the underlying screen. On some devices the overlay excludes or blacks out the entire display capture after the first frame. Additionally, the normal View/RenderThread pipeline could lag behind worker-generated brush plans.
