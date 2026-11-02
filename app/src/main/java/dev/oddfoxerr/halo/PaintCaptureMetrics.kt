@@ -16,6 +16,7 @@ internal object PaintCaptureMetrics {
     private var painted=0L
     private var dropped=0L
     private var failed=0L
+    private var resizes=0L
     private var previousHash: Long?=null
     private var lastInput=0L
     private var lastPaint=0L
@@ -24,7 +25,7 @@ internal object PaintCaptureMetrics {
     private var reason="Idle"
 
     @Synchronized fun begin(probe: Boolean) {
-        callbacks=0;valid=0;black=0;changed=0;painted=0;dropped=0;failed=0
+        callbacks=0;valid=0;black=0;changed=0;painted=0;dropped=0;failed=0;resizes=0
         previousHash=null;lastInput=0;lastPaint=0;lastPublish=0
         mode=if(probe) "Capture only (no overlay)" else "Capture + painter"
         reason="Running"
@@ -47,6 +48,13 @@ internal object PaintCaptureMetrics {
         else failed++
         publish(false)
     }
+    @Synchronized fun onResize() {resizes++;publish(true)}
+    @Synchronized fun onRecovered() {
+        if(reason!="Running") {
+            reason="Running"
+            publish(true)
+        }
+    }
     @Synchronized fun onEvent(description:String) {reason=description.take(120);publish(true)}
 
     @Synchronized fun current():String {
@@ -64,7 +72,7 @@ internal object PaintCaptureMetrics {
         return "Mode: "+mode+
             "\nCapture callbacks: "+callbacks+
             "\nValid: "+valid+" | Black: "+black+" | Changed: "+changed+
-            "\nPainted: "+painted+" | Dropped: "+dropped+" | Render failures: "+failed+
+            "\nPainted: "+painted+" | Dropped: "+dropped+" | Render failures: "+failed+" | Resizes: "+resizes+
             "\nLatest input: "+inputAge+" | Latest paint: "+paintAge+
             "\nState: "+diagnosis
     }
