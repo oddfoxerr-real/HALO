@@ -1,5 +1,13 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.8 — Phone safety first: no system-wide Painted Screen overlay
+
+The prior system-wide painter is **disabled**. Reports on Galaxy A56 showed it could block all touches and darken the display. The former mechanism duplicated the entire captured screen at 78% overlay alpha and drew opaque strokes onto it; Android's untrusted full-screen overlay restrictions and Samsung's compositor make this unsafe, and it is not a system shader. The service now refuses any legacy painted launch intent, even from an old external launcher. **Video Ambilight and other HALO modes are preserved.**
+
+The real Android brush painter remains available under **Misc → Painted Screen** as an *in-app* local-image preview. Pick an image with Android's content picker, select Oil / Impasto, Watercolour or Ink, and tune coverage, size and relief. All processing stays inside HALO's own window; no screen-sharing or overlay permissions are requested for this preview. A full-screen shader over arbitrary unrelated apps is not provided by public Android APIs without system privileges; this release does not make an unsupported or risky promise.
+
+
+
 ## v0.20.7 — Continuous live painter frame acquisition
 
 The previous painted screen could render the first image and then stall: the `ImageReader` listener both captured new frames and generated hundreds of brush stamps + waited on `SurfaceHolder.lockHardwareCanvas`, preventing it from releasing new images promptly. MediaProjection output can stop when the ImageReader producer is not drained. The painter now runs on a **separate dedicated thread** and receives only the latest captured bitmap via a single-slot handoff; old frames are recycled, the capture callback closes images promptly, and rendering lag never grows into a backlog. The stroke budget is reduced to preserve mobile performance while retaining all brush passes. A static-screen watchdog now preserves a valid image instead of clearing it. This is the regular release; development diagnostics from the separate draft branch are not included.
