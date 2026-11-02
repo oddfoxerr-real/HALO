@@ -318,6 +318,7 @@ class VideoAmbilightService : Service() {
                                     PaintedCaptureAction.KEEP -> bitmap?.recycle()
                                     PaintedCaptureAction.PRESENT -> {
                                         if (bitmap != null) {
+                                            PaintCaptureMetrics.onRecovered()
                                             lastUsablePaintFrameAt = SystemClock.uptimeMillis()
                                             if (overlay == null) {
                                                 bitmap.recycle()
@@ -376,7 +377,7 @@ class VideoAmbilightService : Service() {
         framesSeen = 0
         blankPaintFrames = 0
         if (isPainted) {
-            PaintCaptureMetrics.onEvent("Capture resized to "+newWidth+"x"+newHeight)
+            PaintCaptureMetrics.onResize()
             paintHealth.reset()
             lastUsablePaintFrameAt = SystemClock.uptimeMillis()
             paintDispatcher?.clear()
