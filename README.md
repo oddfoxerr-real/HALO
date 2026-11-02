@@ -1,5 +1,14 @@
 # HALO — Unified GPU Edge Effects
 
+## v0.20.6 — Isolated secure SurfaceView for live painting
+
+**Issue:** prior builds painted into a fully secure `TYPE_APPLICATION_OVERLAY` window while trying to recapture the underlying screen. On some devices the overlay excludes or blacks out the entire display capture after the first frame. Additionally, the normal View/RenderThread pipeline could lag behind worker-generated brush plans.
+
+**Architectural change:** HALO now uses a non-secure, transparent, non-touchable overlay *window* containing an isolated `SurfaceView` whose own surface is secure. Its independent rendering surface receives GPU Canvas brush stamps directly from the dedicated MediaProjection handler thread. The normal View queue and old bitmap posting mechanism are eliminated from the live painter. Each update reports real measured presented FPS. Brush-stroke work is capped and distributed across the display and three paint passes so lower rows are not lost to a global cap. Automated tests verify consecutive different images produce different painted frames and that the whole device display receives strokes.
+
+**Compatibility:** Android's compositor controls whether its secure layer exclusion retains the underlying captured display; this cannot be guaranteed on Samsung/One UI until tested on the device. If Android reports black/protected frames, the overlay is removed instead of freezing. HALO has no privileged ability to apply filters directly to arbitrary third-party app windows, and it does not capture protected screens. Other HALO modes are unchanged.
+
+
 ## v0.20.5 — Capture stability and stale overlay cleanup
 
 v0.20.4 intentionally stopped its capture service after 20 black frames. On a secure-overlay capture path this can happen within two seconds; the painted screen then appeared to freeze. This release replaces that shutdown counter with a capture-health state machine: black/DRM frames clear artwork, repeated black frames under an active secure overlay remove the overlay entirely and report the limitation, and the foreground capture stays alive until explicitly stopped or revoked by Android. A watchdog hides stale artwork when no new frames arrive. Only one expensive paint frame may be queued to the main thread at once, preventing an accumulating brush-render backlog. The former 1/7-resolution blurred underpainting has been replaced by a sharp backing frame. Regression tests cover black-frame policy and immediate clearing of painted layers. Protected Android content remains unavailable; full-screen capture compatibility on Samsung must be verified on the actual device.
