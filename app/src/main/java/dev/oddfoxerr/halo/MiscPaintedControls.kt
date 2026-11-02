@@ -85,7 +85,7 @@ fun MiscPaintedControls() {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Native textured brush painter: builds real, rotated image-guided brush dabs in several passes, using custom dry-bristle and palette-knife tips. Unlike the old shader filter, each mark is stamped onto the live screen picture; touches still pass through.",
+                "Experimental live brush painter: renders multiple passes of real brush marks onto a dedicated secure GPU surface, while preserving touch-through to the apps beneath. HALO shows measured live FPS when updates succeed.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text("Paint style", style = MaterialTheme.typography.titleMedium)
@@ -166,7 +166,7 @@ fun MiscPaintedControls() {
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(
-                "HALO needs Android full-screen sharing consent. If Samsung blocks screen pixels or the capture stops, painting clears rather than leaving an old image. HALO cannot bypass protected apps. Stop the session here or via Android; frames remain private and are never uploaded.",
+                "Android screen sharing and Display over other apps permissions are required. Watch the Live paint FPS status to confirm continuous frames. If Samsung blacks out underlying capture, HALO will remove the overlay: it cannot bypass system protection. No screen frames are saved or uploaded.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
