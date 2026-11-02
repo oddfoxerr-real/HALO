@@ -265,7 +265,6 @@ class VideoAmbilightService : Service() {
                             // SurfaceView has its own secure layer. The parent
                             // application overlay window stays transparent, so
                             // the compositor can exclude only the brush layer.
-                            if (!paintHealth.overlayRejected) {
                                 val bitmap = try {
                                     PaintedFrameDecoder.decode(
                                         plane.buffer, image.width, image.height,
@@ -279,7 +278,7 @@ class VideoAmbilightService : Service() {
                                     PaintedCaptureAction.DISABLE_OVERLAY -> {
                                         bitmap?.recycle()
                                         statusValue.value =
-                                            "Live screen painting unsupported by this device's capture compositor"
+                                            "Live painter paused: secure surface blocks capture; probing recovery"
                                         main.post { disablePaintOverlay() }
                                     }
                                     PaintedCaptureAction.CLEAR -> {
@@ -342,7 +341,6 @@ class VideoAmbilightService : Service() {
                                         }
                                     }
                                 }
-                            }
                         } else {
                             val profile = lighting
                             val value = VideoColorSampler.sample(
