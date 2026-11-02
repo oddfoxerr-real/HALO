@@ -116,7 +116,7 @@ class VideoAmbilightService : Service() {
             ACTION_START -> Unit
             else -> return START_NOT_STICKY
         }
-        val requestedProbe = intent.getBooleanExtra(EXTRA_PROBE_ONLY, false)
+        val requestedProbe = intent?.getBooleanExtra(EXTRA_PROBE_ONLY, false) == true
         if (isRunning || (!requestedProbe && !Settings.canDrawOverlays(this))) {
             if (!requestedProbe && !Settings.canDrawOverlays(this))
                 statusValue.value = "Allow display over other apps first"
