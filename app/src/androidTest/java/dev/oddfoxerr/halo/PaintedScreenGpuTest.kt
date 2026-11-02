@@ -22,10 +22,18 @@ import java.nio.ByteBuffer
 class PaintedScreenGpuTest {
     @Test fun systemWidePainterIsRejectedBeforeAnyOverlayOrProjectionStarts() {
         assertTrue(
-            "A full-screen painting overlay must never block the phone again",
+            "Legacy opaque full-screen painting must never start",
             PaintingSafetyGate.rejectProjectionStart(
-                VideoAmbilightService.ACTION_START, true)
+                VideoAmbilightService.ACTION_START, true, false)
         )
+        assertTrue(
+            "Explicit safe TextureView session must be permitted",
+            !PaintingSafetyGate.rejectProjectionStart(
+                VideoAmbilightService.ACTION_START, true, true)
+        )
+        assertTrue(PaintingSafetyGate.isTouchThroughOpacity(
+            PaintingSafetyGate.MAX_LIVE_OVERLAY_ALPHA))
+        assertTrue(!PaintingSafetyGate.isTouchThroughOpacity(.9f))
         assertTrue(
             "Other capture modes must remain available",
             !PaintingSafetyGate.rejectProjectionStart(
@@ -36,6 +44,42 @@ class PaintedScreenGpuTest {
             !PaintingSafetyGate.rejectProjectionStart(
                 VideoAmbilightService.ACTION_REFRESH, true)
         )
+    }
+
+    @Test fun livePainterIsTransparentAndDoesNotCopyAnOpaqueScreen() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val layer = LivePaintSurface(context)
+        assertTrue("Live overlay must be a regular TextureView",
+            layer is android.view.TextureView)
+        assertTrue("TextureView must be non-opaque", !layer.isOpaque)
+        val photo = Bitmap.createBitmap(120, 240, Bitmap.Config.ARGB_8888)
+        photo.eraseColor(Color.rgb(195, 167, 141))
+        val settings = PaintedScreenPreferences()
+        val planned = PaintedStrokePlanner.plan(photo, settings)
+        val painting = Bitmap.createBitmap(120, 240, Bitmap.Config.ARGB_8888)
+        val painter = BrushCanvasPainter()
+        try {
+            painter.draw(
+                android.graphics.Canvas(painting),
+                planned, settings, 120, 240,
+                includeBackground = false
+            )
+            var transparent = 0
+            var painted = 0
+            for (y in 0 until 240 step 5) for (x in 0 until 120 step 5) {
+                val alpha = Color.alpha(painting.getPixel(x, y))
+                if (alpha == 0) transparent++
+                if (alpha > 0) painted++
+                assertTrue("No completely opaque live pixels permitted", alpha < 255)
+            }
+            assertTrue("No visible brush marks", painted > 2)
+            assertTrue("Backplate is opaque and can darken the phone", transparent > 5)
+        } finally {
+            planned.dispose()
+            painter.release()
+            painting.recycle()
+            layer.release()
+        }
     }
 
     @Test fun rgbaDecoderRespectsRowStrideAndBlackPrivacy() {
