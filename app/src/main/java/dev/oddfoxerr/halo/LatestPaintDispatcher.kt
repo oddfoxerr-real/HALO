@@ -74,6 +74,14 @@ internal class LatestPaintDispatcher(
         if(!closed) handler.post { surface()?.clearSurface() }
     }
 
+    /** Drain the old secure surface without stopping the render worker. */
+    fun retireSurface(releaseSurface:LivePaintSurface) {
+        handler.post {
+            releaseSurface.clearSurface()
+            releaseSurface.release()
+        }
+    }
+
     fun close(releaseSurface:LivePaintSurface?) {
         if(closed) return
         closed=true
