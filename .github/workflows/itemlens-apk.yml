@@ -35,7 +35,7 @@ jobs:
 
       - name: Unpack native Android application
         run: |
-          python3 -m pip install --user brotli pillow
+          python3 -m pip install --user brotli pillow reportlab
           python3 - <<'PY'
           from pathlib import Path
           import base64
