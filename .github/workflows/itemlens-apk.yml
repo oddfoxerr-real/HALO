@@ -51,7 +51,12 @@ jobs:
           test -f app/src/main/res/drawable-nodpi/base_marker.png
 
       - name: Install Android platform
-        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -r | head -n 1)"
+          test -n "$SDK_MANAGER"
+          yes | "$SDK_MANAGER" --licenses || true
+          "$SDK_MANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Assemble installable debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
