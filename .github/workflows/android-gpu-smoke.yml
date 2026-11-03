@@ -1,5 +1,10 @@
 name: Android GPU shader smoke
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/android-gpu-smoke.yml'
   pull_request:
     branches: [main]
     paths:

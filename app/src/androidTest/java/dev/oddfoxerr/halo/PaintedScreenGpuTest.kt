@@ -52,7 +52,7 @@ class PaintedScreenGpuTest {
         assertTrue("Live overlay must be a normal transparent View",
             layer is android.view.View)
         assertTrue("Live overlay must not allocate a TextureView buffer",
-            layer !is android.view.TextureView)
+            !android.view.TextureView::class.java.isInstance(layer))
         assertTrue("Live overlay must not capture input", !layer.isClickable)
         assertTrue("Live overlay must not take keyboard focus", !layer.isFocusable)
         assertTrue("Live layer must not be opaque", !layer.isOpaque)
