@@ -12,9 +12,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
-      - name: Checkout ItemLens build branch
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -28,12 +28,20 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install supported Android SDK tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android platform 35
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
 
-      - name: Unpack native Android application
+      - name: Unpack original ItemLens source
         run: |
           python3 -m pip install --user brotli pillow reportlab
           python3 - <<'PY'
@@ -49,22 +57,24 @@ jobs:
           PY
           python3 generate_marker.py
           printf 'android.useAndroidX=true\norg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8\nkotlin.code.style=official\n' > gradle.properties
+
+      - name: Apply measurement and hand tracking integration
+        run: |
+          python3 itemlens-toolkit/apply.py
+          mkdir -p app/src/main/assets
+          curl -fSL --retry 3 --connect-timeout 20 \
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
+            -o app/src/main/assets/hand_landmarker.task
+          test -s app/src/main/assets/hand_landmarker.task
           test -f app/src/main/res/drawable-nodpi/base_marker.png
 
-      - name: Install Android platform
-        run: |
-          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -r | head -n 1)"
-          test -n "$SDK_MANAGER"
-          yes | "$SDK_MANAGER" --licenses || true
-          "$SDK_MANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
-
-      - name: Assemble installable debug APK
+      - name: Assemble ItemLens v0.2.0 debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Upload ItemLens APK
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: ItemLens-0.1.0-debug-apk
+          name: ItemLens-0.2.0-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 30
