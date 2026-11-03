@@ -10,8 +10,8 @@ android {
         applicationId = "dev.oddfoxerr.halo"
         minSdk = 29
         targetSdk = 36
-        versionCode = 37
-        versionName = "0.20.9"
+        versionCode = 38
+        versionName = "0.20.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

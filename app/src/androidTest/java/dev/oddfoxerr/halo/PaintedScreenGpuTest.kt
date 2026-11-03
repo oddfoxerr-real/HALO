@@ -49,9 +49,13 @@ class PaintedScreenGpuTest {
     @Test fun livePainterIsTransparentAndDoesNotCopyAnOpaqueScreen() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val layer = LivePaintSurface(context)
-        assertTrue("Live overlay must be a regular TextureView",
-            layer is android.view.TextureView)
-        assertTrue("TextureView must be non-opaque", !layer.isOpaque)
+        assertTrue("Live overlay must be a normal transparent View",
+            layer is android.view.View)
+        assertTrue("Live overlay must not allocate a TextureView buffer",
+            layer !is android.view.TextureView)
+        assertTrue("Live overlay must not capture input", !layer.isClickable)
+        assertTrue("Live overlay must not take keyboard focus", !layer.isFocusable)
+        assertTrue("Live layer must not be opaque", !layer.isOpaque)
         val photo = Bitmap.createBitmap(120, 240, Bitmap.Config.ARGB_8888)
         photo.eraseColor(Color.rgb(195, 167, 141))
         val settings = PaintedScreenPreferences()
@@ -82,6 +86,22 @@ class PaintedScreenGpuTest {
             painter.release()
             painting.recycle()
             layer.release()
+        }
+    }
+
+    @Test fun transparentViewNeverPaintsAnOpaqueBackplate() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val surface = LivePaintSurface(context)
+        surface.layout(0, 0, 120, 240)
+        val output = Bitmap.createBitmap(120, 240, Bitmap.Config.ARGB_8888)
+        try {
+            output.eraseColor(Color.TRANSPARENT)
+            surface.draw(android.graphics.Canvas(output))
+            assertEquals("Empty painter must reveal underlying content",
+                0, Color.alpha(output.getPixel(60, 120)))
+        } finally {
+            surface.release()
+            output.recycle()
         }
     }
 

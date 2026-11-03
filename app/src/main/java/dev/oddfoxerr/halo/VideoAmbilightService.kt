@@ -185,9 +185,9 @@ class VideoAmbilightService : Service() {
             val divisor = if (isPainted) 3 else 6
             width = (dm.widthPixels / divisor).coerceAtLeast(96)
             height = (dm.heightPixels / divisor).coerceAtLeast(96)
-            // Do not put the painter over the permission chooser or the first
-            // capture frame. Create its secure overlay only after valid pixels
-            // arrive; this avoids capturing our own surface on session startup.
+            // Attach the ordinary transparent View only after valid pixels
+            // arrive, never while Android's permission chooser is visible.
+            // No secure SurfaceView or TextureView is used.
             if (!isPainted) showOverlay() else {
                 paintDispatcher = LatestPaintDispatcher(
                     surface = { livePaintSurface },
@@ -255,9 +255,9 @@ class VideoAmbilightService : Service() {
             // The brush SURFACE is still fully painted; window blending
             // allows underlying apps to remain interactive.
             alpha = if (isPainted) PaintingSafetyGate.MAX_LIVE_OVERLAY_ALPHA else .78f
-            // Live pigment comes from a non-secure TextureView, not a separate
-            // compositor SurfaceView. The phone UI remains physically behind
-            // a mostly transparent window, with all touch input passed through.
+            // Live pigment is drawn directly by a transparent View. There is
+            // no child texture, secure surface, or captured-image backdrop.
+            // The real phone UI receives all touches underneath.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
@@ -314,9 +314,16 @@ class VideoAmbilightService : Service() {
                             when (paintHealth.observe(bitmap != null, overlay != null)) {
                                 PaintedCaptureAction.DISABLE_OVERLAY -> {
                                     bitmap?.recycle()
-                                    statusValue.value =
-                                        "Painting stopped: Android blocked screen capture"
-                                    main.post { stopSelf() }
+                                    // Don't terminate the MediaProjection session: once
+                                    // the overlay is gone, valid captures can recover
+                                    // and PaintedCaptureHealth can retry after cooldown.
+                                    main.post {
+                                        if (!stopping) {
+                                            disablePaintOverlay()
+                                            statusValue.value =
+                                                "Painting paused · capture blocked · retrying"
+                                        }
+                                    }
                                 }
                                 PaintedCaptureAction.CLEAR -> {
                                     bitmap?.recycle()
