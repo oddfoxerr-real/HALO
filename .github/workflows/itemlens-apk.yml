@@ -48,6 +48,7 @@ jobs:
               archive.extractall(".")
           PY
           python3 generate_marker.py
+          printf 'android.useAndroidX=true\norg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8\nkotlin.code.style=official\n' > gradle.properties
           test -f app/src/main/res/drawable-nodpi/base_marker.png
 
       - name: Install Android platform
