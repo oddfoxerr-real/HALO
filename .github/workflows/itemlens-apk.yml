@@ -1,0 +1,62 @@
+name: Build ItemLens APK
+
+on:
+  push:
+    branches:
+      - itemlens-apk-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout ItemLens build branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Unpack native Android application
+        run: |
+          python3 -m pip install --user brotli pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import brotli
+          import io
+          import tarfile
+          contents = Path("itemlens-source.b64").read_text(encoding="ascii").strip()
+          source_archive = brotli.decompress(base64.b64decode(contents, validate=True))
+          with tarfile.open(fileobj=io.BytesIO(source_archive), mode="r:") as archive:
+              archive.extractall(".")
+          PY
+          python3 generate_marker.py
+          test -f app/src/main/res/drawable-nodpi/base_marker.png
+
+      - name: Install Android platform
+        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Assemble installable debug APK
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Upload ItemLens APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ItemLens-0.1.0-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
