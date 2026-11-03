@@ -12,6 +12,12 @@ source = main.read_text()
 needle = "        PinOverlay(state.pins)"
 assert source.count(needle) == 1, "FinderScreen changed; review toolkit placement"
 source = source.replace(needle, needle + "\n        MeasureToolkitUi()")
+needle = "    Box(modifier = Modifier.fillMaxSize().background(Night)) {"
+assert source.count(needle) == 1, "FinderScreen root changed"
+source = source.replace(needle, "    val measureState by MeasureToolkit.state.collectAsState()\n" + needle)
+needle = "        if (!state.calibrated) {"
+assert source.count(needle) == 1, "Marker prompt changed"
+source = source.replace(needle, "        if (!state.calibrated && measureState.mode == MeasureMode.OFF) {")
 main.write_text(source)
 
 engine = root / "CameraEngine.kt"
