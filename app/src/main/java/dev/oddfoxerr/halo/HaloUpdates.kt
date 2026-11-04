@@ -127,9 +127,19 @@ internal object HaloUpdates {
         val version = prefs.getString("version", "").orEmpty()
         if (version.isBlank() || !Regex("^v?[0-9]+\\.[0-9]+\\.[0-9]+$").matches(version)) return
         synchronized(this) {
-            if (startingInstall || prefs.getString("attempted", null) == version) return
+            val priorAttempt = prefs.getString("attempted", null) == version
+            val previousTime = prefs.getLong("attempted_at", 0L)
+            val state = prefs.getString("state", "").orEmpty()
+            val elapsed = System.currentTimeMillis() - previousTime
+            // Never spin while an Android install session is awaiting approval.
+            // If a user declined or the OS interrupted an update, retry after
+            // six hours rather than permanently blacklisting its version.
+            if (startingInstall ||
+                (priorAttempt && (state == "installing" || state == "approval" ||
+                    elapsed in 0L until 6 * 60 * 60_000L))) return
             startingInstall = true
-            prefs.edit().putString("attempted", version).apply()
+            prefs.edit().putString("attempted", version)
+                .putLong("attempted_at", System.currentTimeMillis()).apply()
         }
         Thread({
             try {
@@ -142,10 +152,10 @@ internal object HaloUpdates {
                 if (!HaloUpdateInstaller.submit(app, file)) {
                     // Consent has not yet been granted. After Android grants it,
                     // onAppResumed retries this same verified file immediately.
-                    prefs.edit().remove("attempted").apply()
+                    prefs.edit().remove("attempted").remove("attempted_at").apply()
                 }
             } catch (e: Exception) {
-                prefs.edit().remove("attempted").apply()
+                prefs.edit().remove("attempted").remove("attempted_at").apply()
                 val message = e.message.orEmpty().take(160)
                 val category = if (message.contains("signing key", ignoreCase = true))
                     "incompatible" else "ready"
