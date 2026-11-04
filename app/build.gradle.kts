@@ -21,6 +21,26 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    // Private, permanent key supplied at build time from a GitHub Actions
+    // secret. Never commit a signing key or publish a fresh debug key again.
+    val stableKeystore = System.getenv("HALO_RELEASE_KEYSTORE_PATH")
+    if (!stableKeystore.isNullOrBlank()) {
+        signingConfigs {
+            create("haloStable") {
+                storeFile = file(stableKeystore)
+                storePassword = System.getenv("HALO_RELEASE_PASSWORD")
+                keyAlias = System.getenv("HALO_RELEASE_ALIAS") ?: "halo-release"
+                keyPassword = System.getenv("HALO_RELEASE_PASSWORD")
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("haloStable")
+                isMinifyEnabled = false
+            }
+        }
+    }
+
 }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.08.00")
@@ -36,6 +56,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
