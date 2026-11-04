@@ -69,9 +69,39 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Run tests and assemble installable debug APK
+      - name: Load the permanent HALO signing identity
         if: steps.version.outputs.publish == 'true'
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        shell: bash
+        env:
+          HALO_SIGNING_MATERIAL_B64: ${{ secrets.HALO_SIGNING_MATERIAL_B64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HALO_SIGNING_MATERIAL_B64" ]]; then
+            echo "::error::Missing HALO_SIGNING_MATERIAL_B64 repository secret. Refusing to publish APKs signed by temporary debug keys."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          blob = base64.b64decode(os.environ["HALO_SIGNING_MATERIAL_B64"], validate=True)
+          material = json.loads(blob)
+          keystore = base64.b64decode(material["keystore_b64"], validate=True)
+          password = material["password"]
+          alias = material.get("alias", "halo-release")
+          if len(keystore) < 1000 or len(password) < 32 or alias != "halo-release":
+              raise SystemExit("Invalid HALO signing material")
+          path = Path(os.environ["RUNNER_TEMP"]) / "halo-stable-release.p12"
+          path.write_bytes(keystore)
+          path.chmod(0o600)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write("HALO_RELEASE_KEYSTORE_PATH=" + str(path) + "\n")
+              env.write("HALO_RELEASE_PASSWORD=" + password + "\n")
+              env.write("HALO_RELEASE_ALIAS=" + alias + "\n")
+          PY
+
+      - name: Run tests and assemble signed release APK
+        if: steps.version.outputs.publish == 'true'
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
 
       - name: Verify signature and generate checksum
         if: steps.version.outputs.publish == 'true'
@@ -80,9 +110,9 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "HALO-${RELEASE_TAG}-debug.apk"
-          sha256sum "HALO-${RELEASE_TAG}-debug.apk" > SHA256SUMS.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "HALO-${RELEASE_TAG}-release.apk"
+          sha256sum "HALO-${RELEASE_TAG}-release.apk" > SHA256SUMS.txt
 
       - name: Keep CI build artifact
         if: steps.version.outputs.publish == 'true'
@@ -90,7 +120,7 @@ jobs:
         with:
           name: HALO-release-build
           path: |
-            HALO-v*-debug.apk
+            HALO-v*-release.apk
             SHA256SUMS.txt
           if-no-files-found: error
 
@@ -102,8 +132,8 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" "HALO-${RELEASE_TAG}-debug.apk" SHA256SUMS.txt \
+          gh release create "$RELEASE_TAG" "HALO-${RELEASE_TAG}-release.apk" SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "HALO ${RELEASE_TAG} (Debug APK)" \
+            --title "HALO ${RELEASE_TAG} (Signed APK)" \
             --prerelease \
-            --notes "HALO v0.20.21 organizes all 59 existing GPU edge animations into six accurate visual families: Lines (9), Particles (7), Lights (17), Waves (7), Rhythm (15), and Dynamic (4). Both Music and Alerts now share one catalogue, display category counts, include an All 59 selector, and virtualize the design gallery so opening All does not instantiate every GPU thumbnail. Saved preset keys, shader IDs, all animation materials, their colors, audio response, notch calibration, original live previews, and the notification isolation remain unchanged. Added catalogue, category assignment, persistence and coverage unit tests. Debug-signed Android APK."
+            --notes "HALO stable auto-updater: scheduled release checks every six hours, automatic SHA-256 and signature-verified downloads, and Android PackageInstaller self-update. Android approval is required only when the operating system enforces it. Every release uses a permanent private signing key from GitHub Actions secrets. Older debug-signed HALO installations require a one-time reinstall to migrate to stable signing. All 59 animations and both preview screens are preserved."
