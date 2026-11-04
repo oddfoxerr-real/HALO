@@ -329,6 +329,22 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 VideoAmbilightControls()
             }
             MusicPanel.RULES -> {
+                MusicToggle("Slide offscreen in other apps",
+                    "Edges glide out of view when you open an unrelated app, then return on your music player or home screen.",
+                    settings.retreatInOtherApps) {
+                    save(settings.copy(retreatInOtherApps = it))
+                }
+                if (settings.retreatInOtherApps && !ForegroundMusicFocus.hasAccess(context)) {
+                    Text("Grant optional Usage access to detect your foreground app. " +
+                        "Without it, the lights stay visible. No app history is stored or sent anywhere.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = {
+                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Grant app activity access")
+                    }
+                }
                 MusicToggle("Follow music playback", "Hide when your music player is paused. Uses notification access to detect media sessions.", settings.onlyPlaying) {
                     save(settings.copy(onlyPlaying = it))
                 }
@@ -338,7 +354,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 OutlinedButton(onClick = { chooseSources = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (settings.allowedSources.isEmpty()) "Music sources · All apps" else "Music sources · ${settings.allowedSources.size} selected")
                 }
-                Text("Sources control when lighting is shown. Android provides a device-wide mix, so simultaneous apps cannot be isolated.",
+                Text("Music source and home screen bring the edges back when auto-hide is enabled. Android provides a device-wide mix, so simultaneous apps cannot be isolated.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Notifications take priority", style = MaterialTheme.typography.titleMedium)
                 Text("HALO uses the same GPU animation for notifications. Incoming alerts take priority, then normal playback resumes.",

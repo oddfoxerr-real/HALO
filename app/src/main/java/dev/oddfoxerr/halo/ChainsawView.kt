@@ -63,6 +63,17 @@ class ChainsawView(context: Context) : View(context) {
     private var speed = 1f
     private var beatIntensity = 1.5f
     private var dynamicForce = 2.4f
+    private val retreat = EdgeRetreatMotion()
+    private val retreatBounds = RectF()
+    private var appRetreatEnabled = false
+
+    /** Reverse from current position; never snap the entire overlay window. */
+    fun setMusicForegroundAllowed(allowed: Boolean) {
+        if (appRetreatEnabled && retreat.setTarget(allowed)) {
+            requestFrame()
+            invalidate()
+        }
+    }
     private var shaderSeconds = 0f
     private var videoColors: VideoEdgeColors? = null
     private var videoLighting = VideoLightingPreferences()
@@ -125,6 +136,8 @@ class ChainsawView(context: Context) : View(context) {
         speed = settings.speed
         beatIntensity = settings.beatIntensity
         dynamicForce = settings.dynamicForce
+        appRetreatEnabled = settings.retreatInOtherApps
+        if (!appRetreatEnabled) retreat.jumpToVisible()
         cornerRadius = settings.corner
         leftInset = settings.leftInset
         rightInset = settings.rightInset
@@ -267,6 +280,8 @@ class ChainsawView(context: Context) : View(context) {
         }
 
         val moving = motion.advance(now, dt, speed)
+        val shiftingFocus = retreat.advance(dt)
+        val edgePresence = if (appRetreatEnabled) retreat.visibility else 1f
         val dynamics = motion.dynamics
         // Integrate velocity, never multiply an absolute timestamp by loudness:
         // bass transients accelerate immediately without positional jumps.
@@ -295,14 +310,19 @@ class ChainsawView(context: Context) : View(context) {
             }
         }
 
-        if (bounds.width() > 0f && bounds.height() > 0f &&
+        retreatBounds.set(bounds)
+        // Each lit side moves OUT of its own screen edge, including corners.
+        // The underlying app stays in place and receives touches normally.
+        retreatBounds.inset(-(1f - edgePresence) * 155f * density,
+            -(1f - edgePresence) * 155f * density)
+        if (edgePresence > .002f && bounds.width() > 0f && bounds.height() > 0f &&
             (drawTop || drawBottom || drawLeft || drawRight)) {
             canvas.save()
             canvas.clipPath(sides)
             // Use the SAME GPU material for video, music, notifications and the
             // camera cutout. Only the palette source differs in video mode.
             gpuDidRender = shaderEngine?.render(
-                canvas, width, height, bounds,
+                canvas, width, height, retreatBounds,
                 min(cornerRadius * density, min(bounds.width(), bounds.height()) / 2f),
                 mode, motion.bands, motion.pulse, motion.phase, shaderSeconds,
                 density * thickness, spread, glow, brightness, edgeColor, accentColor,
@@ -313,17 +333,18 @@ class ChainsawView(context: Context) : View(context) {
                 videoIntensity = videoLighting.intensity,
                 dynamicLow = dynamics.low, dynamicMid = dynamics.mid,
                 dynamicHigh = dynamics.high, dynamicHit = dynamics.hit,
-                dynamicForce = dynamicForce, pixelDensity = density
+                dynamicForce = dynamicForce, pixelDensity = density,
+                edgePresence = edgePresence
             ) == true
             canvas.restore()
         } else {
             gpuDidRender = false
         }
 
-        drawCameraEffect(canvas)
+        if (edgePresence > .98f) drawCameraEffect(canvas)
         // Static video frames still animate the user's selected material; color
         // sampling frequency never controls the GPU animation frame rate.
-        if (moving || noticePlaying || keepAmbientMotion ||
+        if (moving || noticePlaying || keepAmbientMotion || shiftingFocus ||
             (videoColors != null && videoLighting.style != VideoLightStyle.CINEMATIC)) requestFrame()
     }
 }

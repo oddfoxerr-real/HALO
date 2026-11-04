@@ -30,7 +30,8 @@ data class MusicConfiguration(
     val colorSource: EdgeColorSource = EdgeColorSource.MANUAL,
     val onlyPlaying: Boolean = true,
     val allowedSources: Set<String> = emptySet(),
-    val respectQuiet: Boolean = true
+    val respectQuiet: Boolean = true,
+    val retreatInOtherApps: Boolean = false
 ) {
     fun save(context: Context) {
         context.getSharedPreferences("chainsaw_music", Context.MODE_PRIVATE).edit()
@@ -44,7 +45,8 @@ data class MusicConfiguration(
             .putBoolean("draw_top", drawTop).putBoolean("draw_bottom", drawBottom)
             .putBoolean("draw_left", drawLeft).putBoolean("draw_right", drawRight)
             .putString("color_source", colorSource.name).putBoolean("only_while_playing", onlyPlaying)
-            .putStringSet("allowed_sources", allowedSources.toSet()).putBoolean("respect_quiet", respectQuiet).apply()
+            .putStringSet("allowed_sources", allowedSources.toSet()).putBoolean("respect_quiet", respectQuiet)
+            .putBoolean("retreat_in_other_apps", retreatInOtherApps).apply()
     }
     companion object {
         fun read(context: Context): MusicConfiguration {
@@ -71,7 +73,8 @@ data class MusicConfiguration(
                 colorSource = MediaEdgePolicy.colorSource(p.getString("color_source", null)),
                 onlyPlaying = p.getBoolean("only_while_playing", true),
                 allowedSources = p.getStringSet("allowed_sources", emptySet())?.toSet().orEmpty(),
-                respectQuiet = p.getBoolean("respect_quiet", true)
+                respectQuiet = p.getBoolean("respect_quiet", true),
+                retreatInOtherApps = p.getBoolean("retreat_in_other_apps", false)
             )
         }
     }

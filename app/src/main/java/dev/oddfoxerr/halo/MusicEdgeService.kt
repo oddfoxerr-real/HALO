@@ -70,6 +70,22 @@ class MusicEdgeService : Service() {
     private val power by lazy { getSystemService(PowerManager::class.java) }
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
     private val store by lazy { ProfileStore(this) }
+    private val foregroundFocus by lazy { ForegroundMusicFocus(this) }
+    @Volatile private var allowLightingOnCurrentApp = true
+    private val focusPoll = object : Runnable {
+        override fun run() {
+            if (closing) return
+            val settings = config
+            allowLightingOnCurrentApp =
+                if (settings.retreatInOtherApps && ForegroundMusicFocus.hasAccess(this@MusicEdgeService))
+                    MusicFocusRouting.revealFor(
+                        foregroundFocus.currentPackage(), media.get().pkg,
+                        foregroundFocus.homePackages, packageName
+                    )
+                else true
+            worker.postDelayed(this, 350L)
+        }
+    }
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF) view?.visibility = View.INVISIBLE
@@ -164,6 +180,7 @@ class MusicEdgeService : Service() {
                 (info.pkg != null || (!settings.onlyPlaying && settings.allowedSources.isEmpty()))
             val noCapture = captureUnavailable || lastCapture == 0L || now - lastCapture > 1100L
             view?.apply {
+                setMusicForegroundAllowed(allowLightingOnCurrentApp || showingInMusicWindow)
                 keepAmbientMotion = mediaFallback && noCapture
                 if (!showingInMusicWindow) {
                     edgeColor = info.color ?: settings.color
@@ -238,6 +255,7 @@ class MusicEdgeService : Service() {
             receiverRegistered = true
             worker.post { initializeVisualizer() }
             worker.post(mediaPoll)
+            worker.post(focusPoll)
             NotificationEdgeOverlay.dismiss(); PillHaloOverlay.dismiss()
             main.post(tick)
         } catch (_: Exception) { fail("Android could not start music lighting · check permissions") }
