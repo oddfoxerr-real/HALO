@@ -20,6 +20,8 @@ object NotificationEdgeOverlay {
     private var view: ChainsawView? = null
     private var generation = 0L
     private var persistent = false
+    private var lastStaticColor: Long? = null
+    private var lastStaticDesign: EdgeMode? = null
     val isVisible: Boolean get() = view != null
     val isAnimating: Boolean get() = !persistent && view?.isNotificationPlaying == true
 
@@ -27,7 +29,8 @@ object NotificationEdgeOverlay {
         store: ProfileStore, design: EdgeMode = store.notificationEdgeDesign) {
         if (!Settings.canDrawOverlays(context) || VideoAmbilightService.isRunning) return
         // Borrow running Music window instead of stacking a new overlay.
-        if (MusicEdgeService.showNotification(color.toInt(), duration, store, design)) {
+        if (MusicEdgeService.showNotification(
+                color.toInt(), duration, store, design, keepUntilDismissed)) {
             dismiss()
             return
         }
@@ -35,6 +38,8 @@ object NotificationEdgeOverlay {
         generation++
         val current = generation
         persistent = keepUntilDismissed
+        lastStaticColor = if (keepUntilDismissed) color else null
+        lastStaticDesign = if (keepUntilDismissed) design else null
         drawing.configure(NotificationLighting.config(store, color.toInt(), design))
         drawing.configureNotch(store.notchSettings())
         drawing.playNotification(color.toInt(), duration, keepUntilDismissed)
@@ -48,9 +53,13 @@ object NotificationEdgeOverlay {
         design: EdgeMode = store.notificationEdgeDesign) {
         if (VideoAmbilightService.isRunning || MusicEdgeService.isRunning) return
         if (isAnimating) return
+        if (isVisible && persistent && lastStaticColor == color &&
+            lastStaticDesign == design) return
         val drawing = ensure(context) ?: return
         generation++
         persistent = true
+        lastStaticColor = color
+        lastStaticDesign = design
         drawing.configure(NotificationLighting.config(store, color.toInt(), design))
         drawing.configureNotch(store.notchSettings())
         drawing.playNotification(color.toInt(), 3500L, true)
@@ -95,6 +104,8 @@ object NotificationEdgeOverlay {
     fun dismiss() {
         generation++
         persistent = false
+        lastStaticColor = null
+        lastStaticDesign = null
         view?.let { prior ->
             prior.stopNotification()
             try { manager?.removeViewImmediate(prior) } catch (_: RuntimeException) { }

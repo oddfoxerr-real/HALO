@@ -29,17 +29,39 @@ class MusicEdgeService : Service() {
         @Volatile var isRunning = false; private set
         private var current: MusicEdgeService? = null
         /** Play the notification in the SAME music overlay window when music is active. */
-        fun showNotification(color: Int, duration: Long, store: ProfileStore, design: EdgeMode): Boolean {
+        fun showNotification(color: Int, duration: Long, store: ProfileStore,
+            design: EdgeMode, keepUntilDismissed: Boolean = false): Boolean {
             if (VideoAmbilightService.isRunning) return false
             val service = current ?: return false
             val drawing = service.view ?: return false
             val validDuration = duration.coerceIn(800L, 10_000L)
-            service.yieldUntil = SystemClock.elapsedRealtime() + validDuration + 100L
+            if (keepUntilDismissed && service.yieldPersistent && service.yielding &&
+                service.activeNoticeColor == color && service.activeNoticeDesign == design) {
+                return true
+            }
+            service.yieldPersistent = keepUntilDismissed
+            service.yieldUntil = if (keepUntilDismissed) Long.MAX_VALUE
+                else SystemClock.elapsedRealtime() + validDuration + 100L
             service.yielding = true
+            service.activeNoticeColor = color
+            service.activeNoticeDesign = design
             drawing.configure(NotificationLighting.config(store, color, design))
-            drawing.playNotification(color, validDuration, false)
+            drawing.playNotification(color, validDuration, keepUntilDismissed)
             drawing.visibility = View.VISIBLE
             return true
+        }
+
+        /** Ends a persistent alert without stopping ongoing music playback. */
+        fun dismissPersistentNotification() {
+            val service = current ?: return
+            if (!service.yieldPersistent) return
+            service.yieldPersistent = false
+            service.yielding = false
+            service.yieldUntil = 0L
+            service.activeNoticeColor = null
+            service.activeNoticeDesign = null
+            service.view?.stopNotification()
+            service.view?.configure(service.config)
         }
     }
     private data class AudioFrame(val bands: FloatArray, val bass: Float, val at: Long)
@@ -64,6 +86,9 @@ class MusicEdgeService : Service() {
     private var lastBassLevel = 0f
     private var yieldUntil = 0L
     private var yielding = false
+    private var yieldPersistent = false
+    private var activeNoticeColor: Int? = null
+    private var activeNoticeDesign: EdgeMode? = null
     private var receiverRegistered = false
     private var lastPlayingObservedAt = 0L // worker-owned: grace for transient session changes
     private var failed = false
@@ -171,6 +196,9 @@ class MusicEdgeService : Service() {
                 view?.configure(config)
                 NotificationEdgeOverlay.dismiss()
                 yielding = false
+                yieldPersistent = false
+                activeNoticeColor = null
+                activeNoticeDesign = null
             }
             val reason = MusicVisibility.reason(awake, !keyguard.isKeyguardLocked, quiet, notification,
                 sessionAllowed, lastCapture != 0L && now - lastCapture < 700L,

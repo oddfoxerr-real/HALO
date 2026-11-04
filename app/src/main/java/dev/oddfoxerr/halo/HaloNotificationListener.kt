@@ -109,7 +109,11 @@ class HaloNotificationListener : NotificationListenerService() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> { PillHaloOverlay.dismiss(); NotificationEdgeOverlay.dismiss() }
+                Intent.ACTION_SCREEN_OFF -> {
+                    PillHaloOverlay.dismiss()
+                    NotificationEdgeOverlay.dismiss()
+                    if (store.onlyScreenOn) MusicEdgeService.dismissPersistentNotification()
+                }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
                     refreshIndicator()
                     refreshPill()
@@ -209,6 +213,7 @@ class HaloNotificationListener : NotificationListenerService() {
             main.removeCallbacks(quietCheck)
             NotificationActivityState.disconnected()
             NotificationEdgeOverlay.dismiss()
+            MusicEdgeService.dismissPersistentNotification()
         }
         super.onListenerDisconnected()
     }
@@ -219,6 +224,7 @@ class HaloNotificationListener : NotificationListenerService() {
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) { }
         NotificationEdgeOverlay.dismiss()
+        MusicEdgeService.dismissPersistentNotification()
         super.onDestroy()
     }
 
@@ -248,11 +254,24 @@ class HaloNotificationListener : NotificationListenerService() {
     private fun refreshIndicator() {
         if (!mayShow()) {
             NotificationEdgeOverlay.dismiss()
+            MusicEdgeService.dismissPersistentNotification()
             return
         }
         if (MusicEdgeService.isRunning) {
-            // A temporary notification takes priority, then the music edge resumes.
-            if (!NotificationEdgeOverlay.isAnimating) NotificationEdgeOverlay.dismiss()
+            if (store.notificationBorderPersistent) {
+                val active = tracker.newestIndicatorPackages().asSequence()
+                    .map { it to store.readForPackage(it) }
+                    .firstOrNull { it.second.enabled }
+                if (active == null) {
+                    MusicEdgeService.dismissPersistentNotification()
+                } else {
+                    MusicEdgeService.showNotification(
+                        active.second.color.toInt(), store.notificationDurationMs, store,
+                        store.notificationDesignFor(active.first), true
+                    )
+                }
+            } else MusicEdgeService.dismissPersistentNotification()
+            NotificationEdgeOverlay.dismiss()
             return
         }
         if (NotificationEdgeOverlay.isAnimating) return
