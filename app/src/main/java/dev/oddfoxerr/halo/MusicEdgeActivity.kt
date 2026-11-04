@@ -216,10 +216,12 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("Choose a design to see it move. The three minimal styles keep their light close to the edge.",
+                Text("Everyday borders first: one clean line around your screen, with just a little movement. More energetic options remain available below.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                EdgeMode.entries.forEach { design ->
+                EdgeMode.entries.sortedBy { mode ->
+                    if (mode.shaderId >= 6) mode.shaderId - 6 else mode.shaderId + 3
+                }.forEach { design ->
                     DesignTile(design, settings.mode == design, settings.color, settings.accent,
                         Modifier.fillMaxWidth()) {
                         save(settings.copy(mode = design))

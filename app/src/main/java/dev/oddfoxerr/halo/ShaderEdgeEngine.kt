@@ -356,7 +356,33 @@ internal class ShaderEdgeEngine {
                 float weight=1.0;
                 float tint=.5-.5*cos(TAU*u);
                 float highlight=0.0;
-                if(design==1) {
+                if(design==6) {
+                    // Classic Outline: one unbroken hairline around the full
+                    // rounded rectangle. Beats cause only a small brightness
+                    // lift, without changing the geometry or spawning particles.
+                    shapeDistance=abs(d)-line*(.52+.08*low+.05*hit);
+                    weight=.70+.19*low+.09*hit;
+                    highlight=.035*hit;
+                    tint=.5-.5*cos(TAU*u);
+                } else if(design==7) {
+                    // Soft Glow: still a single solid border. A quiet halo
+                    // breathes cosmetically; real bass adds a tiny expansion.
+                    float breathing=.5+.5*sin(seconds*.88);
+                    shapeDistance=abs(d)-line*(.55+.045*breathing+.09*low);
+                    weight=.59+.055*breathing+.23*low+.08*hit;
+                    highlight=.04*breathing+.06*hit;
+                    tint=.5-.5*cos(TAU*u);
+                } else if(design==8) {
+                    // Accent Sweep: single perimeter stroke and a very small
+                    // moving sheen, not a separate light orb or spark shower.
+                    float head=fract(seconds*.033);
+                    float along=periodicDistance(u,head)*perimeter;
+                    float sheen=gaussian(along,max(14.0*unit,line*8.0));
+                    shapeDistance=abs(d)-line*(.52+.055*low);
+                    weight=.62+.19*low+.09*hit+.12*sheen;
+                    highlight=.13*sheen+.05*hit;
+                    tint=.5-.5*cos(TAU*u);
+                } else if(design==1) {
                     // Two anchored capsules. Low frequencies change their length,
                     // mids lift their body, and transients give the tips a quick lift.
                     float right=(h+arc+v*.5)/perimeter;
@@ -432,9 +458,14 @@ internal class ShaderEdgeEngine {
                 }
                 float coverage=1.0-smoothstep(-.65,.85,shapeDistance);
                 float bloom=gaussian(max(shapeDistance,0.0),line*2.0+unit*1.5);
+                float classic=(design>=6 && design<=8) ? 1.0 : 0.0;
+                // Fine hairline, subtle falloff. Even maximum glow cannot
+                // turn these everyday styles into an intrusive edge field.
+                float haloWeight=mix(.16,.09,classic);
+                float coreWeight=mix(.82,.86,classic);
                 float punch=clamp(.70+.28*low+.34*hit,0.0,1.30);
-                float alpha=(coverage*.82+bloom*.16*glow)*weight*
-                    brightness*gain*punch*edgePresence;
+                float alpha=(coverage*coreWeight+bloom*haloWeight*glow)*
+                    weight*brightness*gain*punch*edgePresence;
                 alpha*=1.0-smoothstep(limit*.65,limit,abs(d));
                 float3 base=mix(first,second,tint);
                 if(videoMode==1) {
