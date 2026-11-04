@@ -60,7 +60,19 @@ enum class EdgeMode(
     PULSE_CORNERS("Pulse Corners", 43, "Four corner brackets grow outward on the beat."),
     AUDIO_WAVE("Audio Wave", 44, "The whole line bends with the live audio spectrum."),
     LIQUID_EDGE("Liquid Edge", 45, "A thin moving liquid-like rim shaped by bass and mids."),
-    SIDE_ENERGY("Side Energy", 46, "Left and right edge strokes stretch on the bass.")
+    SIDE_ENERGY("Side Energy", 46, "Left and right edge strokes stretch on the bass."),
+    SERIAL_LIGHTS("Serial Lights", 47, "Individual round lights chase around the border.", EdgeGroup.TEXTURE),
+    EDGE_BARS("Edge Bars", 48, "A ring of small audio-reactive bars.", EdgeGroup.RHYTHM),
+    SIDE_BARS("Side Bars", 49, "Vertical equalizer bars on the left and right sides.", EdgeGroup.RHYTHM),
+    SIDE_WAVES("Side Waves", 50, "Smooth wave ribbons flow along both side edges.", EdgeGroup.FLOW),
+    FULL_WAVES("Full Waves", 51, "A rounded border bends with the live spectrum.", EdgeGroup.FLOW),
+    TOP_BOTTOM_WAVES("Top and Bottom Waves", 52, "Soft layered waves run along the top and bottom.", EdgeGroup.FLOW),
+    CHASE_LIGHT("Chase Light", 53, "One smooth luminous trail travels the perimeter.", EdgeGroup.FLOW),
+    CORNER_SPARKS("Corner Sparks", 54, "Small light particles drift through opposite corners.", EdgeGroup.TEXTURE),
+    EDGE_DRIFT("Edge Drift", 55, "Sparse floating light specks move along the edge.", EdgeGroup.TEXTURE),
+    SOFT_BEAMS("Soft Beams", 56, "Soft vertical light beams breathe at each side.", EdgeGroup.GLOW),
+    FLUTTER("Flutter", 57, "Short gentle edge pulses move in rhythm.", EdgeGroup.RHYTHM),
+    FIRE_LINES("Fire Lines", 58, "Narrow flames flicker along both screen sides.", EdgeGroup.DYNAMIC)
 }
 
 enum class NotificationEdgeMode(val title: String) {

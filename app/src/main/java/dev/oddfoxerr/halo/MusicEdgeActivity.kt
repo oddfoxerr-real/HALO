@@ -217,7 +217,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("47 GPU effects: understated borders and stronger music animation. Your live phone preview stays above.",
+                Text("59 GPU effects: clean borders, flowing waves, moving lights and particle details. The live preview stays above.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(

@@ -283,15 +283,14 @@ class ChainsawView(context: Context) : View(context) {
         val shiftingFocus = retreat.advance(dt)
         val edgePresence = if (appRetreatEnabled) retreat.visibility else 1f
         val dynamics = motion.dynamics
-        // Integrate velocity, never multiply an absolute timestamp by loudness:
-        // bass transients accelerate immediately without positional jumps.
-        val audioVelocity = if (videoColors != null) 1f else {
-            val drive = dynamics.low * 2.1f + dynamics.mid * 1.2f +
-                dynamics.high * .75f + dynamics.hit * 2.5f
-            val fallback = if (keepAmbientMotion) .36f else .14f
-            (fallback + drive * dynamicForce).coerceIn(.1f, 7.5f)
-        }
-        shaderSeconds = (shaderSeconds + dt * speed * audioVelocity).rem(3600f)
+        // Stable seconds: the shader owns effect speed, audio owns amplitude.
+        // The old clock could run 7.5x faster on kicks and barely move at
+        // quieter sections, turning smooth waves and dots into erratic motion.
+        // Existing motion continues while there is real music, a preview signal,
+        // a notification envelope, or an explicitly enabled fallback.
+        val musicAcceleration = (1f + .12f * dynamics.low +
+            .18f * dynamics.hit).coerceIn(1f, 1.35f)
+        shaderSeconds = (shaderSeconds + dt * speed * musicAcceleration).rem(3600f)
         val key = "$width:$height:$leftInset:$rightInset:$topInset:$bottomInset:$cornerRadius:$thickness:$spread:$drawTop:$drawBottom:$drawLeft:$drawRight"
         if (geometryKey != key) {
             geometryKey = key
