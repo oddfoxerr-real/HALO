@@ -34,6 +34,10 @@ class MinimalEdgeRenderTest {
             savePreview(mode, loud, "t0")
             val animated = render(mode, 1f, seconds = 2.9f)
             savePreview(mode, animated, "t1")
+            if (mode.shaderId in 47..58) {
+                assertTrue("$mode should show visible motion, not just rename a static outline",
+                    motionDelta(loud, animated) > 35L)
+            }
             animated.recycle()
             assertEquals("$mode must disappear in silence", 0L, alphaSum(quiet))
             assertTrue("$mode must respond to music", alphaSum(loud) > alphaSum(soft) * 2)
@@ -65,6 +69,16 @@ class MinimalEdgeRenderTest {
         output.outputStream().use { stream ->
             assertTrue("Could not encode $output", bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
         }
+    }
+
+    private fun motionDelta(before: Bitmap, after: Bitmap): Long {
+        val oldPixels = IntArray(before.width * before.height)
+        val newPixels = IntArray(after.width * after.height)
+        before.getPixels(oldPixels, 0, before.width, 0, 0, before.width, before.height)
+        after.getPixels(newPixels, 0, after.width, 0, 0, after.width, after.height)
+        return oldPixels.indices.count { i ->
+            kotlin.math.abs(Color.alpha(oldPixels[i]) - Color.alpha(newPixels[i])) >= 6
+        }.toLong()
     }
 
     private fun alphaSum(bitmap: Bitmap): Long {

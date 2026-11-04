@@ -397,7 +397,7 @@ internal class ShaderEdgeEngine {
                         float at=(floor(lane)+.5)/count;
                         float local=clamp(harmonic(at)*1.8,0.0,1.0);
                         float barHeight=unit*(1.4+(design==48 ? 10.0 : 14.0)*local
-                            +3.0*hit);
+                            +3.0*hit+(design==49 ? 2.0*mid : 0.0));
                         float halfWidth=max(.50*unit,w/count*.21);
                         float along=(fract(lane)-.5)*w/count;
                         float2 q=abs(float2(along,d+barHeight*.46))
@@ -409,7 +409,6 @@ internal class ShaderEdgeEngine {
                         if(design==49) {
                             // Side Bars only: sides are active, top/bottom stay empty.
                             weight*=sideGate;
-                            barHeight+=2.0*unit*mid;
                         }
                         highlight=.06*high;
                     } else if(design==50 || design==51 || design==52) {

@@ -10,7 +10,7 @@ class NotificationDesignRoutingTest {
         val added = EdgeMode.entries.filter { it.shaderId in 39..46 }
         assertEquals(8, added.size)
         assertEquals((39..46).toList(), added.map { it.shaderId }.sorted())
-        assertEquals(47, EdgeMode.entries.size)
+        assertEquals(59, EdgeMode.entries.size)
         for (mode in added) {
             assertEquals(EdgeGroup.DYNAMIC, mode.group)
             assertEquals(mode, EdgeSpectrum.mode(mode.name))
