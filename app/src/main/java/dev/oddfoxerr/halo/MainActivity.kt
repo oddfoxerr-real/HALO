@@ -46,6 +46,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -157,6 +158,9 @@ private fun HaloApp(
 ) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
+    var showActivity by remember { mutableStateOf(false) }
+    var showAppRules by remember { mutableStateOf(false) }
+    var showAdvancedSettings by remember { mutableStateOf(false) }
     BackHandler(enabled = tab == HaloTab.MISC) { tab = HaloTab.SETTINGS }
     var enabled by remember(revision) { mutableStateOf(store.masterEnabled) }
     val appVersion = remember(context) {
@@ -169,44 +173,43 @@ private fun HaloApp(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            when (tab) {
-                                HaloTab.HOME -> "HALO"
-                                HaloTab.MUSIC -> "MUSIC"
-                                HaloTab.APPS -> "NOTIFICATIONS"
-                                HaloTab.SETTINGS -> "SETTINGS"
-                                HaloTab.MISC -> "MISC LAB"
-                            },
-                            fontWeight = FontWeight.ExtraBold,
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                        Text(
-                            when (tab) {
-                                HaloTab.HOME -> "YOUR EDGE STUDIO"
-                                HaloTab.MUSIC -> "SOUND-REACTIVE LIGHTING"
-                                HaloTab.APPS -> "PERSONALIZED ALERT EFFECTS"
-                                HaloTab.SETTINGS -> "APP CONTROL"
-                                HaloTab.MISC -> "EXPERIMENTAL EFFECTS"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Muted
-                        )
-                    }
+                    Text(
+                        when (tab) {
+                            HaloTab.HOME -> "HALO"
+                            HaloTab.MUSIC -> "Music"
+                            HaloTab.APPS -> "Alerts"
+                            HaloTab.SETTINGS -> "Settings"
+                            HaloTab.MISC -> "Creative Lab"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge
+                    )
                 },
                 navigationIcon = {
                     if (tab == HaloTab.MISC) {
                         TextButton(onClick = { tab = HaloTab.SETTINGS }) { Text("Back") }
                     }
                 },
-                actions = { Text("v" + appVersion, modifier = Modifier.padding(end = 18.dp),
-                    color = MaterialTheme.colorScheme.primary) },
+                actions = {
+                    when (tab) {
+                        HaloTab.SETTINGS -> {
+                            Text("v$appVersion", color = Muted, style = MaterialTheme.typography.labelSmall)
+                            IconButton(onClick = { tab = HaloTab.HOME }) {
+                                Icon(Icons.Default.Home, contentDescription = "Back to home")
+                            }
+                        }
+                        HaloTab.MISC -> Unit
+                        else -> IconButton(onClick = { tab = HaloTab.SETTINGS }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Open settings")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                HaloTab.entries.filter { it != HaloTab.MISC }.forEach { item ->
+                HaloTab.entries.filter { it == HaloTab.HOME || it == HaloTab.MUSIC || it == HaloTab.APPS }.forEach { item ->
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.MUSIC -> Icons.Default.MusicNote
@@ -214,7 +217,7 @@ private fun HaloApp(
                         HaloTab.SETTINGS, HaloTab.MISC -> Icons.Default.Settings
                     }
                     NavigationBarItem(
-                        selected = tab == item || (tab == HaloTab.MISC && item == HaloTab.SETTINGS),
+                        selected = tab == item,
                         onClick = { tab = item },
                         icon = { Icon(image, contentDescription = null) },
                         label = { Text(item.label) }
@@ -246,40 +249,6 @@ private fun HaloApp(
                     HaloTab.MUSIC, HaloTab.MISC -> Unit
                     HaloTab.HOME -> {
                         item {
-                            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text("YOUR STUDIOS",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold)
-                                Text("Bring your screen to life.",
-                                    style = MaterialTheme.typography.headlineLarge,
-                                    fontWeight = FontWeight.Bold)
-                                Text(
-                                    "Music and notifications each have their own live preview and settings.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Muted
-                                )
-                            }
-                        }
-                        item {
-                            FocusStudioCard(
-                                title = "Music lighting",
-                                subtitle = "Beat-reactive edge visualizer",
-                                detail = MusicConfiguration.read(context).mode.title + " · Live preview",
-                                icon = Icons.Default.MusicNote,
-                                accent = Color(0xFFBDA6FF)
-                            ) { tab = HaloTab.MUSIC }
-                        }
-                        item {
-                            FocusStudioCard(
-                                title = "Notifications",
-                                subtitle = "Personalized edge alerts",
-                                detail = store.notificationEdgeDesign.title + " · Per-app effects",
-                                icon = Icons.Default.Notifications,
-                                accent = Color(0xFF81DDC8)
-                            ) { tab = HaloTab.APPS }
-                        }
-                        item {
                             StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                                 enabled = value
                                 store.masterEnabled = value
@@ -290,17 +259,29 @@ private fun HaloApp(
                                 HaloNotificationListener.requestPillRefresh()
                             }
                         }
+                        item { Text("Your studios", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
                         item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                MetricCard("Notifications", "${NotificationActivityState.activeCount}", Modifier.weight(1f))
-                                MetricCard("Listener", if (NotificationActivityState.listenerConnected) "Live" else "Offline",
-                                    Modifier.weight(1f))
-                            }
+                            FocusStudioCard(
+                                title = "Music lighting",
+                                subtitle = "Beat-reactive edge effects",
+                                detail = MusicConfiguration.read(context).mode.title,
+                                icon = Icons.Default.MusicNote,
+                                accent = Color(0xFFBDA6FF)
+                            ) { tab = HaloTab.MUSIC }
+                        }
+                        item {
+                            FocusStudioCard(
+                                title = "Notifications",
+                                subtitle = "Independent alert effects",
+                                detail = store.notificationEdgeDesign.title,
+                                icon = Icons.Default.Notifications,
+                                accent = Color(0xFF81DDC8)
+                            ) { tab = HaloTab.APPS }
                         }
                         if (!listenerEnabled || !overlayEnabled) {
                             item {
                                 SectionCard {
-                                    Text("Complete setup", fontWeight = FontWeight.Bold)
+                                    Text("Finish setup", fontWeight = FontWeight.SemiBold)
                                     if (!listenerEnabled) Button(onClick = requestListener,
                                         modifier = Modifier.fillMaxWidth()) { Text("Enable notification access") }
                                     if (!overlayEnabled) OutlinedButton(onClick = requestOverlay,
@@ -308,23 +289,36 @@ private fun HaloApp(
                                 }
                             }
                         }
-                        item { Text("Recent activity", style = MaterialTheme.typography.titleLarge) }
-                        if (NotificationActivityState.recent.isEmpty()) {
-                            item { SectionCard { Text("No notification events yet.", color = Muted) } }
-                        } else {
-                            items(NotificationActivityState.recent.take(8)) { event ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    ColorDot(store.readForPackage(event.packageName).color)
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(applicationLabel(context, event.packageName),
-                                            fontWeight = FontWeight.SemiBold)
-                                        Text(if (event.type == EventType.RECEIVED) "Notification received"
-                                            else "Notification dismissed", color = Muted)
+                        item {
+                            TextButton(onClick = { showActivity = !showActivity }) {
+                                Text(if (showActivity) "Hide recent activity" else "Show recent activity")
+                            }
+                        }
+                        if (showActivity) {
+                            item {
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    MetricCard("Notifications", "${NotificationActivityState.activeCount}", Modifier.weight(1f))
+                                    MetricCard("Listener", if (NotificationActivityState.listenerConnected) "Live" else "Offline",
+                                        Modifier.weight(1f))
+                                }
+                            }
+                            if (NotificationActivityState.recent.isEmpty()) {
+                                item { Text("No notification events yet.", color = Muted) }
+                            } else {
+                                items(NotificationActivityState.recent.take(8)) { event ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        ColorDot(store.readForPackage(event.packageName).color)
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(applicationLabel(context, event.packageName),
+                                                fontWeight = FontWeight.SemiBold)
+                                            Text(if (event.type == EventType.RECEIVED) "Notification received"
+                                                else "Notification dismissed", color = Muted)
+                                        }
+                                        Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(event.timestamp)),
+                                            color = Muted, style = MaterialTheme.typography.labelSmall)
                                     }
-                                    Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(event.timestamp)),
-                                        color = Muted, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -337,8 +331,15 @@ private fun HaloApp(
                                 color = Muted)
                         }
                         item { NotificationStudio(store, overlayEnabled, requestOverlay) }
-                        item { Text("Per-app notification rules", style = MaterialTheme.typography.titleLarge) }
-                        item { AppRulesEditor(store) }
+                        item {
+                            OutlinedButton(
+                                onClick = { showAppRules = !showAppRules },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (showAppRules) "Hide per-app rules" else "Customize individual apps") }
+                        }
+                        if (showAppRules) {
+                            item { AppRulesEditor(store) }
+                        }
                     }
                     HaloTab.SETTINGS -> {
                         item {
@@ -348,6 +349,13 @@ private fun HaloApp(
                         item { HaloUpdaterCard(revision) }
                         item { PermissionSection("Notification access", listenerEnabled, requestListener) }
                         item { PermissionSection("Display over apps", overlayEnabled, requestOverlay) }
+                        item {
+                            OutlinedButton(onClick = { showAdvancedSettings = !showAdvancedSettings },
+                                modifier = Modifier.fillMaxWidth()) {
+                                Text(if (showAdvancedSettings) "Hide additional settings" else "More settings & creative tools")
+                            }
+                        }
+                        if (showAdvancedSettings) {
                         item { SectionCard { QuietHoursEditor(store) } }
                         item {
                             SectionCard {
@@ -421,7 +429,8 @@ private fun HaloApp(
                                     color = Muted)
                                 Text("Android may restrict drawing over secure screens, Samsung's status bar, and AOD.",
                                     color = Muted)
-                            }
+                                }
+                    }
                         }
                     }
                 }
@@ -443,28 +452,28 @@ private fun FocusStudioCard(
     Card(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.11f))
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
-                modifier = Modifier.size(54.dp)
-                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(18.dp)),
+                modifier = Modifier.size(44.dp)
+                    .background(accent.copy(alpha = 0.13f), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, contentDescription = null, tint = accent,
-                    modifier = Modifier.size(28.dp))
+                    modifier = Modifier.size(24.dp))
             }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Text(title, style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold)
+                Text(title, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Muted)
                 Text(detail, style = MaterialTheme.typography.labelMedium,
                     color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
