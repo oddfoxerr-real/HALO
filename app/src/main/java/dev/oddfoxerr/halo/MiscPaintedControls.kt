@@ -7,9 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.media.projection.MediaProjectionManager
-import android.media.projection.MediaProjectionConfig
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,22 +40,15 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/**
- * Safe image-painter preview. Android forbids third-party apps from injecting
- * shaders into unrelated application windows. The full-screen screen-copy
- * overlay blocked touches and altered brightness on Samsung devices.
- *
- * The historical opaque SurfaceView is forbidden. Live painting uses a
- * newly consented, translucent TextureView with touch-through opacity.
- */
+/** Genuine GPU paint shader for photos and explicitly shared app previews. */
 @Composable
 fun MiscPaintedControls() {
     val context = LocalContext.current
     val captureStatus by VideoAmbilightService.status.collectAsState()
-    val unsafeSession = VideoAmbilightService.isRunning && VideoAmbilightService.isPainted
+    val paintedSession = VideoAmbilightService.isRunning && VideoAmbilightService.isPainted
+    val gpuPreview = paintedSession && VideoAmbilightService.isPreview
     var settings by remember(context) {
         mutableStateOf(PaintedScreenPreferences.read(context))
     }
@@ -73,31 +64,24 @@ fun MiscPaintedControls() {
                 .setAction(VideoAmbilightService.ACTION_START)
                 .putExtra(VideoAmbilightService.EXTRA_PAINTED, true)
                 .putExtra(VideoAmbilightService.EXTRA_SAFE_LIVE, true)
+                .putExtra(VideoAmbilightService.EXTRA_PAINT_PREVIEW, true)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_CODE, result.resultCode)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_DATA, result.data)
             try {
                 ContextCompat.startForegroundService(context, intent)
                 liveFeedback = null
             } catch (error: RuntimeException) {
-                liveFeedback = "Live painting could not start: " +
-                    (error.message ?: "Android restricted the overlay")
+                liveFeedback = "GPU painting could not start: " +
+                    (error.message ?: "Android restricted screen sharing")
             }
         } else {
             liveFeedback = "Screen sharing permission was not granted."
         }
     }
-    val overlayPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        liveFeedback = if (Settings.canDrawOverlays(context))
-            "Permission granted. Tap Start live painting again."
-        else "Display-over-other-apps permission is needed."
-    }
-    var artwork by remember { mutableStateOf<PaintedStrokeFrame?>(null) }
-    var message by remember {
-        mutableStateOf("Choose a photo to preview real textured brush strokes.")
-    }
-    val paintedView = remember(context) { PaintedScreenView(context) }
+    var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var message by remember { mutableStateOf("Choose a photo to run the GPU paint shader.") }
+    val photoView = remember(context) { PaintShaderView(context) }
+    val liveView = remember(context) { PaintShaderView(context) }
     val choosePhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -112,32 +96,28 @@ fun MiscPaintedControls() {
         next.save(context)
     }
 
-    LaunchedEffect(photo, settings) {
+    LaunchedEffect(photo) {
         val selected = photo ?: return@LaunchedEffect
-        // Repainting is costly; cancel/restart only after a slider settles.
-        delay(180L)
-        message = "Painting your selected image…"
+        message = "Decoding selected picture…"
         try {
-            val frame = withContext(Dispatchers.Default) {
-                val image = readPreviewBitmap(context, selected)
-                try {
-                    PaintedStrokePlanner.plan(image, settings)
-                } catch (error: Exception) {
-                    if (!image.isRecycled) image.recycle()
-                    throw error
-                }
+            val bitmap = withContext(Dispatchers.IO) {
+                readPreviewBitmap(context, selected)
             }
-            artwork = frame
-            message = "Preview ready · original colours, textured brush layers"
+            photoBitmap = bitmap
+            message = "Photo ready · AGSL GPU shader"
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            message = "Could not paint image: " + (error.message ?: "unsupported picture")
+            message = "Unable to open picture: " + (error.message ?: "unsupported format")
         }
     }
 
-    DisposableEffect(paintedView) {
-        onDispose { paintedView.clear() }
+    DisposableEffect(photoView) {
+        onDispose { photoView.clearSource() }
+    }
+    DisposableEffect(liveView, gpuPreview) {
+        if (gpuPreview) PaintPreviewFrameHub.attach(liveView)
+        onDispose { PaintPreviewFrameHub.detach(liveView) }
     }
 
     Card(Modifier.fillMaxWidth()) {
@@ -145,23 +125,26 @@ fun MiscPaintedControls() {
             Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Painted Screen", style = MaterialTheme.typography.titleLarge)
+            Text("Paint Shader · GPU", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Live painting uses a transparent, touch-through pigment layer. The real screen stays visible beneath it rather than being replaced by a dark duplicate. You can also paint a photo directly in HALO.",
+                "Real AGSL brush shader, not a translucent filter or pixel mosaic. " +
+                    "Live output is displayed inside HALO, without an overlay that can darken or block your phone.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            Text("Live painting", style = MaterialTheme.typography.titleMedium)
+            Text("Live GPU preview", style = MaterialTheme.typography.titleMedium)
             Text(
-                if (unsafeSession) captureStatus else
-                    "Transparent brush marks only. Android's screen-sharing indicator and HALO's Stop notification remain available.",
+                if (gpuPreview) captureStatus else
+                    "Select another app in Android's screen-sharing dialog, then view its live painted output here. " +
+                    "For interaction, place HALO beside that app using Samsung split screen. " +
+                    "Stock Android does not allow HALO to replace another app's actual display shader.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Button(
                 onClick = {
                     when {
-                        unsafeSession -> context.startService(
+                        paintedSession -> context.startService(
                             Intent(context, VideoAmbilightService::class.java)
                                 .setAction(VideoAmbilightService.ACTION_STOP)
                         )
@@ -174,47 +157,48 @@ fun MiscPaintedControls() {
                         }
                         Build.VERSION.SDK_INT < 33 ->
                             liveFeedback = "Live painting requires Android 13 or newer."
-                        !Settings.canDrawOverlays(context) ->
-                            overlayPermission.launch(
-                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:" + context.packageName))
-                            )
                         else -> {
                             val manager = context.getSystemService(
                                 MediaProjectionManager::class.java)
-                            val request = if (Build.VERSION.SDK_INT >= 34)
-                                manager.createScreenCaptureIntent(
-                                    MediaProjectionConfig.createConfigForDefaultDisplay()
-                                ) else manager.createScreenCaptureIntent()
-                            screenPermission.launch(request)
+                            // Android 14+ offers single-app sharing. Select a
+                            // different app to avoid HALO capturing itself.
+                            screenPermission.launch(manager.createScreenCaptureIntent())
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (unsafeSession) "Stop live painting" else if (otherVideo)
-                    "Stop Video Ambilight" else "Start live painting")
+                Text(if (paintedSession) "Stop GPU painting" else if (otherVideo)
+                    "Stop Video Ambilight" else "Start GPU painting")
             }
             liveFeedback?.let {
                 Text(it, color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall)
             }
-            Text("Photo painting preview", style = MaterialTheme.typography.titleMedium)
+            if (gpuPreview) {
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().height(460.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    factory = { liveView },
+                    update = { it.configure(settings) }
+                )
+            }
+            Text("Photo GPU shader", style = MaterialTheme.typography.titleMedium)
 
             Button(
                 onClick = { choosePhoto.launch("image/*") },
                 modifier = Modifier.fillMaxWidth()
             ) { Text(if (photo == null) "Choose a photo" else "Change photo") }
 
-            if (photo != null) {
+            if (photo != null && photoBitmap != null) {
                 AndroidView(
                     modifier = Modifier.fillMaxWidth()
                         .height(340.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
-                    factory = { paintedView },
+                    factory = { photoView },
                     update = { view ->
                         view.configure(settings)
-                        view.setFrame(artwork)
+                        view.show(photoBitmap)
                     }
                 )
             }
@@ -259,18 +243,18 @@ fun MiscPaintedControls() {
                 valueRange = .15f..1.6f
             )
 
-            if (VideoAmbilightService.isRunning && !unsafeSession) {
+            if (VideoAmbilightService.isRunning && !paintedSession) {
                 Text("Video Ambilight is running independently. " + captureStatus,
                     style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = {
-                paintedView.clear()
-                artwork = null
+                photoView.clearSource()
+                photoBitmap = null
                 photo = null
-                message = "Choose a photo to preview real textured brush strokes."
+                message = "Choose a photo to run the GPU paint shader."
             }) { Text("Clear preview") }
             Text(
-                "The photo preview processes images locally. Live painting needs Android screen-sharing consent and stops from HALO or the notification. Protected contents may not appear; no frames are uploaded.",
+                "Everything is processed locally. Live preview requires screen-sharing consent; protected content may be black. The Stop notification ends capture. No frames are uploaded.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

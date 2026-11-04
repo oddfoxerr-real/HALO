@@ -40,6 +40,7 @@ class VideoAmbilightService : Service() {
         const val EXTRA_RESULT_DATA = "projection_result_data"
         const val EXTRA_PAINTED = "projection_painted"
         const val EXTRA_SAFE_LIVE = "projection_safe_transparent_pigment_only"
+        const val EXTRA_PAINT_PREVIEW = "projection_painted_gpu_preview"
         private const val CHANNEL = "halo_video_ambilight"
         private const val NOTICE_ID = 711
 
@@ -48,6 +49,8 @@ class VideoAmbilightService : Service() {
         @Volatile var isRunning = false
             private set
         @Volatile var isPainted = false
+            private set
+        @Volatile var isPreview = false
             private set
     }
 
@@ -135,8 +138,11 @@ class VideoAmbilightService : Service() {
             ACTION_START -> Unit
             else -> return START_NOT_STICKY
         }
-        if (isRunning || !Settings.canDrawOverlays(this)) {
-            if (!Settings.canDrawOverlays(this)) statusValue.value = "Allow display over other apps first"
+        val previewRequested = intent.getBooleanExtra(EXTRA_PAINT_PREVIEW, false) &&
+            intent.getBooleanExtra(EXTRA_PAINTED, false)
+        if (isRunning || (!previewRequested && !Settings.canDrawOverlays(this))) {
+            if (!previewRequested && !Settings.canDrawOverlays(this))
+                statusValue.value = "Allow display over other apps first"
             return START_NOT_STICKY
         }
         val request = intent ?: return START_NOT_STICKY
@@ -151,6 +157,7 @@ class VideoAmbilightService : Service() {
             return START_NOT_STICKY
         }
         isPainted = request.getBooleanExtra(EXTRA_PAINTED, false)
+        isPreview = isPainted && previewRequested
         paintHealth.reset()
         paintSettings = PaintedScreenPreferences.read(this)
         framesRendered = 0L
@@ -188,7 +195,7 @@ class VideoAmbilightService : Service() {
             // Attach the ordinary transparent View only after valid pixels
             // arrive, never while Android's permission chooser is visible.
             // No secure SurfaceView or TextureView is used.
-            if (!isPainted) showOverlay() else {
+            if (!isPainted) showOverlay() else if (!isPreview) {
                 paintDispatcher = LatestPaintDispatcher(
                     surface = { livePaintSurface },
                     preferences = { paintSettings },
@@ -311,7 +318,18 @@ class VideoAmbilightService : Service() {
                                 null
                             }
                             framesSeen++
-                            when (paintHealth.observe(bitmap != null, overlay != null)) {
+                            if (isPreview) {
+                                if (bitmap != null) {
+                                    lastUsablePaintFrameAt = now
+                                    PaintPreviewFrameHub.publish(bitmap)
+                                    if (framesSeen % 15 == 0)
+                                        statusValue.value = "GPU painting · capturing selected app"
+                                } else {
+                                    PaintPreviewFrameHub.clear()
+                                    if (framesSeen % 15 == 0)
+                                        statusValue.value = "Capture unavailable · protected content or app closed"
+                                }
+                            } else when (paintHealth.observe(bitmap != null, overlay != null)) {
                                 PaintedCaptureAction.DISABLE_OVERLAY -> {
                                     bitmap?.recycle()
                                     // Don't terminate the MediaProjection session: once
@@ -433,9 +451,11 @@ class VideoAmbilightService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle(if (isPainted) "HALO Painted Screen" else "HALO Video Ambilight")
+            .setContentTitle(if (isPreview) "HALO GPU Paint Preview"
+                else if (isPainted) "HALO Painted Screen" else "HALO Video Ambilight")
             .setContentText(
                 when {
+                    isPreview -> "Painting captured app in HALO · tap to manage"
                     isPainted && paintHealth.overlayRejected ->
                         "Painting paused: Android blocked capture · tap to manage"
                     isPainted -> "Painting screen locally · tap to manage"
@@ -453,6 +473,7 @@ class VideoAmbilightService : Service() {
         // Hide the entire painting surface before releasing capture, so
         // MediaProjection cannot leave stale pixels visible after stop.
         hidePaintLayer()
+        PaintPreviewFrameHub.clear()
         if (!statusValue.value.startsWith("Android ended screen sharing") &&
             !statusValue.value.startsWith("Painting unavailable") &&
             !statusValue.value.startsWith("Painting overlay")) {
@@ -472,6 +493,7 @@ class VideoAmbilightService : Service() {
         paintDispatcher = null
         view = null; overlay = null; windowManager = null
         isPainted = false
+        isPreview = false
         thread.quitSafely()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
