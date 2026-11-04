@@ -99,10 +99,14 @@ internal object HaloUpdates {
             }
             try {
                 ReleaseDownload.validateArchive(app, file)
-                HaloUpdateInstaller.submit(app, file)
+                HaloUpdateInstaller.submit(app, file, interactive = true)
             } catch (e: Exception) {
-                note(app, "ready", "Installation requires Android approval: " +
-                    e.message.orEmpty().take(135))
+                val message = e.message.orEmpty().take(180)
+                if (message.contains("signing key", ignoreCase = true)) {
+                    note(app, "incompatible", message)
+                } else {
+                    note(app, "ready", "Android needs installation approval: " + message)
+                }
             }
         }, "HALO-install-update").start()
     }
