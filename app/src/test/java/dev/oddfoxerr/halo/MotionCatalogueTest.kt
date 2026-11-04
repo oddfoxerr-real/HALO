@@ -22,9 +22,9 @@ class MotionCatalogueTest {
             assertTrue(style.title.length > 3)
             assertTrue(style.description.isNotBlank())
         }
-        assertEquals(EdgeGroup.FLOW, EdgeMode.SIDE_WAVES.group)
+        assertEquals(EdgeGroup.WAVES, EdgeMode.SIDE_WAVES.group)
         assertEquals(EdgeGroup.RHYTHM, EdgeMode.EDGE_BARS.group)
-        assertEquals(EdgeGroup.TEXTURE, EdgeMode.CORNER_SPARKS.group)
-        assertEquals(EdgeGroup.GLOW, EdgeMode.SOFT_BEAMS.group)
+        assertEquals(EdgeGroup.PARTICLES, EdgeMode.CORNER_SPARKS.group)
+        assertEquals(EdgeGroup.LIGHTS, EdgeMode.SOFT_BEAMS.group)
     }
 }

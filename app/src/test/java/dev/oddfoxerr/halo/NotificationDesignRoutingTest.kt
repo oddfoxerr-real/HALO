@@ -12,9 +12,16 @@ class NotificationDesignRoutingTest {
         assertEquals((39..46).toList(), added.map { it.shaderId }.sorted())
         assertEquals(59, EdgeMode.entries.size)
         for (mode in added) {
-            assertEquals(EdgeGroup.DYNAMIC, mode.group)
             assertEquals(mode, EdgeSpectrum.mode(mode.name))
         }
+        assertEquals(EdgeGroup.RHYTHM, EdgeMode.BASS_PRESSURE.group)
+        assertEquals(EdgeGroup.WAVES, EdgeMode.IMPACT_WAVES.group)
+        assertEquals(EdgeGroup.DYNAMIC, EdgeMode.RUNNING_PULSES.group)
+        assertEquals(EdgeGroup.RHYTHM, EdgeMode.KICK_RIPPLE.group)
+        assertEquals(EdgeGroup.RHYTHM, EdgeMode.PULSE_CORNERS.group)
+        assertEquals(EdgeGroup.WAVES, EdgeMode.AUDIO_WAVE.group)
+        assertEquals(EdgeGroup.WAVES, EdgeMode.LIQUID_EDGE.group)
+        assertEquals(EdgeGroup.DYNAMIC, EdgeMode.SIDE_ENERGY.group)
     }
 
     @Test fun notificationOverrideCanDifferFromMusicMode() {
