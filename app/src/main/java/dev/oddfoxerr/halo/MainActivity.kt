@@ -429,8 +429,8 @@ private fun HaloApp(
                                     color = Muted)
                                 Text("Android may restrict drawing over secure screens, Samsung's status bar, and AOD.",
                                     color = Muted)
-                                }
-                    }
+                            }
+                        }
                         }
                     }
                 }
