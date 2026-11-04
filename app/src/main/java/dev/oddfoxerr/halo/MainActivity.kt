@@ -121,7 +121,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        HaloUpdateInstaller.foreground(this)
         permissionRevision++
+    }
+
+    override fun onPause() {
+        HaloUpdateInstaller.background(this)
+        super.onPause()
     }
 }
 
@@ -278,6 +284,7 @@ private fun HaloApp(
                             Text("Settings & permissions", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold)
                         }
+                        item { HaloUpdaterCard() }
                         item { PermissionSection("Notification access", listenerEnabled, requestListener) }
                         item { PermissionSection("Display over apps", overlayEnabled, requestOverlay) }
                         item { SectionCard { QuietHoursEditor(store) } }
