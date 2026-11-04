@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class HaloTab(val label: String) {
-    HOME("Home"), MUSIC("Music"), MISC("Misc"), APPS("Apps"), SETTINGS("Settings")
+    HOME("Home"), MUSIC("Music"), MISC("Misc"), APPS("Alerts"), SETTINGS("Settings")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,7 +155,7 @@ private fun HaloApp(
                         Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.20.9", modifier = Modifier.padding(end = 18.dp),
+                actions = { Text("v0.20.18", modifier = Modifier.padding(end = 18.dp),
                     color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
@@ -217,7 +217,7 @@ private fun HaloApp(
                             SectionCard {
                                 Text("One engine for all effects", style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
-                                Text("Incoming notifications and music use the same GPU-designed edge patterns. No cartoon characters or separate border layer.",
+                                Text("Music and notifications have independent effects and previews.",
                                     color = Muted)
                                 Button(onClick = { tab = HaloTab.MUSIC },
                                     modifier = Modifier.fillMaxWidth()) { Text("Open Edge Studio") }
@@ -264,11 +264,13 @@ private fun HaloApp(
                     }
                     HaloTab.APPS -> {
                         item {
-                            Text("Notification app rules", style = MaterialTheme.typography.titleLarge,
+                            Text("Notification Studio", style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold)
-                            Text("Use the global Music design for every notification. Choose which apps can trigger it and override their colors.",
+                            Text("Choose an independent notification design, then customize effects per app.",
                                 color = Muted)
                         }
+                        item { NotificationStudio(store, overlayEnabled, requestOverlay) }
+                        item { Text("Per-app notification rules", style = MaterialTheme.typography.titleLarge) }
                         item { AppRulesEditor(store) }
                     }
                     HaloTab.SETTINGS -> {
@@ -281,9 +283,9 @@ private fun HaloApp(
                         item { SectionCard { QuietHoursEditor(store) } }
                         item {
                             SectionCard {
-                                Text("Unified notification lighting", style = MaterialTheme.typography.titleMedium,
+                                Text("Notification lighting", style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
-                                Text("Every notification plays your selected Music design and uses its brightness, spread, glow, edge calibration and camera-cutout settings.",
+                                Text("Notifications use their own selected GPU design. Configure the live preview in Alerts.",
                                     color = Muted)
                                 var persistent by remember { mutableStateOf(store.notificationBorderPersistent) }
                                 SwitchRow("Keep active notification lighting", "Continue gentle motion until the notification is dismissed.",
@@ -299,13 +301,13 @@ private fun HaloApp(
                                 }
                                 Button(onClick = {
                                     if (overlayEnabled) {
-                                        val config = MusicConfiguration.read(context)
+                                        val config = NotificationLighting.config(store, store.notificationPreviewColor.toInt(), store.notificationEdgeDesign)
                                         NotificationEdgeOverlay.show(context, config.color.toLong(),
                                             store.notificationDurationMs, false, store)
                                     } else requestOverlay()
-                                }, modifier = Modifier.fillMaxWidth()) { Text("Test selected Music edge effect") }
-                                OutlinedButton(onClick = { tab = HaloTab.MUSIC },
-                                    modifier = Modifier.fillMaxWidth()) { Text("Customize effects in Music") }
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Test selected notification effect") }
+                                OutlinedButton(onClick = { tab = HaloTab.APPS },
+                                    modifier = Modifier.fillMaxWidth()) { Text("Open notification preview") }
                             }
                         }
                         item {
@@ -507,7 +509,7 @@ private fun AppRulesEditor(store: ProfileStore) {
                     }
                     OutlinedButton(onClick = { selectedPackage = null }) { Text("Close") }
                 }
-                SwitchRow("Enable notification lighting", "Trigger the Music edge design when this app sends a notification.",
+                SwitchRow("Enable notification lighting", "Trigger the selected notification effect for this app.",
                     current.enabled) { update(current.copy(enabled = it)) }
                 val fallbackColor = CharacterApp.fromPackage(current.packageName).initialColor
                 var customHex by remember(current.packageName) {
@@ -533,7 +535,25 @@ private fun AppRulesEditor(store: ProfileStore) {
                             .clickable { update(current.copy(colorOverride = color)) })
                     }
                 }
-                Text("The animation style, timing, and geometry are shared with your Music Studio settings.",
+                var designMenu by remember(current.packageName) { mutableStateOf(false) }
+                Text("Notification animation", style = MaterialTheme.typography.labelLarge)
+                OutlinedButton(onClick = { designMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(current.notificationDesignOverride?.title ?: "Use notification default")
+                }
+                DropdownMenu(expanded = designMenu, onDismissRequest = { designMenu = false }) {
+                    DropdownMenuItem(text = { Text("Use notification default") }, onClick = {
+                        update(current.copy(notificationDesignOverride = null))
+                        designMenu = false
+                    })
+                    EdgeMode.entries.forEach { design ->
+                        DropdownMenuItem(text = { Text(design.group.title + " · " + design.title) },
+                            onClick = {
+                                update(current.copy(notificationDesignOverride = design))
+                                designMenu = false
+                            })
+                    }
+                }
+                Text("This app can use a separate notification design, independent from music.",
                     style = MaterialTheme.typography.bodySmall, color = Muted)
                 OutlinedButton(onClick = {
                     store.clearRule(current.packageName)
@@ -558,7 +578,7 @@ private fun AppRulesEditor(store: ProfileStore) {
                         Column(Modifier.weight(1f)) {
                             Text(app.label, fontWeight = FontWeight.SemiBold, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
-                            Text(if (data.enabled) "Uses Music edge" else "Disabled",
+                            Text(if (data.enabled) (data.notificationDesignOverride?.title ?: "Default alert") else "Disabled",
                                 color = Muted, style = MaterialTheme.typography.bodySmall)
                         }
                         Text("Edit", color = MaterialTheme.colorScheme.primary)
