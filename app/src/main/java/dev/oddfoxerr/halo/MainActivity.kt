@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -55,6 +57,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
@@ -69,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -136,7 +140,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class HaloTab(val label: String) {
-    HOME("Home"), MUSIC("Music"), MISC("Misc"), APPS("Alerts"), SETTINGS("Settings")
+    HOME("Home"), MUSIC("Music"), APPS("Alerts"), SETTINGS("Settings"), MISC("Misc")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,6 +157,7 @@ private fun HaloApp(
 ) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
+    BackHandler(enabled = tab == HaloTab.MISC) { tab = HaloTab.SETTINGS }
     var enabled by remember(revision) { mutableStateOf(store.masterEnabled) }
     val appVersion = remember(context) {
         @Suppress("DEPRECATION")
@@ -165,8 +170,33 @@ private fun HaloApp(
             TopAppBar(
                 title = {
                     Column {
-                        Text("HALO", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineMedium)
-                        Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        Text(
+                            when (tab) {
+                                HaloTab.HOME -> "HALO"
+                                HaloTab.MUSIC -> "MUSIC"
+                                HaloTab.APPS -> "NOTIFICATIONS"
+                                HaloTab.SETTINGS -> "SETTINGS"
+                                HaloTab.MISC -> "MISC LAB"
+                            },
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Text(
+                            when (tab) {
+                                HaloTab.HOME -> "YOUR EDGE STUDIO"
+                                HaloTab.MUSIC -> "SOUND-REACTIVE LIGHTING"
+                                HaloTab.APPS -> "PERSONALIZED ALERT EFFECTS"
+                                HaloTab.SETTINGS -> "APP CONTROL"
+                                HaloTab.MISC -> "EXPERIMENTAL EFFECTS"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Muted
+                        )
+                    }
+                },
+                navigationIcon = {
+                    if (tab == HaloTab.MISC) {
+                        TextButton(onClick = { tab = HaloTab.SETTINGS }) { Text("Back") }
                     }
                 },
                 actions = { Text("v" + appVersion, modifier = Modifier.padding(end = 18.dp),
@@ -176,16 +206,15 @@ private fun HaloApp(
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                HaloTab.entries.forEach { item ->
+                HaloTab.entries.filter { it != HaloTab.MISC }.forEach { item ->
                     val image = when (item) {
                         HaloTab.HOME -> Icons.Default.Home
                         HaloTab.MUSIC -> Icons.Default.MusicNote
-                        HaloTab.MISC -> Icons.Default.AutoAwesome
-                        HaloTab.APPS -> Icons.Default.Apps
-                        HaloTab.SETTINGS -> Icons.Default.Settings
+                        HaloTab.APPS -> Icons.Default.Notifications
+                        HaloTab.SETTINGS, HaloTab.MISC -> Icons.Default.Settings
                     }
                     NavigationBarItem(
-                        selected = tab == item,
+                        selected = tab == item || (tab == HaloTab.MISC && item == HaloTab.SETTINGS),
                         onClick = { tab = item },
                         icon = { Icon(image, contentDescription = null) },
                         label = { Text(item.label) }
@@ -202,8 +231,8 @@ private fun HaloApp(
                     .verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Misc Lab", style = MaterialTheme.typography.headlineLarge)
-                Text("Optional creative effects. Independent from your normal notifications, music lighting and Video Ambilight.",
+                Text("Creative Lab", style = MaterialTheme.typography.headlineLarge)
+                Text("Experimental visuals live here, separate from your everyday Music and Notification studios.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MiscPaintedControls()
             }
@@ -217,6 +246,40 @@ private fun HaloApp(
                     HaloTab.MUSIC, HaloTab.MISC -> Unit
                     HaloTab.HOME -> {
                         item {
+                            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text("YOUR STUDIOS",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Bring your screen to life.",
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Music and notifications each have their own live preview and settings.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Muted
+                                )
+                            }
+                        }
+                        item {
+                            FocusStudioCard(
+                                title = "Music lighting",
+                                subtitle = "Beat-reactive edge visualizer",
+                                detail = MusicConfiguration.read(context).mode.title + " · Live preview",
+                                icon = Icons.Default.MusicNote,
+                                accent = Color(0xFFBDA6FF)
+                            ) { tab = HaloTab.MUSIC }
+                        }
+                        item {
+                            FocusStudioCard(
+                                title = "Notifications",
+                                subtitle = "Personalized edge alerts",
+                                detail = store.notificationEdgeDesign.title + " · Per-app effects",
+                                icon = Icons.Default.Notifications,
+                                accent = Color(0xFF81DDC8)
+                            ) { tab = HaloTab.APPS }
+                        }
+                        item {
                             StatusHero(enabled, listenerEnabled && overlayEnabled) { value ->
                                 enabled = value
                                 store.masterEnabled = value
@@ -225,16 +288,6 @@ private fun HaloApp(
                                     PillHaloOverlay.dismiss()
                                 }
                                 HaloNotificationListener.requestPillRefresh()
-                            }
-                        }
-                        item {
-                            SectionCard {
-                                Text("One engine for all effects", style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold)
-                                Text("Music and notifications have independent effects and previews.",
-                                    color = Muted)
-                                Button(onClick = { tab = HaloTab.MUSIC },
-                                    modifier = Modifier.fillMaxWidth()) { Text("Open Edge Studio") }
                             }
                         }
                         item {
@@ -351,6 +404,18 @@ private fun HaloApp(
                         }
                         item {
                             SectionCard {
+                                Text("Creative tools", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Experimental effects are separate from your Music and Notification studios.",
+                                    style = MaterialTheme.typography.bodySmall, color = Muted)
+                                OutlinedButton(
+                                    onClick = { tab = HaloTab.MISC },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Open Misc Lab") }
+                            }
+                        }
+                        item {
+                            SectionCard {
                                 Text("Permissions & privacy", style = MaterialTheme.typography.titleMedium)
                                 Text("Notification events use local app identity and color. No notification message bodies are stored. Music capture remains optional and separate.",
                                     color = Muted)
@@ -362,6 +427,49 @@ private fun HaloApp(
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun FocusStudioCard(
+    title: String,
+    subtitle: String,
+    detail: String,
+    icon: ImageVector,
+    accent: Color,
+    onOpen: () -> Unit
+) {
+    Card(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.11f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(54.dp)
+                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent,
+                    modifier = Modifier.size(28.dp))
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text(detail, style = MaterialTheme.typography.labelMedium,
+                    color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text("›", style = MaterialTheme.typography.headlineMedium, color = accent)
         }
     }
 }
