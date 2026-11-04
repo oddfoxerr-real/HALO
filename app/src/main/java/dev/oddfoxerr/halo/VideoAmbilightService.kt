@@ -202,7 +202,9 @@ class VideoAmbilightService : Service() {
             @Suppress("DEPRECATION")
             display.getRealMetrics(dm)
             densityDpi = dm.densityDpi
-            val divisor = if (isScreenOverlay) 2 else if (isPainted) 3 else 6
+            val divisor = PaintCaptureSizing.divisorFor(
+                dm.widthPixels, dm.heightPixels, isScreenOverlay, isPainted
+            )
             width = (dm.widthPixels / divisor).coerceAtLeast(96)
             height = (dm.heightPixels / divisor).coerceAtLeast(96)
             // Attach the ordinary transparent View only after valid pixels
@@ -477,7 +479,9 @@ class VideoAmbilightService : Service() {
 
     private fun resize(fullWidth: Int, fullHeight: Int) {
         if (stopping || virtualDisplay == null || fullWidth < 16 || fullHeight < 16) return
-        val divisor = if (isScreenOverlay) 2 else if (isPainted) 3 else 6
+        val divisor = PaintCaptureSizing.divisorFor(
+            fullWidth, fullHeight, isScreenOverlay, isPainted
+        )
         val newWidth = (fullWidth / divisor).coerceAtLeast(96)
         val newHeight = (fullHeight / divisor).coerceAtLeast(96)
         if (newWidth == width && newHeight == height) return
