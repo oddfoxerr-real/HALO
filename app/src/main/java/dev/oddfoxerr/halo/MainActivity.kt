@@ -150,6 +150,10 @@ private fun HaloApp(
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
     var enabled by remember(revision) { mutableStateOf(store.masterEnabled) }
+    val appVersion = remember(context) {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -161,7 +165,7 @@ private fun HaloApp(
                         Text("EDGE EFFECT STUDIO", style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 },
-                actions = { Text("v0.20.19", modifier = Modifier.padding(end = 18.dp),
+                actions = { Text("v" + appVersion, modifier = Modifier.padding(end = 18.dp),
                     color = MaterialTheme.colorScheme.primary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
