@@ -318,6 +318,9 @@ class VideoAmbilightService : Service() {
         val drawing = PaintShaderView(applicationContext).apply {
             configure(paintSettings)
             setFullBleed(true)
+            onShaderFailure = { reason ->
+                statusValue.value = "GPU paint shader failed · " + reason.take(120)
+            }
             visibility = View.INVISIBLE
         }
         val params = WindowManager.LayoutParams(

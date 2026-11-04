@@ -37,53 +37,140 @@ uniform float2 resolution;
 uniform float brushSize;
 uniform float strength;
 uniform float relief;
+uniform float paintStyle;
 
 float luminance(half3 c) {
     return dot(float3(c), float3(0.2126, 0.7152, 0.0722));
 }
 
-float hash21(float2 x) {
-    return fract(sin(dot(x, float2(127.1, 311.7))) * 43758.5453);
+float hash21(float2 p) {
+    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
 }
 
+float2 bounds(float2 p, float2 hi) {
+    return clamp(p, float2(0.5, 0.5), hi);
+}
+
+/**
+ * Distinct physical brush dabs, not a blurred or displaced screenshot.
+ * Strokes have staggered positions, directional flow, irregular tapered
+ * silhouettes, bristle separation and raised-edge lighting.
+ */
 half4 main(float2 coordinate) {
-    float2 lo = float2(0.5, 0.5);
-    float2 hi = max(lo, resolution - lo);
-    float2 p = clamp(coordinate, lo, hi);
-    half4 base = source.eval(p);
-    float span = max(1.0, brushSize * 1.5);
-    float gx = luminance(source.eval(clamp(p + float2(span, 0.0), lo, hi)).rgb)
-             - luminance(source.eval(clamp(p - float2(span, 0.0), lo, hi)).rgb);
-    float gy = luminance(source.eval(clamp(p + float2(0.0, span), lo, hi)).rgb)
-             - luminance(source.eval(clamp(p - float2(0.0, span), lo, hi)).rgb);
-    float2 edge = float2(-gy, gx);
-    float weight = length(edge);
-    float cellSize = max(4.0, brushSize * 11.0);
-    float angle = hash21(floor(p / cellSize)) * 6.2831853;
-    float2 tangent = weight > 0.018
-        ? edge / weight
-        : float2(cos(angle), sin(angle));
-    float phase = hash21(floor((p + float2(7.0, 19.0)) / cellSize));
-    float stroke = sin(dot(p, tangent) / max(2.0, brushSize * 3.8)
-                       + phase * 6.2831853);
-    float offset = stroke * brushSize * 2.3;
-    float2 displacement = tangent * offset;
-    float2 p1 = clamp(p + displacement, lo, hi);
-    float2 p2 = clamp(p + displacement + tangent * span * 1.8, lo, hi);
-    float2 p3 = clamp(p + displacement - tangent * span * 1.8, lo, hi);
-    float2 p4 = clamp(p + displacement + tangent * span * 3.4, lo, hi);
-    float2 p5 = clamp(p + displacement - tangent * span * 3.4, lo, hi);
-    half3 pigment = source.eval(p1).rgb * 0.39
-                  + source.eval(p2).rgb * 0.23
-                  + source.eval(p3).rgb * 0.23
-                  + source.eval(p4).rgb * 0.075
-                  + source.eval(p5).rgb * 0.075;
-    float smallGrain = hash21(floor(p / max(1.5, brushSize * 1.7)));
-    float height = (stroke * 0.067 + (smallGrain - 0.5) * 0.040)
-                   * relief;
-    half3 lifted = clamp(pigment * half(1.0 + height),
-                         half3(0.0), half3(1.0));
-    return half4(mix(base.rgb, lifted, half(strength)), base.a);
+    float2 hi = max(float2(0.5, 0.5), resolution - float2(0.5, 0.5));
+    float2 p = bounds(coordinate, hi);
+    half4 original = source.eval(p);
+
+    float radius = max(3.0, brushSize * 5.0);
+    half3 underpainting =
+        source.eval(p).rgb * 0.30
+        + source.eval(bounds(p + float2(radius, 0.0), hi)).rgb * 0.175
+        + source.eval(bounds(p - float2(radius, 0.0), hi)).rgb * 0.175
+        + source.eval(bounds(p + float2(0.0, radius), hi)).rgb * 0.175
+        + source.eval(bounds(p - float2(0.0, radius), hi)).rgb * 0.175;
+
+    float gx = luminance(source.eval(bounds(p + float2(radius, 0.0), hi)).rgb)
+             - luminance(source.eval(bounds(p - float2(radius, 0.0), hi)).rgb);
+    float gy = luminance(source.eval(bounds(p + float2(0.0, radius), hi)).rgb)
+             - luminance(source.eval(bounds(p - float2(0.0, radius), hi)).rgb);
+    float2 perpendicular = float2(-gy, gx);
+    float edgeAmount = length(perpendicular);
+    float2 flow = edgeAmount > 0.001
+        ? perpendicular / edgeAmount : float2(1.0, 0.0);
+
+    // At full display scale, one visible oil stroke occupies approximately
+    // 30-100 physical pixels, rather than a single pixel-art block.
+    float gridSize = max(12.0, brushSize * 19.0);
+    float2 tile = floor(p / gridSize);
+    float alignment = clamp(edgeAmount * 9.0, 0.0, 0.84);
+    float watercolor = 1.0 - step(0.5, abs(paintStyle - 1.0));
+    float ink = step(1.5, paintStyle);
+
+    half3 accumulatedPigment = half3(0.0);
+    float accumulatedCoverage = 0.0;
+    float accumulatedRelief = 0.0;
+
+    for (int iy = -1; iy <= 1; iy++) {
+        for (int ix = -1; ix <= 1; ix++) {
+            float2 cell = tile + float2(float(ix), float(iy));
+            float seed = hash21(cell + float2(5.37, 14.91));
+            float seed2 = hash21(cell + float2(41.71, 9.52));
+            float seed3 = hash21(cell + float2(2.91, 37.62));
+
+            // Jitter and rotation hide the sampling grid entirely.
+            float2 center = (cell + float2(0.5, 0.5) +
+                float2(seed - 0.5, seed2 - 0.5) * 0.54) * gridSize;
+            float angle = seed3 * 6.2831853;
+            float2 randomAxis = float2(cos(angle), sin(angle));
+            float2 axis = normalize(mix(randomAxis, flow, alignment));
+            float2 side = float2(-axis.y, axis.x);
+            float2 displacement = p - center;
+
+            float halfLength = gridSize * (0.82 + 0.60 * seed);
+            float halfWidth = gridSize * (0.27 + 0.16 * seed2);
+            float u = dot(displacement, axis) / halfLength;
+            float v = dot(displacement, side) / halfWidth;
+            float silhouette = u*u + v*v*(0.81 + 0.32*abs(u));
+
+            // Uneven brush tips + split bristles are stable across frames.
+            float bristles =
+                sin(v * 27.0 + sin(u * 13.0 + seed * 7.0) * 2.3) * 0.12
+                + sin(v * 63.0 - u * 17.0 + seed2 * 12.0) * 0.051;
+            float brokenEdge =
+                0.073 * sin(v * 15.0 + u * 11.0 + seed3 * 5.0)
+                + 0.047 * sin(v * 38.0 - u * 25.0 + seed * 8.0);
+            float silhouetteMask =
+                1.0 - smoothstep(0.70, 1.05,
+                    silhouette + brokenEdge + bristles * 0.33);
+            float strokeAlpha = silhouetteMask *
+                (1.0 - watercolor * 0.24);
+            if (strokeAlpha > 0.003) {
+                float2 pigmentPoint = bounds(center + axis * halfLength * 0.12, hi);
+                half3 color = source.eval(pigmentPoint).rgb;
+                float pigmentShift = (seed2 - 0.5) * 0.15 +
+                    (seed3 - 0.5) * 0.08;
+                color = clamp(color * half(1.0 + pigmentShift),
+                              half3(0.0), half3(1.0));
+
+                float upperRidge = smoothstep(0.51, 0.87, silhouette)
+                    * (1.0 - smoothstep(0.89, 1.13, silhouette));
+                float paintHeight =
+                    bristles * 0.94 + (0.5 - v) * 0.12 +
+                    upperRidge * 0.28 + (seed - 0.5) * 0.09;
+                float lighting = 1.0 + relief *
+                    paintHeight * (0.37 - watercolor * 0.23 + ink * 0.08);
+                color = clamp(color * half(lighting),
+                              half3(0.0), half3(1.0));
+                if (ink > 0.5) {
+                    color *= half(0.80 + 0.15 *
+                        (1.0 - smoothstep(0.53, 1.02, silhouette)));
+                }
+                accumulatedPigment += color * half(strokeAlpha);
+                accumulatedCoverage += strokeAlpha;
+                accumulatedRelief += paintHeight * strokeAlpha;
+            }
+        }
+    }
+
+    float coverage = 1.0 - exp(-accumulatedCoverage * 2.6);
+    half3 strokeColor = accumulatedPigment /
+        half(max(0.001, accumulatedCoverage));
+    // A softer painted undercoat fills gaps between the raised oil dabs.
+    half3 painted = mix(underpainting, strokeColor, half(coverage));
+
+    float localHeight = accumulatedRelief /
+        max(0.001, accumulatedCoverage);
+    float grain = hash21(floor(p / max(1.8, brushSize * 1.4)) +
+        float2(15.7, 4.3)) - 0.5;
+    float surfaceLight = 1.0 + relief * (
+        localHeight * 0.15 + grain * (0.075 - watercolor * 0.038));
+    painted = clamp(painted * half(surfaceLight),
+                    half3(0.0), half3(1.0));
+
+    // Nearly full-strength painting is intentional: the previous shader
+    // retained most of the original pixels and looked unfiltered.
+    float mixAmount = clamp(strength * 1.07, 0.0, 1.0);
+    return half4(mix(original.rgb, painted, half(mixAmount)), original.a);
 }
 """
     }
@@ -93,6 +180,7 @@ half4 main(float2 coordinate) {
     private var sourceBitmap: Bitmap? = null
     private var gpuShader: RuntimeShader? = null
     private var failedGpuShader = false
+    var onShaderFailure: ((String) -> Unit)? = null
     private var preferences = PaintedScreenPreferences()
     private var fullBleed = false
 
@@ -165,12 +253,14 @@ half4 main(float2 coordinate) {
                     active.setFloatUniform("brushSize", preferences.brushSize.coerceIn(.65f, 2.3f))
                     active.setFloatUniform("strength", preferences.strength.coerceIn(.35f, 1f))
                     active.setFloatUniform("relief", preferences.relief.coerceIn(.15f, 1.6f))
+                    active.setFloatUniform("paintStyle", preferences.style.ordinal.toFloat())
                     framePaint.shader = active
                     canvas.drawRect(dest, framePaint)
                     return
                 } catch (error: RuntimeException) {
                     failedGpuShader = true
                     Log.e("HALO-PaintGPU", "AGSL shader failed; source kept visible", error)
+                    onShaderFailure?.invoke(error.message ?: "GPU could not compile paint strokes")
                 } finally {
                     framePaint.shader = null
                 }

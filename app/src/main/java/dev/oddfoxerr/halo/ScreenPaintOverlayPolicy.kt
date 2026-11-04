@@ -3,7 +3,7 @@ package dev.oddfoxerr.halo
 /** Pure policy for a visually safe Android 12+ pass-through paint window. */
 internal object ScreenPaintOverlayPolicy {
     const val MAX_TOUCH_THROUGH_ALPHA = 0.79f
-    const val PREFERRED_ALPHA = 0.68f
+    const val PREFERRED_ALPHA = 0.76f
 
     fun shouldDisplayFrame(
         hasUsableFrame: Boolean,
