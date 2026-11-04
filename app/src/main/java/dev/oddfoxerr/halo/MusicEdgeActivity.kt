@@ -58,7 +58,7 @@ class MusicEdgeActivity : ComponentActivity() {
     }
 }
 
-private enum class MusicPanel(val label: String) { DESIGNS("Designs"), TUNE("Tune"), VIDEO("Video"), RULES("Playback") }
+private enum class MusicPanel(val label: String) { DESIGNS("Look"), TUNE("Motion"), VIDEO("Video"), RULES("Rules") }
 private data class MusicPalette(val name: String, val first: Long, val second: Long)
 private val palettes = listOf(
     MusicPalette("Aurora", 0xFF9A7BFF, 0xFF52E0CB),
@@ -88,6 +88,9 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     val latest by rememberUpdatedState(settings)
     val runtime by MusicRuntime.state.collectAsState()
     var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
+    var colorsExpanded by remember { mutableStateOf(false) }
+    var advancedTuningExpanded by remember { mutableStateOf(false) }
+    var showSignalDetails by remember { mutableStateOf(false) }
     var designGroup by remember { mutableStateOf<EdgeGroup?>(settings.mode.group) }
     var demo by remember { mutableStateOf(true) }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
@@ -160,8 +163,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     }
     Column(modifier.background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())
         .padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Edge Visuals", style = MaterialTheme.typography.headlineLarge)
-        Text("One GPU effect for both music and notifications.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Live preview", style = MaterialTheme.typography.titleMedium)
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -173,16 +175,21 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                     }
                 }
                 if (runtime.active) {
-                    Text("Captured audio · ${(runtime.signal * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    LinearProgressIndicator(progress = { runtime.signal.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth())
-                    Text("Bass energy · ${(runtime.bass * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    LinearProgressIndicator(progress = { runtime.bass.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth())
+                    TextButton(onClick = { showSignalDetails = !showSignalDetails }) {
+                        Text(if (showSignalDetails) "Hide signal details" else "Show signal details")
+                    }
+                    if (showSignalDetails) {
+                        Text("Captured audio · ${(runtime.signal * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LinearProgressIndicator(progress = { runtime.signal.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth())
+                        Text("Bass energy · ${(runtime.bass * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LinearProgressIndicator(progress = { runtime.bass.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth())
+                    }
                 }
                 Button(onClick = {
                     if (runtime.active) {
@@ -195,7 +202,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Box(Modifier.width(204.dp).height(370.dp).background(Color.Black, RoundedCornerShape(26.dp))) {
+            Box(Modifier.width(180.dp).height(322.dp).background(Color.Black, RoundedCornerShape(24.dp))) {
                 AndroidView(factory = { preview }, update = { it.configure(settings); it.configureNotch(notch) }, modifier = Modifier.fillMaxSize())
                 Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("HALO", style = MaterialTheme.typography.titleLarge, color = Color(0xFFEEE9FA))
@@ -205,10 +212,13 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 }
             }
         }
-        Text("Renderer · $rendererStatus", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { demo = !demo }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (demo) "Stop design preview" else "Play design preview")
+        if (rendererStatus.contains("error", ignoreCase = true) ||
+            rendererStatus.contains("fail", ignoreCase = true)) {
+            Text("Renderer · $rendererStatus", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error)
+        }
+        TextButton(onClick = { demo = !demo }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (demo) "Pause preview" else "Play preview")
         }
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             MusicPanel.entries.forEachIndexed { index, value ->
@@ -219,9 +229,6 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("Organized by animation type. All 59 effects are still available; choosing a category only filters the gallery.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -239,9 +246,6 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                Text("${EdgeCatalogue.visible(designGroup).size} designs · Selected: ${settings.mode.title}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // Only visible thumbnails create Android GPU views; All does not
                 // eagerly allocate 59 shader instances or exhaust the UI thread.
                 key(designGroup) {
@@ -258,6 +262,11 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                OutlinedButton(onClick = { colorsExpanded = !colorsExpanded },
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(if (colorsExpanded) "Hide color editor" else "Customize colors")
+                }
+                if (colorsExpanded) {
                 Text("Color Studio", style = MaterialTheme.typography.titleMedium)
                 Text("Pick any two colors with precise hue, saturation, brightness and HEX editing, or apply a ready-made gradient.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -279,6 +288,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 ColorStudio(settings.color, settings.accent) { first, second ->
                     save(settings.copy(color = first, accent = second, colorSource = EdgeColorSource.MANUAL))
                 }
+                }
                 MusicToggle("Use album colors",
                     "Use a balanced two-color palette from the dominant artwork tones. The original manual gradient is saved.",
                     settings.colorSource == EdgeColorSource.ALBUM_ART) {
@@ -290,19 +300,21 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 MusicSlider("Dynamic force", settings.dynamicForce, .6f..3.5f, "×") {
                     save(settings.copy(dynamicForce = it))
                 }
-                Text("Bass controls reach and impact. Mids lift the light, and high notes sharpen detail. Minimal designs grow along the edge as you increase the force.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MusicSlider("Beat sensitivity", settings.sensitivity, .5f..5f, "×") {
                     save(settings.copy(sensitivity = it))
                 }
+                MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
+                OutlinedButton(onClick = { advancedTuningExpanded = !advancedTuningExpanded },
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(if (advancedTuningExpanded) "Hide advanced controls" else "Advanced motion & screen fit")
+                }
+                if (advancedTuningExpanded) {
                 MusicSlider("Beat impact", settings.beatIntensity, .5f..3f, "×") {
                     save(settings.copy(beatIntensity = it))
                 }
                 MusicSlider("Motion speed", settings.speed, .25f..3f, "×") {
                     save(settings.copy(speed = it))
                 }
-                MusicSlider("Thickness", settings.thickness, .6f..3f, "×") { save(settings.copy(thickness = it)) }
                 MusicSlider("Brightness", settings.brightness, .2f..1f, "") { save(settings.copy(brightness = it)) }
                 MusicSlider("Glow", settings.glow, 0f..1f, "") { save(settings.copy(glow = it)) }
                 MusicSlider("Light spread", settings.spread, .3f..2.8f, "×") { save(settings.copy(spread = it)) }
@@ -356,6 +368,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                     drawTop = true, drawBottom = true, drawLeft = true, drawRight = true,
                     corner = 32f, thickness = 1f, brightness = 1f, glow = .75f)) },
                     modifier = Modifier.fillMaxWidth()) { Text("Reset edge calibration") }
+                }
             }
             MusicPanel.VIDEO -> {
                 VideoAmbilightControls()
@@ -398,8 +411,6 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Enable notification access")
             }
         }
-        Text("For YouTube screen-color matching, use the Video tab instead of Music lighting. Start music lighting to run the foreground overlay beyond HALO's interface. The design preview stops when you leave this page. When Android blocks FFT capture, HALO keeps a gentle fallback animation without pretending it is beat-synced. Samsung's protected status icons, lock screen and AOD cannot be replaced.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
     }
     if (chooseSources) SourcePicker(settings.allowedSources, { save(settings.copy(allowedSources = it)) }, { chooseSources = false })
@@ -427,16 +438,15 @@ private fun DesignTile(
             AndroidView(
                 factory = { EdgeDesignPreview(it) },
                 update = { it.configure(mode, first, second) },
-                modifier = Modifier.width(52.dp).height(92.dp)
+                modifier = Modifier.width(46.dp).height(78.dp)
                     .background(Color.Black, RoundedCornerShape(12.dp))
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(mode.title, style = MaterialTheme.typography.titleSmall)
-                Text(mode.description, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(if (selected) "Selected" else "Tap to preview",
+                Text(if (selected) "Selected" else mode.group.title,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary)
+                    color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
