@@ -9,7 +9,9 @@ enum class EdgeMode(val title: String, val shaderId: Int, val description: Strin
     ELECTRIC_ARCS("Electric Arcs", 0, "Broken electric filaments with sharp, energetic movement."),
     TWIN_PULSE("Twin Pulse", 1, "Two slim side lights stretch from the centre with the bass."),
     LIGHT_BEADS("Light Beads", 2, "Evenly spaced points of light with a soft, musical shimmer."),
-    CORNER_TRACE("Corner Trace", 3, "Four rounded corner accents extend and settle with each beat.")
+    CORNER_TRACE("Corner Trace", 3, "Four rounded corner accents extend and settle with each beat."),
+    BASS_RIBBON("Bass Ribbon", 4, "Two clean light blades surge on bass then snap back."),
+    KICK_RAIL("Kick Rail", 5, "A minimal lower rail that punches outward on kick drums.")
 }
 
 enum class NotificationEdgeMode(val title: String) {

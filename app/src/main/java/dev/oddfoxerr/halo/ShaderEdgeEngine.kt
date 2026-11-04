@@ -41,7 +41,8 @@ internal class ShaderEdgeEngine {
         videoWidthPx: Float = 30f, videoIntensity: Float = .58f,
         dynamicLow: Float = 0f, dynamicMid: Float = 0f,
         dynamicHigh: Float = 0f, dynamicHit: Float = 0f,
-        dynamicForce: Float = 2.4f, pixelDensity: Float = 1f): Boolean {
+        dynamicForce: Float = 2.4f, pixelDensity: Float = 1f,
+        edgePresence: Float = 1f): Boolean {
         if (disabled || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         return try {
             val runtime = shader ?: RuntimeShader(SOURCE).also { shader = it }
@@ -68,6 +69,7 @@ internal class ShaderEdgeEngine {
                 dynamicLow.coerceIn(0f, 1f), dynamicMid.coerceIn(0f, 1f),
                 dynamicHigh.coerceIn(0f, 1f), dynamicHit.coerceIn(0f, 1.5f))
             runtime.setFloatUniform("dynamicForce", dynamicForce.coerceIn(.6f, 3.5f))
+            runtime.setFloatUniform("edgePresence", edgePresence.coerceIn(0f, 1f))
             if (video != null) {
                 val sampledFrame = videoFrame ?: bounds
                 runtime.setFloatUniform("videoFrame",
@@ -133,6 +135,7 @@ internal class ShaderEdgeEngine {
             uniform float ambientMotion;
             uniform float4 musicDynamics;
             uniform float dynamicForce;
+            uniform float edgePresence;
             // Capture replaces ONLY the colors. Shape, particles, fluid movement, glow
             // and timing remain controlled by the selected animation.
             uniform int videoMode;
@@ -332,7 +335,7 @@ internal class ShaderEdgeEngine {
                 float mid=clamp(musicDynamics.y*dynamicForce*.65,0.0,1.0);
                 float high=clamp(musicDynamics.z*dynamicForce*.65,0.0,1.0);
                 float hit=clamp((musicDynamics.w+attack*.25)*dynamicForce*.55,0.0,1.0);
-                float level=clamp(max(max(low,mid),high)*.8+hit*.35,0.0,1.0);
+                float level=clamp(.56*low+.27*mid+.12*high+.94*hit,0.0,1.0);
                 float gain=level;
                 // A visible, gentle no-capture mode remains explicitly distinct from
                 // beat response. No timer-generated beats enter the music envelopes.
@@ -379,6 +382,37 @@ internal class ShaderEdgeEngine {
                     weight=.40+.38*local+.22*sheen;
                     highlight=sheen*high*.26;
                     tint=.5-.5*cos(TAU*beadU);
+                } else if(design==4) {
+                    // Bass Ribbon: two slim mirrored blades running along the
+                    // sides. Their length is driven by low-frequency energy.
+                    float right=(h+arc+v*.5)/perimeter;
+                    float left=(2.0*h+3.0*arc+1.5*v)/perimeter;
+                    float along=min(periodicDistance(u,right),
+                        periodicDistance(u,left))*perimeter;
+                    float halfLength=v*clamp((.07+.34*low+.18*hit)*reach,.045,.55);
+                    float breathing=sin(along/max(12.0*unit,1.0)*2.8
+                        -seconds*.62)*unit*(.3+1.05*mid);
+                    float blade=line*(.68+.55*low+.42*hit);
+                    shapeDistance=length(float2(max(along-halfLength,0.0),
+                        d-breathing))-blade;
+                    highlight=gaussian(along-halfLength,max(2.0*unit,blade*3.2))*
+                        (.46*hit+.18*high);
+                    weight=.52+.24*low+.38*hit;
+                    tint=.5-.5*cos(TAU*(u+seconds*.018));
+                } else if(design==5) {
+                    // Kick Rail: one precise strip anchored to the lower edge.
+                    // Its endpoints punch outward on each real percussive hit.
+                    float bottom=(1.5*h+2.0*arc+v)/perimeter;
+                    float along=periodicDistance(u,bottom)*perimeter;
+                    float halfLength=h*clamp((.045+.25*low+.16*hit)*reach,
+                        .025,.42);
+                    float rail=line*(.66+.58*hit+.23*low);
+                    shapeDistance=length(float2(max(along-halfLength,0.0),d))
+                        -rail;
+                    highlight=gaussian(along-halfLength,max(2.5*unit,rail*3.5))
+                        *(.83*hit+.12*high);
+                    weight=.42+.28*low+.51*hit;
+                    tint=.5-.5*cos(TAU*(u+seconds*.008));
                 } else {
                     // Four corner brackets, anchored to the actual rounded arcs.
                     // No orbit or random deformation: the straight ends grow on bass.
@@ -398,7 +432,9 @@ internal class ShaderEdgeEngine {
                 }
                 float coverage=1.0-smoothstep(-.65,.85,shapeDistance);
                 float bloom=gaussian(max(shapeDistance,0.0),line*2.0+unit*1.5);
-                float alpha=(coverage*.80+bloom*.17*glow)*weight*brightness*gain;
+                float punch=clamp(.70+.28*low+.34*hit,0.0,1.30);
+                float alpha=(coverage*.82+bloom*.16*glow)*weight*
+                    brightness*gain*punch*edgePresence;
                 alpha*=1.0-smoothstep(limit*.65,limit,abs(d));
                 float3 base=mix(first,second,tint);
                 if(videoMode==1) {
@@ -513,6 +549,7 @@ internal class ShaderEdgeEngine {
                     aura*(.10+.35*glow)*auraResponse+whiteSpark*.28)
                     *brightness*musicalGain,0.0,.96);
                 float edgeFade=110.0;
+                a*=edgePresence;
                 a*=1.0-smoothstep(40.0*max(spread,.3),edgeFade*max(spread,.3),abs(d));
                 if(videoMode==1) {
                     // Even when the user explicitly opts into an animated design,
