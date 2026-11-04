@@ -653,10 +653,10 @@ internal class ShaderEdgeEngine {
                             weight=.47+.08*wave+.18*low;
                         } else if(variant==1) {
                             shapeDistance=abs(d)-line*(.60+.08*low);
-                            weight=.38+.19*wave+.14*low;
+                            weight=.36+.22*wave+.24*low+.06*hit;
                         } else if(variant==2) {
                             shapeDistance=abs(d)-line*(.50+.07*wave);
-                            weight=.54+.12*wave+.11*low;
+                            weight=.41+.23*wave+.24*low;
                         } else if(variant==3) {
                             shapeDistance=min(abs(d-line*.65),abs(d+line*.65))
                                 -line*.42;
@@ -674,72 +674,75 @@ internal class ShaderEdgeEngine {
                         // Six true music accents. Kicks and bands are measured
                         // from Android's FFT, never from a fake metronome.
                         if(variant==0) {
-                            shapeDistance=abs(d)-line*(.40+.25*low);
-                            weight=.32+.40*low+.11*hit;
+                            shapeDistance=abs(d)-line*(.28+.64*low+.20*hit);
+                            weight=.21+.69*low+.22*hit;
                         } else if(variant==1) {
-                            shapeDistance=abs(d)-line*(.69-.19*hit);
-                            weight=.40+.20*low+.25*hit;
+                            shapeDistance=abs(d)-line*(.77-.33*hit);
+                            weight=.30+.26*low+.58*hit;
                         } else if(variant==2) {
                             shapeDistance=abs(d)-line*.48;
-                            highlight=.31*hit;
-                            weight=.40+.43*hit+.08*low;
+                            highlight=.58*hit;
+                            weight=.25+.76*hit+.14*low;
                         } else if(variant==3) {
                             shapeDistance=abs(d)-line*(.47+.09*mid);
-                            weight=.30+.37*mid+.10*low;
+                            weight=.22+.71*mid+.16*low;
                         } else if(variant==4) {
                             sheen=pow(.5+.5*cos(TAU*(u*6.0-seconds*.024)),10.0);
                             shapeDistance=abs(d)-line*.43;
                             highlight=.20*high*sheen;
-                            weight=.41+.24*high*sheen+.12*low;
+                            weight=.29+.58*high*sheen+.17*low;
                         } else {
                             shapeDistance=abs(d)-line*.50;
                             float spectrum=harmonic(u);
-                            weight=.41+.21*low+.24*spectrum;
+                            weight=.28+.20*low+.53*spectrum+.09*hit;
                             tint=.25+.50*clamp(spectrum,.0,1.0);
                         }
                     } else if(family==3) {
                         // Six extremely subtle moving accents, always attached
                         // to a continuous border; never a roaming bright blob.
                         shapeDistance=abs(d)-line*.48;
-                        float head=fract(seconds*.018);
+                        float head=fract(seconds*(.072+.020*low));
                         float along=0.0;
                         if(variant==0) {
                             along=periodicDistance(u,head)*perimeter;
-                            sheen=gaussian(along,12.0*unit);
+                            sheen=gaussian(along,38.0*unit);
                         } else if(variant==1) {
                             along=min(periodicDistance(u,head),
                                 periodicDistance(u,1.0-head))*perimeter;
-                            sheen=gaussian(along,10.0*unit);
+                            sheen=gaussian(along,28.0*unit);
                         } else if(variant==2) {
-                            float corner=abs(sin(TAU*(u*2.0-seconds*.027)));
+                            float corner=abs(sin(TAU*(u*2.0-seconds*.095)));
                             sheen=pow(corner,12.0)*.72;
                         } else if(variant==3) {
                             float yy=clamp((px.y-frame.y)/
                                 max(1.0,frame.w-frame.y),0.0,1.0);
-                            sheen=gaussian(yy-fract(seconds*.09),.095);
+                            sheen=gaussian(yy-fract(seconds*.17),.14);
                         } else if(variant==4) {
-                            sheen=.5+.5*sin(TAU*(u*5.0-seconds*.04));
-                            shapeDistance=abs(d)-line*(.40+.085*sheen);
+                            sheen=.5+.5*sin(TAU*(u*5.0-seconds*.13));
+                            shapeDistance=abs(d-unit*sheen*(.35+1.2*low))
+                                -line*(.40+.16*sheen);
                         } else {
                             along=periodicDistance(u,head)*perimeter;
-                            sheen=gaussian(along,27.0*unit);
+                            sheen=gaussian(along,74.0*unit);
                         }
-                        weight=.43+.11*low+.21*sheen;
-                        highlight=.11*sheen+.05*high;
+                        weight=.29+.16*low+.49*sheen+.17*hit;
+                        highlight=.30*sheen+.08*high;
                     } else {
                         // Fine micro-patterns. Dashes / beads stay genuinely
                         // small even at phone resolution and around camera cutouts.
-                        float spacing=compact>.5 ? 5.0*unit : 9.0*unit;
-                        float count=clamp(floor(perimeter/spacing),8.0,500.0);
-                        float cell=abs(fract(u*count)-.5);
-                        float across=(fract(u*count)-.5)*perimeter/count;
+                        float spacing=compact>.5 ? 5.5*unit : 11.0*unit;
+                        float count=clamp(floor(perimeter/spacing),8.0,400.0);
+                        // Slowly traveling microtextures with no hard seam.
+                        float cursor=fract(u*count-seconds*(.20+.16*low));
+                        float cell=abs(cursor-.5);
+                        float across=(cursor-.5)*perimeter/count;
                         if(variant==0) {
-                            shapeDistance=length(float2(across,d))-line*.78;
-                            weight=.55+.16*low;
+                            shapeDistance=length(float2(across,d))-line*(.68+.25*low);
+                            weight=.46+.26*low+.13*hit;
                         } else if(variant==1) {
                             shapeDistance=abs(d)-line*.43;
-                            weight=(1.0-smoothstep(.20,.32,cell))*
-                                (.52+.21*low);
+                            weight=(1.0-smoothstep(.19,.34,cell))*
+                                (.48+.31*low+.10*hit);
                         } else if(variant==2) {
                             shapeDistance=abs(d)-line*.41;
                             weight=(.32+.68*(1.0-smoothstep(.06,.18,cell)))*
@@ -754,9 +757,9 @@ internal class ShaderEdgeEngine {
                             highlight=.08+.06*high;
                             weight=.43+.12*low;
                         } else {
-                            shapeDistance=length(float2(across,d))-line*.94;
-                            weight=.43+.14*wave+.21*low;
-                            highlight=.035*high;
+                            shapeDistance=length(float2(across,d))-line*(.75+.28*low);
+                            weight=.42+.23*wave+.32*low+.12*hit;
+                            highlight=.085*high;
                         }
                     }
                 } else if(design==6) {
@@ -771,19 +774,19 @@ internal class ShaderEdgeEngine {
                     // Soft Glow: still a single solid border. A quiet halo
                     // breathes cosmetically; real bass adds a tiny expansion.
                     float breathing=.5+.5*sin(seconds*.88);
-                    shapeDistance=abs(d)-line*(.55+.045*breathing+.09*low);
-                    weight=.59+.055*breathing+.23*low+.08*hit;
+                    shapeDistance=abs(d)-line*(.53+.14*breathing+.17*low);
+                    weight=.43+.22*breathing+.26*low+.12*hit;
                     highlight=.04*breathing+.06*hit;
                     tint=.5-.5*cos(TAU*u);
                 } else if(design==8) {
                     // Accent Sweep: single perimeter stroke and a very small
                     // moving sheen, not a separate light orb or spark shower.
-                    float head=fract(seconds*.033);
+                    float head=fract(seconds*.095);
                     float along=periodicDistance(u,head)*perimeter;
-                    float sheen=gaussian(along,max(14.0*unit,line*8.0));
+                    float sheen=gaussian(along,max(35.0*unit,line*13.0));
                     shapeDistance=abs(d)-line*(.52+.055*low);
-                    weight=.62+.19*low+.09*hit+.12*sheen;
-                    highlight=.13*sheen+.05*hit;
+                    weight=.41+.17*low+.12*hit+.51*sheen;
+                    highlight=.32*sheen+.09*hit;
                     tint=.5-.5*cos(TAU*u);
                 } else if(design==1) {
                     // Two anchored capsules. Low frequencies change their length,
@@ -800,16 +803,17 @@ internal class ShaderEdgeEngine {
                 } else if(design==2) {
                     // Fixed, evenly spaced beads; only their size and luminance
                     // breathe. Integer count closes the seam at every aspect ratio.
-                    float count=compact>.5 ? 12.0 : clamp(floor(perimeter/(15.0*unit)),24.0,320.0);
-                    float cell=floor(u*count);
-                    float beadU=(cell+.5)/count;
-                    float along=(fract(u*count)-.5)*perimeter/count;
+                    float count=compact>.5 ? 12.0 : clamp(floor(perimeter/(16.0*unit)),24.0,280.0);
+                    float moved=u*count-seconds*(.55+.33*low);
+                    float cell=floor(moved);
+                    float beadU=fract((cell+.5+seconds*(.55+.33*low))/count);
+                    float along=(fract(moved)-.5)*perimeter/count;
                     float local=clamp(harmonic(beadU)*dynamicForce*.6,0.0,1.0);
                     float rad=min(perimeter/count*.23,line*(.9+.55*local+.35*high));
                     shapeDistance=length(float2(along,d))-rad;
-                    float sheen=pow(.5+.5*cos(TAU*(beadU-seconds*.025)),6.0);
-                    weight=.40+.38*local+.22*sheen;
-                    highlight=sheen*high*.26;
+                    float sheen=pow(.5+.5*cos(TAU*(beadU-seconds*.10)),6.0);
+                    weight=.28+.46*local+.36*sheen+.10*hit;
+                    highlight=sheen*high*.29;
                     tint=.5-.5*cos(TAU*beadU);
                 } else if(design==4) {
                     // Bass Ribbon: two slim mirrored blades running along the
@@ -820,7 +824,7 @@ internal class ShaderEdgeEngine {
                         periodicDistance(u,left))*perimeter;
                     float halfLength=v*clamp((.07+.34*low+.18*hit)*reach,.045,.55);
                     float breathing=sin(along/max(12.0*unit,1.0)*2.8
-                        -seconds*.62)*unit*(.3+1.05*mid);
+                        -seconds*1.2)*unit*(.4+2.3*mid+1.2*hit);
                     float blade=line*(.68+.55*low+.42*hit);
                     shapeDistance=length(float2(max(along-halfLength,0.0),
                         d-breathing))-blade;
@@ -862,8 +866,8 @@ internal class ShaderEdgeEngine {
                 float coverage=1.0-smoothstep(-.65,.85,shapeDistance);
                 float bloom=gaussian(max(shapeDistance,0.0),line*2.0+unit*1.5);
                 float classic=(design>=6 && design<=38) ? 1.0 : 0.0;
-                // Fine hairline, subtle falloff. Even maximum glow cannot
-                // turn these everyday styles into an intrusive edge field.
+                // A stable readable core plus a small halo. The everyday styles
+                // remain restrained; waves and particles have distinct geometry.
                 float haloWeight=mix(.16,.09,classic);
                 float coreWeight=mix(.82,.86,classic);
                 float punch=clamp(.70+.28*low+.34*hit,0.0,1.30);
