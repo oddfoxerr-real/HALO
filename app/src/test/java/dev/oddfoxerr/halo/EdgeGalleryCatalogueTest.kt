@@ -9,8 +9,8 @@ class EdgeGalleryCatalogueTest {
         val added = EdgeMode.entries.filter { it.shaderId in 9..38 }
         assertEquals(30, added.size)
         assertEquals((9..38).toList(), added.map { it.shaderId }.sorted())
-        assertEquals(39, EdgeMode.entries.size)
-        assertEquals(39, EdgeMode.entries.map { it.shaderId }.distinct().size)
+        assertEquals(47, EdgeMode.entries.size)
+        assertEquals(47, EdgeMode.entries.map { it.shaderId }.distinct().size)
         for (preset in added) {
             assertEquals(preset, EdgeSpectrum.mode(preset.name))
             assertTrue(preset.title.isNotBlank())
