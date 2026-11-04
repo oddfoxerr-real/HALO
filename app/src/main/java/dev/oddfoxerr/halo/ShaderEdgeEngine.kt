@@ -356,7 +356,103 @@ internal class ShaderEdgeEngine {
                 float weight=1.0;
                 float tint=.5-.5*cos(TAU*u);
                 float highlight=0.0;
-                if(design>=9 && design<=38) {
+                if(design>=39 && design<=46) {
+                    // A separate, genuinely moving family. Geometry responds
+                    // to measured FFT bass, mids, highs and real transients.
+                    float kick=clamp(hit*.95+low*.36,0.0,1.3);
+                    float t=seconds;
+                    float drive=.32+.70*low+.45*mid+1.15*hit;
+                    if(design==39) {
+                        // A continuous border shifts inward as bass pressure rises.
+                        float offset=(.5+3.3*low+1.7*hit)*unit;
+                        shapeDistance=abs(d+offset)-line*(.62+.42*kick);
+                        weight=.34+.33*low+.42*hit;
+                        highlight=.14*hit;
+                    } else if(design==40) {
+                        // Mirrored side waves, not a random glowing rectangle.
+                        float right=(h+arc+v*.5)/perimeter;
+                        float left=(2.0*h+3.0*arc+1.5*v)/perimeter;
+                        float along=min(periodicDistance(u,right),
+                            periodicDistance(u,left))*perimeter;
+                        float lengthSide=v*(.11+.34*low+.18*hit);
+                        float bend=sin(along/max(11.0*unit,1.0)*2.0
+                            -t*1.3)*unit*(.8+2.1*low+.8*hit);
+                        shapeDistance=length(float2(max(along-lengthSide,0.0),
+                            d-bend))-line*(.80+.35*kick);
+                        weight=.31+.35*low+.45*hit;
+                        highlight=.12*high;
+                    } else if(design==41) {
+                        // Three separate traveling perimeter highlights.
+                        float head=fract(t*.062*drive);
+                        float near0=periodicDistance(u,head)*perimeter;
+                        float near1=periodicDistance(u,fract(head+.33))*perimeter;
+                        float near2=periodicDistance(u,fract(head+.66))*perimeter;
+                        float trail=max(gaussian(near0,26.0*unit),
+                            max(gaussian(near1,20.0*unit),
+                                gaussian(near2,16.0*unit)));
+                        shapeDistance=abs(d)-line*(.58+.18*kick);
+                        weight=.14+(.31+.55*kick)*trail;
+                        highlight=.30*trail;
+                        tint=fract(u*.85+t*.015);
+                    } else if(design==42) {
+                        // A bass onset illuminates an outward-moving band
+                        // measured along both directions from the lower edge.
+                        float bottom=(1.5*h+2.0*arc+v)/perimeter;
+                        float along=periodicDistance(u,bottom)*perimeter;
+                        float travel=fract(t*.17*drive)*(.5*perimeter);
+                        float pulse=gaussian(along-travel,18.0*unit);
+                        shapeDistance=abs(d)-line*(.50+.33*hit);
+                        weight=.15+.32*low+.57*pulse*hit;
+                        highlight=.39*pulse*hit;
+                    } else if(design==43) {
+                        // Rounded corner brackets extend only on measured beats.
+                        float c0=(h+arc*.5)/perimeter;
+                        float c1=(h+v+arc*1.5)/perimeter;
+                        float c2=(2.0*h+v+arc*2.5)/perimeter;
+                        float c3=(2.0*h+2.0*v+arc*3.5)/perimeter;
+                        float along=min(min(periodicDistance(u,c0),
+                            periodicDistance(u,c1)),
+                            min(periodicDistance(u,c2),periodicDistance(u,c3)))
+                            *perimeter;
+                        float lengthCorner=arc*.25+min(h,v)*(.02+.21*low+.12*hit);
+                        shapeDistance=length(float2(max(along-lengthCorner,0.0),d))
+                            -line*(.74+.27*hit);
+                        weight=.29+.32*low+.47*hit;
+                        highlight=.22*hit;
+                    } else if(design==44) {
+                        // Eight local FFT groups visibly deform the line.
+                        float local=harmonic(u);
+                        float wave=sin(TAU*(u*12.0-t*.075));
+                        float offset=wave*unit*(.65+4.3*local+1.9*hit);
+                        shapeDistance=abs(d-offset)-line*(.53+.15*local);
+                        weight=.27+.44*local+.16*high+.28*hit;
+                        highlight=.08*high;
+                    } else if(design==45) {
+                        // Smooth multi-harmonic flow, no orbiting particles.
+                        float bend=(sin(TAU*(u*4.0-t*.085))*.61+
+                            sin(TAU*(u*9.0+t*.063))*.26+
+                            sin(TAU*(u*16.0-t*.041))*.13)
+                            *unit*(.5+4.4*low+1.8*hit);
+                        shapeDistance=abs(d-bend)-line*(.70+.16*mid);
+                        weight=.34+.25*low+.28*mid+.30*hit;
+                        highlight=.07*high;
+                        tint=.5-.5*cos(TAU*(u-t*.019));
+                    } else {
+                        // Two bouncing side capsules, bass length & treble tips.
+                        float right=(h+arc+v*.5)/perimeter;
+                        float left=(2.0*h+3.0*arc+1.5*v)/perimeter;
+                        float along=min(periodicDistance(u,right),
+                            periodicDistance(u,left))*perimeter;
+                        float halfLength=v*(.04+.33*low+.18*hit);
+                        float bend=unit*sin(along/max(8.0*unit,1.0)
+                            -t*.73)*(1.0+1.4*mid);
+                        shapeDistance=length(float2(max(along-halfLength,0.0),
+                            d-bend))-line*(.72+.38*high);
+                        weight=.21+.30*low+.30*mid+.40*hit;
+                        highlight=gaussian(along-halfLength,
+                            max(2.0*unit,line*3.0))*(.28*high+.19*hit);
+                    }
+                } else if(design>=9 && design<=38) {
                     // Thirty restrained edge materials: one shader, grouped
                     // into real geometric families rather than random particles.
                     // Every variant stays within the existing 20dp edge envelope.
@@ -609,7 +705,7 @@ internal class ShaderEdgeEngine {
                 }
                 float coverage=1.0-smoothstep(-.65,.85,shapeDistance);
                 float bloom=gaussian(max(shapeDistance,0.0),line*2.0+unit*1.5);
-                float classic=(design>=6) ? 1.0 : 0.0;
+                float classic=(design>=6 && design<=38) ? 1.0 : 0.0;
                 // Fine hairline, subtle falloff. Even maximum glow cannot
                 // turn these everyday styles into an intrusive edge field.
                 float haloWeight=mix(.16,.09,classic);

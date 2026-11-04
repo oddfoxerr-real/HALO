@@ -86,7 +86,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     val latest by rememberUpdatedState(settings)
     val runtime by MusicRuntime.state.collectAsState()
     var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
-    var designGroup by remember { mutableStateOf(EdgeGroup.BORDERS) }
+    var designGroup by remember { mutableStateOf(settings.mode.group) }
     var demo by remember { mutableStateOf(true) }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var revision by remember { mutableIntStateOf(0) }
@@ -217,7 +217,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("39 GPU designs · 30 new simple styles. Choose a family below. Your live phone preview stays above.",
+                Text("47 GPU effects: understated borders and stronger music animation. Your live phone preview stays above.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(
@@ -370,7 +370,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
                 Text("Music source and home screen bring the edges back when auto-hide is enabled. Android provides a device-wide mix, so simultaneous apps cannot be isolated.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Notifications take priority", style = MaterialTheme.typography.titleMedium)
-                Text("HALO uses the same GPU animation for notifications. Incoming alerts take priority, then normal playback resumes.",
+                Text("Notifications use their own GPU design, which you select in Alerts. The music style is restored after each notification.",
                     style = MaterialTheme.typography.bodyMedium)
             }
         }
