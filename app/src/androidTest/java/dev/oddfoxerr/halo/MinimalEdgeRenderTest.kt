@@ -23,6 +23,8 @@ import org.junit.runner.RunWith
 /** Exercise pixels from Android's hardware renderer, not just shader compilation. */
 @RunWith(AndroidJUnit4::class)
 class MinimalEdgeRenderTest {
+    private val sharedEngine = ShaderEdgeEngine()
+
     @Test fun minimalMaterialsStayAtTheEdgeAndReactToTheSignal() {
         assumeTrue(Build.VERSION.SDK_INT >= 33)
         for (mode in EdgeMode.entries.filter { it != EdgeMode.ELECTRIC_ARCS }) {
@@ -84,7 +86,7 @@ class MinimalEdgeRenderTest {
             val bounds = if (compact) RectF(WIDTH / 2f - 24f, HEIGHT / 2f - 24f,
                 WIDTH / 2f + 24f, HEIGHT / 2f + 24f)
                 else RectF(6f, 6f, WIDTH - 6f, HEIGHT - 6f)
-            val rendered = ShaderEdgeEngine().render(canvas, WIDTH, HEIGHT, bounds,
+            val rendered = sharedEngine.render(canvas, WIDTH, HEIGHT, bounds,
                 if (compact) 24f else 28f, mode,
                 FloatArray(EdgeSpectrum.BAND_COUNT) { level }, level, 0f, seconds,
                 1f, 1f, .75f, 1f, 0xFF4CAEFF.toInt(), 0xFFB7F5FF.toInt(),

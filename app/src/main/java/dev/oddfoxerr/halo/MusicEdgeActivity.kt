@@ -86,6 +86,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     val latest by rememberUpdatedState(settings)
     val runtime by MusicRuntime.state.collectAsState()
     var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
+    var designGroup by remember { mutableStateOf(EdgeGroup.BORDERS) }
     var demo by remember { mutableStateOf(true) }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var revision by remember { mutableIntStateOf(0) }
@@ -216,12 +217,22 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("Everyday borders first: one clean line around your screen, with just a little movement. More energetic options remain available below.",
+                Text("39 GPU designs · 30 new simple styles. Choose a family below. Your live phone preview stays above.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                EdgeMode.entries.sortedBy { mode ->
-                    if (mode.shaderId >= 6) mode.shaderId - 6 else mode.shaderId + 3
-                }.forEach { design ->
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EdgeGroup.entries.forEach { family ->
+                        FilterChip(
+                            selected = designGroup == family,
+                            onClick = { designGroup = family },
+                            label = { Text(family.title) }
+                        )
+                    }
+                }
+                EdgeMode.entries.filter { it.group == designGroup }.forEach { design ->
                     DesignTile(design, settings.mode == design, settings.color, settings.accent,
                         Modifier.fillMaxWidth()) {
                         save(settings.copy(mode = design))
