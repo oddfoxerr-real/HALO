@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.media.projection.MediaProjectionManager
+import android.provider.Settings
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,7 +49,10 @@ fun MiscPaintedControls() {
     val context = LocalContext.current
     val captureStatus by VideoAmbilightService.status.collectAsState()
     val paintedSession = VideoAmbilightService.isRunning && VideoAmbilightService.isPainted
-    val gpuPreview = paintedSession && VideoAmbilightService.isPreview
+    val fullScreenActive = paintedSession && VideoAmbilightService.isScreenOverlay
+    val gpuPreview = paintedSession && VideoAmbilightService.isPreview &&
+        !VideoAmbilightService.isScreenOverlay
+    var requestedFullScreen by remember { mutableStateOf(false) }
     var settings by remember(context) {
         mutableStateOf(PaintedScreenPreferences.read(context))
     }
@@ -65,6 +69,7 @@ fun MiscPaintedControls() {
                 .putExtra(VideoAmbilightService.EXTRA_PAINTED, true)
                 .putExtra(VideoAmbilightService.EXTRA_SAFE_LIVE, true)
                 .putExtra(VideoAmbilightService.EXTRA_PAINT_PREVIEW, true)
+                .putExtra(VideoAmbilightService.EXTRA_PAINT_OVERLAY, requestedFullScreen)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_CODE, result.resultCode)
                 .putExtra(VideoAmbilightService.EXTRA_RESULT_DATA, result.data)
             try {
@@ -77,6 +82,13 @@ fun MiscPaintedControls() {
         } else {
             liveFeedback = "Screen sharing permission was not granted."
         }
+    }
+    val overlayPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        liveFeedback = if (Settings.canDrawOverlays(context))
+            "Overlay permission granted. Tap Paint current screen again."
+        else "Allow display over other apps for full-screen painting."
     }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var message by remember { mutableStateOf("Choose a photo to run the GPU paint shader.") }
@@ -94,6 +106,10 @@ fun MiscPaintedControls() {
     fun save(next: PaintedScreenPreferences) {
         settings = next
         next.save(context)
+        if (paintedSession) context.startService(
+            Intent(context, VideoAmbilightService::class.java)
+                .setAction(VideoAmbilightService.ACTION_REFRESH)
+        )
     }
 
     LaunchedEffect(photo) {
@@ -128,16 +144,16 @@ fun MiscPaintedControls() {
             Text("Paint Shader · GPU", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Real AGSL brush shader, not a translucent filter or pixel mosaic. " +
-                    "Live output is displayed inside HALO, without an overlay that can darken or block your phone.",
+                    "Paint the selected app across your whole display, or use the small preview inside HALO.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            Text("Live GPU preview", style = MaterialTheme.typography.titleMedium)
+            Text("Live GPU painting", style = MaterialTheme.typography.titleMedium)
             Text(
-                if (gpuPreview) captureStatus else
-                    "Select another app in Android's screen-sharing dialog, then view its live painted output here. " +
-                    "For interaction, place HALO beside that app using Samsung split screen. " +
-                    "Stock Android does not allow HALO to replace another app's actual display shader.",
+                if (paintedSession) captureStatus else
+                    "Full-screen: select SINGLE APP (not entire screen) in Android's capture picker, " +
+                    "then open that app. The touch-through painting follows it across the display. " +
+                    "Other apps and protected screens remain unmodified.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -158,10 +174,9 @@ fun MiscPaintedControls() {
                         Build.VERSION.SDK_INT < 33 ->
                             liveFeedback = "Live painting requires Android 13 or newer."
                         else -> {
+                            requestedFullScreen = false
                             val manager = context.getSystemService(
                                 MediaProjectionManager::class.java)
-                            // Android 14+ offers single-app sharing. Select a
-                            // different app to avoid HALO capturing itself.
                             screenPermission.launch(manager.createScreenCaptureIntent())
                         }
                     }
@@ -169,7 +184,36 @@ fun MiscPaintedControls() {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (paintedSession) "Stop GPU painting" else if (otherVideo)
-                    "Stop Video Ambilight" else "Start GPU painting")
+                    "Stop Video Ambilight" else "Start small GPU preview")
+            }
+            if (!paintedSession && !otherVideo) {
+                Button(
+                    onClick = {
+                        when {
+                            Build.VERSION.SDK_INT < 34 ->
+                                liveFeedback = "Full-screen single-app painting requires Android 14 or newer."
+                            !Settings.canDrawOverlays(context) ->
+                                overlayPermission.launch(
+                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:" + context.packageName))
+                                )
+                            else -> {
+                                requestedFullScreen = true
+                                val manager = context.getSystemService(
+                                    MediaProjectionManager::class.java)
+                                screenPermission.launch(manager.createScreenCaptureIntent())
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Paint current screen · full display") }
+            }
+            if (fullScreenActive) {
+                Text(
+                    "Full-screen GPU paint is running. Switch to the selected app. " +
+                        "Use HALO's Stop screen capture notification to turn it off.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             liveFeedback?.let {
                 Text(it, color = MaterialTheme.colorScheme.error,

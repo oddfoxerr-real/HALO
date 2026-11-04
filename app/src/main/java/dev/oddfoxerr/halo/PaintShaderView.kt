@@ -21,8 +21,9 @@ import java.util.concurrent.atomic.AtomicReference
  * A genuine GPU-powered image-space painting shader.
  *
  * Its source is a real bitmap (photograph or user-consented MediaProjection
- * frame). No screen-sized overlay is ever installed by this preview. HALO
- * cannot inject shaders into other apps' display surfaces on stock Android.
+ * frame). The same GPU renderer is used in HALO's viewer and in a
+ * permissioned, touch-through screen-sized window. It cannot replace the
+ * system compositor or paint apps that refuse MediaProjection capture.
  */
 internal class PaintShaderView(context: Context) : View(context) {
     companion object {
@@ -93,6 +94,15 @@ half4 main(float2 coordinate) {
     private var gpuShader: RuntimeShader? = null
     private var failedGpuShader = false
     private var preferences = PaintedScreenPreferences()
+    private var fullBleed = false
+
+    /** Full-screen display crops to the selected app instead of letterboxing. */
+    fun setFullBleed(enabled: Boolean) {
+        if (fullBleed != enabled) {
+            fullBleed = enabled
+            invalidate()
+        }
+    }
 
     init {
         setWillNotDraw(false)
@@ -136,7 +146,10 @@ half4 main(float2 coordinate) {
         if (image.isRecycled || width <= 0 || height <= 0) return
         val save = canvas.save()
         try {
-            val scale = minOf(width.toFloat() / image.width, height.toFloat() / image.height)
+            val scale = if (fullBleed)
+                maxOf(width.toFloat() / image.width, height.toFloat() / image.height)
+            else
+                minOf(width.toFloat() / image.width, height.toFloat() / image.height)
             val drawingWidth = image.width * scale
             val drawingHeight = image.height * scale
             canvas.translate((width - drawingWidth) * .5f, (height - drawingHeight) * .5f)

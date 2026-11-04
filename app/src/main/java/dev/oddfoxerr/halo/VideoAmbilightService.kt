@@ -41,8 +41,10 @@ class VideoAmbilightService : Service() {
         const val EXTRA_PAINTED = "projection_painted"
         const val EXTRA_SAFE_LIVE = "projection_safe_transparent_pigment_only"
         const val EXTRA_PAINT_PREVIEW = "projection_painted_gpu_preview"
+        const val EXTRA_PAINT_OVERLAY = "projection_painted_gpu_fullscreen"
         private const val CHANNEL = "halo_video_ambilight"
         private const val NOTICE_ID = 711
+        internal const val GPU_PAINT_WINDOW_ALPHA = ScreenPaintOverlayPolicy.PREFERRED_ALPHA
 
         private val statusValue = MutableStateFlow("Video lighting is off")
         val status = statusValue.asStateFlow()
@@ -51,6 +53,8 @@ class VideoAmbilightService : Service() {
         @Volatile var isPainted = false
             private set
         @Volatile var isPreview = false
+            private set
+        @Volatile var isScreenOverlay = false
             private set
     }
 
@@ -62,6 +66,8 @@ class VideoAmbilightService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var windowManager: WindowManager? = null
     private var view: ChainsawView? = null
+    private var gpuPaintOverlay: PaintShaderView? = null
+    @Volatile private var capturedAppVisible = true
     @Volatile private var livePaintSurface: LivePaintSurface? = null
     private var paintDispatcher: LatestPaintDispatcher? = null
     @Volatile private var paintSettings = PaintedScreenPreferences()
@@ -128,8 +134,10 @@ class VideoAmbilightService : Service() {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_REFRESH -> {
                 lighting = VideoLightingPreferences.read(this)
-                if (isPainted) paintSettings = PaintedScreenPreferences.read(this)
-                else {
+                if (isPainted) {
+                    paintSettings = PaintedScreenPreferences.read(this)
+                    gpuPaintOverlay?.configure(paintSettings)
+                } else {
                     view?.configure(MusicConfiguration.read(this))
                     view?.configureVideo(lighting)
                 }
@@ -140,8 +148,11 @@ class VideoAmbilightService : Service() {
         }
         val previewRequested = intent.getBooleanExtra(EXTRA_PAINT_PREVIEW, false) &&
             intent.getBooleanExtra(EXTRA_PAINTED, false)
-        if (isRunning || (!previewRequested && !Settings.canDrawOverlays(this))) {
-            if (!previewRequested && !Settings.canDrawOverlays(this))
+        val fullScreenRequested = previewRequested &&
+            intent.getBooleanExtra(EXTRA_PAINT_OVERLAY, false)
+        val requiresOverlay = !previewRequested || fullScreenRequested
+        if (isRunning || (requiresOverlay && !Settings.canDrawOverlays(this))) {
+            if (requiresOverlay && !Settings.canDrawOverlays(this))
                 statusValue.value = "Allow display over other apps first"
             return START_NOT_STICKY
         }
@@ -158,6 +169,8 @@ class VideoAmbilightService : Service() {
         }
         isPainted = request.getBooleanExtra(EXTRA_PAINTED, false)
         isPreview = isPainted && previewRequested
+        isScreenOverlay = isPreview && fullScreenRequested
+        capturedAppVisible = true
         paintHealth.reset()
         paintSettings = PaintedScreenPreferences.read(this)
         framesRendered = 0L
@@ -189,7 +202,7 @@ class VideoAmbilightService : Service() {
             @Suppress("DEPRECATION")
             display.getRealMetrics(dm)
             densityDpi = dm.densityDpi
-            val divisor = if (isPainted) 3 else 6
+            val divisor = if (isScreenOverlay) 2 else if (isPainted) 3 else 6
             width = (dm.widthPixels / divisor).coerceAtLeast(96)
             height = (dm.heightPixels / divisor).coerceAtLeast(96)
             // Attach the ordinary transparent View only after valid pixels
@@ -225,6 +238,18 @@ class VideoAmbilightService : Service() {
                 }
                 override fun onCapturedContentResize(newWidth: Int, newHeight: Int) {
                     worker.post { resize(newWidth, newHeight) }
+                }
+                override fun onCapturedContentVisibilityChanged(isVisible: Boolean) {
+                    if (!isScreenOverlay || stopping) return
+                    capturedAppVisible = isVisible
+                    if (!isVisible) {
+                        PaintPreviewFrameHub.clear()
+                        gpuPaintOverlay?.visibility = View.INVISIBLE
+                    } else {
+                        // Reveal the overlay only once a new unprotected frame
+                        // arrives; never show an old image of another app.
+                        gpuPaintOverlay?.visibility = View.INVISIBLE
+                    }
                 }
             }, main)
 
@@ -283,6 +308,43 @@ class VideoAmbilightService : Service() {
         overlay = drawing
     }
 
+    /** A GPU-painted copy of the selected app, never a secure SurfaceView. */
+    private fun showGpuPaintOverlay() {
+        if (stopping || gpuPaintOverlay != null || !isScreenOverlay ||
+            !Settings.canDrawOverlays(this)) return
+        val window = getSystemService(WindowManager::class.java)
+        val drawing = PaintShaderView(applicationContext).apply {
+            configure(paintSettings)
+            setFullBleed(true)
+            visibility = View.INVISIBLE
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            // Must remain BELOW Android's 0.8 untrusted touch threshold.
+            // No other HALO overlay is kept while this service runs.
+            alpha = GPU_PAINT_WINDOW_ALPHA
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+        }
+        window.addView(drawing, params)
+        windowManager = window
+        overlay = drawing
+        gpuPaintOverlay = drawing
+        PaintPreviewFrameHub.attach(drawing)
+    }
+
     private fun startCapture(capture: MediaProjection) {
         createReader()
         virtualDisplay = capture.createVirtualDisplay(
@@ -319,15 +381,38 @@ class VideoAmbilightService : Service() {
                             }
                             framesSeen++
                             if (isPreview) {
-                                if (bitmap != null) {
+                                if (bitmap != null && (!isScreenOverlay || capturedAppVisible)) {
                                     lastUsablePaintFrameAt = now
+                                    if (isScreenOverlay) {
+                                        if (gpuPaintOverlay == null) main.post {
+                                            if (!stopping && capturedAppVisible &&
+                                                gpuPaintOverlay == null) {
+                                                try { showGpuPaintOverlay() }
+                                                catch (error: RuntimeException) {
+                                                    Log.e("HALO", "Full-screen GPU layer unavailable", error)
+                                                    statusValue.value = "Full-screen overlay unavailable"
+                                                    stopSelf()
+                                                }
+                                            }
+                                        }
+                                        main.post {
+                                            if (!stopping && capturedAppVisible)
+                                                gpuPaintOverlay?.visibility = View.VISIBLE
+                                        }
+                                    }
                                     PaintPreviewFrameHub.publish(bitmap)
                                     if (framesSeen % 15 == 0)
-                                        statusValue.value = "GPU painting · capturing selected app"
+                                        statusValue.value = if (isScreenOverlay)
+                                            "GPU painting current selected app · full display"
+                                        else "GPU painting · capturing selected app"
                                 } else {
+                                    bitmap?.recycle()
                                     PaintPreviewFrameHub.clear()
+                                    if (isScreenOverlay) main.post {
+                                        gpuPaintOverlay?.visibility = View.INVISIBLE
+                                    }
                                     if (framesSeen % 15 == 0)
-                                        statusValue.value = "Capture unavailable · protected content or app closed"
+                                        statusValue.value = "Capture unavailable · select a visible, unprotected app"
                                 }
                             } else when (paintHealth.observe(bitmap != null, overlay != null)) {
                                 PaintedCaptureAction.DISABLE_OVERLAY -> {
@@ -392,7 +477,7 @@ class VideoAmbilightService : Service() {
 
     private fun resize(fullWidth: Int, fullHeight: Int) {
         if (stopping || virtualDisplay == null || fullWidth < 16 || fullHeight < 16) return
-        val divisor = if (isPainted) 3 else 6
+        val divisor = if (isScreenOverlay) 2 else if (isPainted) 3 else 6
         val newWidth = (fullWidth / divisor).coerceAtLeast(96)
         val newHeight = (fullHeight / divisor).coerceAtLeast(96)
         if (newWidth == width && newHeight == height) return
@@ -409,6 +494,10 @@ class VideoAmbilightService : Service() {
             paintHealth.reset()
             lastUsablePaintFrameAt = SystemClock.uptimeMillis()
             paintDispatcher?.clear()
+            PaintPreviewFrameHub.clear()
+            if (isScreenOverlay) main.post {
+                gpuPaintOverlay?.visibility = View.INVISIBLE
+            }
         }
     }
 
@@ -451,10 +540,12 @@ class VideoAmbilightService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle(if (isPreview) "HALO GPU Paint Preview"
+            .setContentTitle(if (isScreenOverlay) "HALO Full-screen GPU Paint"
+                else if (isPreview) "HALO GPU Paint Preview"
                 else if (isPainted) "HALO Painted Screen" else "HALO Video Ambilight")
             .setContentText(
                 when {
+                    isScreenOverlay -> "Painting selected app over display · Stop available"
                     isPreview -> "Painting captured app in HALO · tap to manage"
                     isPainted && paintHealth.overlayRejected ->
                         "Painting paused: Android blocked capture · tap to manage"
@@ -474,6 +565,12 @@ class VideoAmbilightService : Service() {
         // MediaProjection cannot leave stale pixels visible after stop.
         hidePaintLayer()
         PaintPreviewFrameHub.clear()
+        gpuPaintOverlay?.let { painted ->
+            // Unregister first. A late captured bitmap must never reappear
+            // after the foreground service has been stopped.
+            PaintPreviewFrameHub.detach(painted)
+            gpuPaintOverlay = null
+        }
         if (!statusValue.value.startsWith("Android ended screen sharing") &&
             !statusValue.value.startsWith("Painting unavailable") &&
             !statusValue.value.startsWith("Painting overlay")) {
@@ -494,6 +591,7 @@ class VideoAmbilightService : Service() {
         view = null; overlay = null; windowManager = null
         isPainted = false
         isPreview = false
+        isScreenOverlay = false
         thread.quitSafely()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
