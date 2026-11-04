@@ -6,7 +6,8 @@ data class ApplicationRule(
     val character: CharacterApp = CharacterApp.fromPackage(packageName),
     val enabled: Boolean = true,
     val colorOverride: Long? = null,
-    val notificationModeOverride: NotificationEdgeMode? = null
+    val notificationModeOverride: NotificationEdgeMode? = null,
+    val notificationDesignOverride: EdgeMode? = null
 )
 
 /** Window supports overnight intervals, a full-day interval, and disabled schedules. */

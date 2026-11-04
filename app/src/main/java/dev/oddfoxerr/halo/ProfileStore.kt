@@ -50,9 +50,13 @@ class ProfileStore(context: Context) {
             character = character,
             enabled = prefs.getBoolean("rule.$packageName.enabled", true),
             colorOverride = color.takeIf { it >= 0L },
-            notificationModeOverride = NotificationEdgeMode.entries.firstOrNull { it.name == prefs.getString("rule.$packageName.notification_mode", "") }
+            notificationModeOverride = NotificationEdgeMode.entries.firstOrNull { it.name == prefs.getString("rule.$packageName.notification_mode", "") },
+            notificationDesignOverride = EdgeMode.entries.firstOrNull { it.name == prefs.getString("rule.$packageName.notification_design", "") }
         )
     }
+    fun notificationDesignFor(packageName: String): EdgeMode =
+        readRule(packageName).notificationDesignOverride ?: notificationEdgeDesign
+
     fun writeRule(rule: ApplicationRule) {
         val known = configuredPackages.toMutableSet().apply { add(rule.packageName) }
         prefs.edit().putStringSet("configured_packages", known)
@@ -60,6 +64,7 @@ class ProfileStore(context: Context) {
             .putBoolean("rule.${rule.packageName}.enabled", rule.enabled)
             .putLong("rule.${rule.packageName}.color", rule.colorOverride ?: -1L)
             .putString("rule.${rule.packageName}.notification_mode", rule.notificationModeOverride?.name ?: "")
+            .putString("rule.${rule.packageName}.notification_design", rule.notificationDesignOverride?.name ?: "")
             .apply()
     }
     fun clearRule(packageName: String) {
@@ -69,6 +74,7 @@ class ProfileStore(context: Context) {
             .remove("rule.$packageName.enabled")
             .remove("rule.$packageName.color")
             .remove("rule.$packageName.notification_mode")
+            .remove("rule.$packageName.notification_design")
             .apply()
     }
     val configuredPackages: Set<String> get() = prefs.getStringSet("configured_packages", emptySet())?.toSet().orEmpty()
@@ -157,6 +163,15 @@ class ProfileStore(context: Context) {
             .putFloat("notch.height", s.heightDp)
             .putFloat("notch.gap", s.gapDp).apply()
     }
+
+    /** Independent design and demo palette, never linked to MusicConfiguration.mode. */
+    var notificationEdgeDesign: EdgeMode
+        get() = EdgeSpectrum.mode(prefs.getString("notification_edge_design", "CLASSIC_OUTLINE"))
+        set(value) { prefs.edit().putString("notification_edge_design", value.name).apply() }
+
+    var notificationPreviewColor: Long
+        get() = prefs.getLong("notification_preview_color", 0xFF8790FBL)
+        set(value) { prefs.edit().putLong("notification_preview_color", value).apply() }
 
     /** Global notification placement: character, full perimeter, or both. */
     var notificationEdgeMode: NotificationEdgeMode

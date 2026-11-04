@@ -183,14 +183,10 @@ class HaloNotificationListener : NotificationListenerService() {
             val profile = store.readForPackage(sbn.packageName)
             if (profile.enabled) {
                 PillHaloOverlay.dismiss()
-                // Reuse the live Music window when available. Otherwise create a temporary
-                // window containing the exact same visualizer; no audio permission required.
-                val handledInMusic = MusicEdgeService.showNotification(
-                    profile.color.toInt(), store.notificationDurationMs)
-                if (!handledInMusic) {
-                    NotificationEdgeOverlay.show(this, profile.color, store.notificationDurationMs,
-                        store.notificationBorderPersistent, store)
-                }
+                // Per-app or global notification design, never Music selection.
+                NotificationEdgeOverlay.show(this, profile.color, store.notificationDurationMs,
+                    store.notificationBorderPersistent, store,
+                    store.notificationDesignFor(sbn.packageName))
             } else refreshIndicatorIfIdle()
         }
     }
@@ -264,10 +260,12 @@ class HaloNotificationListener : NotificationListenerService() {
             NotificationEdgeOverlay.dismiss()
             return
         }
-        val profile = tracker.newestIndicatorPackages().asSequence()
-            .map(store::readForPackage).firstOrNull { it.enabled }
-        if (profile == null) NotificationEdgeOverlay.dismiss()
-        else NotificationEdgeOverlay.showStatic(this, profile.color, store)
+        val active = tracker.newestIndicatorPackages().asSequence()
+            .map { it to store.readForPackage(it) }
+            .firstOrNull { it.second.enabled }
+        if (active == null) NotificationEdgeOverlay.dismiss()
+        else NotificationEdgeOverlay.showStatic(this, active.second.color, store,
+            store.notificationDesignFor(active.first))
     }
 
     private fun scheduleQuietCheck() {

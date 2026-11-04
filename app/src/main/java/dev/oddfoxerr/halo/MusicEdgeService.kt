@@ -29,14 +29,14 @@ class MusicEdgeService : Service() {
         @Volatile var isRunning = false; private set
         private var current: MusicEdgeService? = null
         /** Play the notification in the SAME music overlay window when music is active. */
-        fun showNotification(color: Int, duration: Long): Boolean {
+        fun showNotification(color: Int, duration: Long, store: ProfileStore, design: EdgeMode): Boolean {
             if (VideoAmbilightService.isRunning) return false
             val service = current ?: return false
             val drawing = service.view ?: return false
             val validDuration = duration.coerceIn(800L, 10_000L)
             service.yieldUntil = SystemClock.elapsedRealtime() + validDuration + 100L
             service.yielding = true
-            drawing.configure(service.config)
+            drawing.configure(NotificationLighting.config(store, color, design))
             drawing.playNotification(color, validDuration, false)
             drawing.visibility = View.VISIBLE
             return true
@@ -168,6 +168,7 @@ class MusicEdgeService : Service() {
             val notification = showingInMusicWindow || NotificationEdgeOverlay.isAnimating
             if (yielding && !notification) {
                 view?.stopNotification()
+                view?.configure(config)
                 NotificationEdgeOverlay.dismiss()
                 yielding = false
             }
@@ -181,7 +182,7 @@ class MusicEdgeService : Service() {
             val noCapture = captureUnavailable || lastCapture == 0L || now - lastCapture > 1100L
             view?.apply {
                 setMusicForegroundAllowed(allowLightingOnCurrentApp || showingInMusicWindow)
-                keepAmbientMotion = mediaFallback && noCapture
+                keepAmbientMotion = !showingInMusicWindow && mediaFallback && noCapture
                 if (!showingInMusicWindow) {
                     edgeColor = info.color ?: settings.color
                     accentColor = info.accent ?: settings.accent

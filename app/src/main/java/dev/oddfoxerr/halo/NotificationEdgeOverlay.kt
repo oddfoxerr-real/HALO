@@ -23,13 +23,19 @@ object NotificationEdgeOverlay {
     val isVisible: Boolean get() = view != null
     val isAnimating: Boolean get() = !persistent && view?.isNotificationPlaying == true
 
-    fun show(context: Context, color: Long, duration: Long, keepUntilDismissed: Boolean, store: ProfileStore) {
+    fun show(context: Context, color: Long, duration: Long, keepUntilDismissed: Boolean,
+        store: ProfileStore, design: EdgeMode = store.notificationEdgeDesign) {
         if (!Settings.canDrawOverlays(context) || VideoAmbilightService.isRunning) return
+        // Borrow running Music window instead of stacking a new overlay.
+        if (MusicEdgeService.showNotification(color.toInt(), duration, store, design)) {
+            dismiss()
+            return
+        }
         val drawing = ensure(context) ?: return
         generation++
         val current = generation
         persistent = keepUntilDismissed
-        drawing.configure(MusicConfiguration.read(context))
+        drawing.configure(NotificationLighting.config(store, color.toInt(), design))
         drawing.configureNotch(store.notchSettings())
         drawing.playNotification(color.toInt(), duration, keepUntilDismissed)
         handler.postDelayed({
@@ -38,13 +44,14 @@ object NotificationEdgeOverlay {
         }, duration.coerceIn(800L, 10_000L))
     }
 
-    fun showStatic(context: Context, color: Long, store: ProfileStore) {
-        if (VideoAmbilightService.isRunning) return
-        if (isVisible) return
+    fun showStatic(context: Context, color: Long, store: ProfileStore,
+        design: EdgeMode = store.notificationEdgeDesign) {
+        if (VideoAmbilightService.isRunning || MusicEdgeService.isRunning) return
+        if (isAnimating) return
         val drawing = ensure(context) ?: return
         generation++
         persistent = true
-        drawing.configure(MusicConfiguration.read(context))
+        drawing.configure(NotificationLighting.config(store, color.toInt(), design))
         drawing.configureNotch(store.notchSettings())
         drawing.playNotification(color.toInt(), 3500L, true)
     }
