@@ -14,6 +14,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +88,7 @@ fun MusicStudio(modifier: Modifier = Modifier) {
     val latest by rememberUpdatedState(settings)
     val runtime by MusicRuntime.state.collectAsState()
     var panel by remember { mutableStateOf(MusicPanel.DESIGNS) }
-    var designGroup by remember { mutableStateOf(settings.mode.group) }
+    var designGroup by remember { mutableStateOf<EdgeGroup?>(settings.mode.group) }
     var demo by remember { mutableStateOf(true) }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var revision by remember { mutableIntStateOf(0) }
@@ -217,26 +219,43 @@ fun MusicStudio(modifier: Modifier = Modifier) {
         when (panel) {
             MusicPanel.DESIGNS -> {
                 Text("Edge animations", style = MaterialTheme.typography.titleMedium)
-                Text("59 GPU effects: clean borders, flowing waves, moving lights and particle details. The live preview stays above.",
+                Text("Organized by animation type. All 59 effects are still available; choosing a category only filters the gallery.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    FilterChip(
+                        selected = designGroup == null,
+                        onClick = { designGroup = null },
+                        label = { Text("All · 59") }
+                    )
                     EdgeGroup.entries.forEach { family ->
                         FilterChip(
                             selected = designGroup == family,
                             onClick = { designGroup = family },
-                            label = { Text(family.title) }
+                            label = { Text("${family.title} · ${EdgeCatalogue.count(family)}") }
                         )
                     }
                 }
-                EdgeMode.entries.filter { it.group == designGroup }.forEach { design ->
-                    DesignTile(design, settings.mode == design, settings.color, settings.accent,
-                        Modifier.fillMaxWidth()) {
-                        save(settings.copy(mode = design))
-                        demo = true
+                Text("${EdgeCatalogue.visible(designGroup).size} designs · Selected: ${settings.mode.title}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Only visible thumbnails create Android GPU views; All does not
+                // eagerly allocate 59 shader instances or exhaust the UI thread.
+                key(designGroup) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().height(372.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(EdgeCatalogue.visible(designGroup), key = { it.name }) { design ->
+                            DesignTile(design, settings.mode == design, settings.color, settings.accent,
+                                Modifier.fillMaxWidth()) {
+                                save(settings.copy(mode = design))
+                                demo = true
+                            }
+                        }
                     }
                 }
                 Text("Color Studio", style = MaterialTheme.typography.titleMedium)

@@ -2,6 +2,8 @@ package dev.oddfoxerr.halo
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +45,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 internal fun NotificationStudio(store: ProfileStore, overlayEnabled: Boolean, requestOverlay: () -> Unit) {
     val context = LocalContext.current
     var design by remember { mutableStateOf(store.notificationEdgeDesign) }
-    var family by remember { mutableStateOf(store.notificationEdgeDesign.group) }
+    var family by remember { mutableStateOf<EdgeGroup?>(store.notificationEdgeDesign.group) }
     var sampleColor by remember { mutableStateOf(store.notificationPreviewColor) }
     var persistence by remember { mutableStateOf(store.notificationBorderPersistent) }
     var duration by remember { mutableFloatStateOf(store.notificationDurationMs.toFloat()) }
@@ -87,39 +89,56 @@ internal fun NotificationStudio(store: ProfileStore, overlayEnabled: Boolean, re
         Text("Notification style: " + design.title, style = MaterialTheme.typography.titleSmall)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            FilterChip(
+                selected = family == null,
+                onClick = { family = null },
+                label = { Text("All · 59") }
+            )
             EdgeGroup.entries.forEach { category ->
                 FilterChip(selected = family == category, onClick = { family = category },
-                    label = { Text(category.title) })
+                    label = { Text("${category.title} · ${EdgeCatalogue.count(category)}") })
             }
         }
-        EdgeMode.entries.filter { it.group == family }.forEach { option ->
-            Card(onClick = {
-                design = option
-                store.notificationEdgeDesign = option
-            }, modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (design == option)
-                        MaterialTheme.colorScheme.secondaryContainer
-                    else MaterialTheme.colorScheme.surface
-                )) {
-                Row(Modifier.fillMaxWidth().padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    AndroidView(factory = { EdgeDesignPreview(it) },
-                        update = {
-                            val previewSettings = NotificationLighting.config(
-                                store, sampleColor.toInt(), option)
-                            it.configure(option, sampleColor.toInt(), previewSettings.accent)
-                        }, modifier = Modifier.width(42.dp).height(76.dp)
-                            .background(Color.Black, RoundedCornerShape(10.dp)))
-                    Column(Modifier.weight(1f)) {
-                        Text(option.title, style = MaterialTheme.typography.titleSmall)
-                        Text(option.description, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${EdgeCatalogue.visible(family).size} effects in this view",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Same catalogue and order as Music. A bounded lazy list avoids
+        // creating dozens of shader previews inside the Alerts screen.
+        key(family) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().height(350.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(EdgeCatalogue.visible(family), key = { it.name }) { option ->
+                    Card(onClick = {
+                        design = option
+                        store.notificationEdgeDesign = option
+                    }, modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (design == option)
+                                MaterialTheme.colorScheme.secondaryContainer
+                            else MaterialTheme.colorScheme.surface
+                        )) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            AndroidView(factory = { EdgeDesignPreview(it) },
+                                update = {
+                                    val previewSettings = NotificationLighting.config(
+                                        store, sampleColor.toInt(), option)
+                                    it.configure(option, sampleColor.toInt(), previewSettings.accent)
+                                }, modifier = Modifier.width(42.dp).height(76.dp)
+                                    .background(Color.Black, RoundedCornerShape(10.dp)))
+                            Column(Modifier.weight(1f)) {
+                                Text(option.title, style = MaterialTheme.typography.titleSmall)
+                                Text(option.description, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (design == option) Text("Selected",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
                     }
-                    if (design == option) Text("Selected",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
