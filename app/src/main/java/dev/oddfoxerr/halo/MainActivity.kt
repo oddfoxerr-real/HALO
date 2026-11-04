@@ -158,10 +158,12 @@ private fun HaloApp(
 ) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(HaloTab.HOME) }
+    var returnTab by remember { mutableStateOf(HaloTab.HOME) }
     var showActivity by remember { mutableStateOf(false) }
     var showAppRules by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(false) }
     BackHandler(enabled = tab == HaloTab.MISC) { tab = HaloTab.SETTINGS }
+    BackHandler(enabled = tab == HaloTab.SETTINGS) { tab = returnTab }
     var enabled by remember(revision) { mutableStateOf(store.masterEnabled) }
     val appVersion = remember(context) {
         @Suppress("DEPRECATION")
@@ -194,12 +196,10 @@ private fun HaloApp(
                     when (tab) {
                         HaloTab.SETTINGS -> {
                             Text("v$appVersion", color = Muted, style = MaterialTheme.typography.labelSmall)
-                            IconButton(onClick = { tab = HaloTab.HOME }) {
-                                Icon(Icons.Default.Home, contentDescription = "Back to home")
-                            }
+                            TextButton(onClick = { tab = returnTab }) { Text("Done") }
                         }
                         HaloTab.MISC -> Unit
-                        else -> IconButton(onClick = { tab = HaloTab.SETTINGS }) {
+                        else -> IconButton(onClick = { returnTab = tab; tab = HaloTab.SETTINGS }) {
                             Icon(Icons.Default.Settings, contentDescription = "Open settings")
                         }
                     }
