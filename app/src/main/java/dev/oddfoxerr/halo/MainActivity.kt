@@ -115,6 +115,9 @@ class MainActivity : ComponentActivity() {
                         startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                     }
                 )
+                // One-time permission education, never a recurring manual
+                // update check. Displayed over the existing app if needed.
+                HaloUpdatePermissionIntro(revision)
             }
         }
     }
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         HaloUpdateInstaller.foreground(this)
         permissionRevision++
+        HaloUpdates.onAppResumed(this)
     }
 
     override fun onPause() {

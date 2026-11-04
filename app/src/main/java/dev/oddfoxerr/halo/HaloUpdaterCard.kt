@@ -39,19 +39,39 @@ internal fun HaloUpdaterCard() {
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val snapshot = remember(revision) { HaloUpdates.snapshot(context) }
+    val canInstall = context.packageManager.canRequestPackageInstalls()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("Automatic updates", style = MaterialTheme.typography.titleMedium)
             Text(
-                "HALO checks for signed GitHub releases every 6 hours and downloads " +
-                "verified updates automatically. You never need to check manually.",
+                "HALO checks for updates in the background and automatically downloads " +
+                "verified releases. Android may request one-time install permission " +
+                "and confirmation when needed.",
                 style = MaterialTheme.typography.bodyMedium
             )
+            Text(
+                if (canInstall) "App installation access: allowed"
+                else "App installation access: not yet allowed",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!canInstall) {
+                OutlinedButton(onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + context.packageName))
+                    )
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Allow automatic updates")
+                }
+            }
             val statusText = when (snapshot.state) {
                 "current" -> "Up to date"
                 "downloading" -> "Downloading"
-                "ready", "approval" -> "Ready to install"
+                "ready" -> "Ready to install"
+                "approval" -> "Android installation approval required"
+                "permission" -> "One-time installation access needed"
                 "installing" -> "Installing"
                 "incompatible" -> "Old installation has a different signing key"
                 "error" -> "Will retry automatically"
@@ -67,23 +87,13 @@ internal fun HaloUpdaterCard() {
                 ).format(Date(snapshot.checkedAt)),
                     style = MaterialTheme.typography.labelSmall)
             }
-            if (snapshot.ready) {
+            if (snapshot.ready && canInstall) {
                 Button(onClick = { HaloUpdates.installPrepared(context) },
                     modifier = Modifier.fillMaxWidth()) {
-                    Text("Install downloaded " + snapshot.version)
-                }
-                if (!context.packageManager.canRequestPackageInstalls()) {
-                    Text("Android may require one-time authorization for sideloaded APK installs. " +
-                        "HALO never opens that permission screen automatically.",
-                        style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                Uri.parse("package:" + context.packageName))
-                        )
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Allow installs from HALO")
-                    }
+                    Text(
+                        if (snapshot.state == "approval") "Approve Android installation"
+                        else "Install downloaded " + snapshot.version
+                    )
                 }
             }
         }
