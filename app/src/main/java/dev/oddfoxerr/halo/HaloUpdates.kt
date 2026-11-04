@@ -111,10 +111,49 @@ internal object HaloUpdates {
         }, "HALO-install-update").start()
     }
 
-    fun alreadyAttempted(context: Context, version: String) =
-        prefs(context).getString("attempted", null) == version
-    fun recordAttempt(context: Context, version: String) {
-        prefs(context).edit().putString("attempted", version).apply()
+    fun onAppResumed(context: Context) {
+        // Returning from Android's one-time permission page automatically
+        // resumes a previously verified update, without pressing Check.
+        attemptAutomaticInstall(context.applicationContext)
+    }
+
+    private var startingInstall = false
+
+    fun attemptAutomaticInstall(context: Context) {
+        val app = context.applicationContext
+        if (!app.packageManager.canRequestPackageInstalls()) return
+        val file = preparedFile(app) ?: return
+        val prefs = prefs(app)
+        val version = prefs.getString("version", "").orEmpty()
+        if (version.isBlank() || !Regex("^v?[0-9]+\\.[0-9]+\\.[0-9]+$").matches(version)) return
+        synchronized(this) {
+            if (startingInstall || prefs.getString("attempted", null) == version) return
+            startingInstall = true
+            prefs.edit().putString("attempted", version).apply()
+        }
+        Thread({
+            try {
+                val expected = prefs.getString("digest", "").orEmpty()
+                if (!ReleaseDownload.matchesDigest(file, expected)) {
+                    save(app, "error", "Downloaded APK failed verification; the next check will redownload it.")
+                    return@Thread
+                }
+                ReleaseDownload.validateArchive(app, file)
+                if (!HaloUpdateInstaller.submit(app, file)) {
+                    // Consent has not yet been granted. After Android grants it,
+                    // onAppResumed retries this same verified file immediately.
+                    prefs.edit().remove("attempted").apply()
+                }
+            } catch (e: Exception) {
+                prefs.edit().remove("attempted").apply()
+                val message = e.message.orEmpty().take(160)
+                val category = if (message.contains("signing key", ignoreCase = true))
+                    "incompatible" else "ready"
+                note(app, category, message)
+            } finally {
+                synchronized(this) { startingInstall = false }
+            }
+        }, "HALO-auto-install").start()
     }
 }
 
@@ -329,15 +368,9 @@ class HaloUpdateWorker(context: Context, params: WorkerParameters) :
             HaloUpdates.save(app, "ready",
                 "HALO " + latest.version + " downloaded and verified.",
                 latest.version, apk, checksum)
-            if (!HaloUpdates.alreadyAttempted(app, latest.version)) {
-                HaloUpdates.recordAttempt(app, latest.version)
-                try {
-                    HaloUpdateInstaller.submit(app, apk)
-                } catch (_: Exception) {
-                    HaloUpdates.note(app, "ready",
-                        "Update downloaded. Android requires confirmation to install.")
-                }
-            }
+            // Permission absent: never mark the update as attempted. The app
+            // requests it only once and automatically resumes on return.
+            HaloUpdates.attemptAutomaticInstall(app)
             Result.success()
         } catch (e: Exception) {
             HaloUpdates.note(app, "error",
