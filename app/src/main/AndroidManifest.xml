@@ -22,7 +22,7 @@
             <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
-    <application android:name=".HaloApplication" android:allowBackup="false" android:label="HALO" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+    <application android:name=".HaloApplication" android:allowBackup="false" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/HaloTheme" android:supportsRtl="true">
         <receiver android:name=".HaloUpdateInstallReceiver"
             android:exported="false" />
         <activity android:name=".MusicEdgeActivity" android:exported="false" />
