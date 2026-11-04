@@ -124,6 +124,7 @@ internal object HaloUpdates {
         if (!app.packageManager.canRequestPackageInstalls()) return
         val file = preparedFile(app) ?: return
         val prefs = prefs(app)
+        if (prefs.getString("state", "") == "incompatible") return
         val version = prefs.getString("version", "").orEmpty()
         if (version.isBlank() || !Regex("^v?[0-9]+\\.[0-9]+\\.[0-9]+$").matches(version)) return
         synchronized(this) {

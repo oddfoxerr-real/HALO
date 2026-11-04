@@ -27,7 +27,7 @@ import java.util.Date
 
 /** Read-only update status by default. No manual Check button or permission popup. */
 @Composable
-internal fun HaloUpdaterCard() {
+internal fun HaloUpdaterCard(resumeRevision: Int) {
     val context = LocalContext.current
     val prefs = remember(context) { HaloUpdates.prefs(context) }
     var revision by remember { mutableIntStateOf(0) }
@@ -38,7 +38,7 @@ internal fun HaloUpdaterCard() {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val snapshot = remember(revision) { HaloUpdates.snapshot(context) }
+    val snapshot = remember(revision, resumeRevision) { HaloUpdates.snapshot(context) }
     val canInstall = context.packageManager.canRequestPackageInstalls()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp),
