@@ -345,7 +345,8 @@ internal class ShaderEdgeEngine {
                     low=max(low,.10+.05*breath);
                 }
                 if(gain<.001) return half4(0.0);
-                float limit=min(20.0*unit,max(10.0*unit,line*6.0));
+                float limit=min(24.0*unit,max(14.0*unit,line*10.0));
+                if(design>=47 && design<=58) limit=29.0*unit;
                 if(abs(d)>limit) return half4(0.0);
                 float2 e=max((frame.zw-frame.xy)*.5,float2(1.0));
                 float r=clamp(radius,1.0,min(e.x,e.y));
@@ -356,7 +357,162 @@ internal class ShaderEdgeEngine {
                 float weight=1.0;
                 float tint=.5-.5*cos(TAU*u);
                 float highlight=0.0;
-                if(design>=39 && design<=46) {
+                if(design>=47 && design<=58) {
+                    // Motion families informed by real edge-lighting references:
+                    // serial bulbs, discrete bars, traveling light, wave contours
+                    // and sparse localized particle drift. No whole-screen masks.
+                    float t=seconds;
+                    float drive=clamp(.45+.55*low+.35*mid+.50*hit,.35,1.5);
+                    float w=max(perimeter,1.0);
+                    float nearLeft=abs(px.x-frame.x);
+                    float nearRight=abs(px.x-frame.z);
+                    float nearSide=min(nearLeft,nearRight);
+                    float sideGate=1.0-smoothstep(4.0*unit,24.0*unit,nearSide);
+                    float nearTop=abs(px.y-frame.y);
+                    float nearBottom=abs(px.y-frame.w);
+                    float horizontalGate=1.0-smoothstep(4.0*unit,22.0*unit,
+                        min(nearTop,nearBottom));
+                    float yNorm=clamp((px.y-frame.y)/max(frame.w-frame.y,1.0),0.0,1.0);
+                    float xNorm=clamp((px.x-frame.x)/max(frame.z-frame.x,1.0),0.0,1.0);
+                    if(design==47) {
+                        // Serial Lights: literal traveling round bulbs.
+                        float count=compact>.5 ? 17.0 : clamp(floor(w/(14.0*unit)),25.0,210.0);
+                        float shift=t*(1.1+.9*low);
+                        float lane=u*count-shift;
+                        float index=floor(lane);
+                        float across=(fract(lane)-.5)*w/count;
+                        float position=fract((index+.5+shift)/count);
+                        float local=harmonic(position);
+                        float pulse=pow(.5+.5*cos(TAU*(position-t*.105)),5.0);
+                        float rad=unit*(.70+.20*local+.32*high);
+                        shapeDistance=length(float2(across,d))-rad;
+                        weight=.25+.44*local+.53*pulse+.13*hit;
+                        highlight=.20*pulse;
+                        tint=.5-.5*cos(TAU*(u-t*.025));
+                    } else if(design==48 || design==49) {
+                        // Physically drawn perimeter bars (rounded boxes), not
+                        // a sine-wave alpha trick on an ordinary outline.
+                        float count=compact>.5 ? 25.0 : clamp(floor(w/(8.0*unit)),45.0,260.0);
+                        float lane=u*count;
+                        float at=(floor(lane)+.5)/count;
+                        float local=clamp(harmonic(at)*1.8,0.0,1.0);
+                        float barHeight=unit*(1.4+(design==48 ? 10.0 : 14.0)*local
+                            +3.0*hit);
+                        float halfWidth=max(.50*unit,w/count*.21);
+                        float along=(fract(lane)-.5)*w/count;
+                        float2 q=abs(float2(along,d+barHeight*.46))
+                            -float2(halfWidth,barHeight*.50);
+                        shapeDistance=length(max(q,float2(0.0)))+
+                            min(max(q.x,q.y),0.0)-.25*unit;
+                        float tick=.68+.18*sin(t*.28+at*TAU*4.0);
+                        weight=(.29+.34*local+.33*hit)*tick;
+                        if(design==49) {
+                            // Side Bars only: sides are active, top/bottom stay empty.
+                            weight*=sideGate;
+                            barHeight+=2.0*unit*mid;
+                        }
+                        highlight=.06*high;
+                    } else if(design==50 || design==51 || design==52) {
+                        // Continuous signed-distance wave contours, including
+                        // waves that pass through the rounded corners.
+                        float local=clamp(harmonic(u)*1.4,0.0,1.0);
+                        float wave0=sin(TAU*(u*(design==51 ? 8.0 : 5.0)-t*.17));
+                        float wave1=sin(TAU*(u*13.0+t*.095)+mid*1.7);
+                        float shift=unit*(.7+5.8*low+2.8*local+2.2*hit)*
+                            (wave0*.74+wave1*.26);
+                        float layerDistance=abs(d-shift)-line*.49;
+                        if(design==50) {
+                            float waveB=sin(TAU*(u*8.0+t*.095));
+                            float second=abs(d-(shift+waveB*2.6*unit))-line*.27;
+                            shapeDistance=min(layerDistance,second);
+                            weight=sideGate*(.41+.27*local+.31*low+.18*hit);
+                        } else if(design==51) {
+                            shapeDistance=layerDistance;
+                            weight=.41+.31*local+.25*low+.25*hit;
+                        } else {
+                            float extra=abs(d-shift-2.8*unit)-line*.26;
+                            float third=abs(d-shift+2.8*unit)-line*.22;
+                            shapeDistance=min(layerDistance,min(extra,third));
+                            weight=horizontalGate*(.40+.36*local+.23*low+.22*hit);
+                        }
+                        highlight=.06*high;
+                        tint=.5-.5*cos(TAU*(u-t*.03));
+                    } else if(design==53) {
+                        // Chase Light: one traveling elongated comet with a
+                        // thin residual border, no detached bright particles.
+                        float head=fract(t*.087);
+                        float gap=periodicDistance(u,head)*w;
+                        float trail=gaussian(gap,55.0*unit);
+                        float core=gaussian(gap,12.0*unit);
+                        shapeDistance=abs(d)-line*(.42+.40*core);
+                        weight=.10+(.58+.34*low+.37*hit)*trail;
+                        highlight=.40*core;
+                        tint=.5-.5*cos(TAU*(u-t*.035));
+                    } else if(design==54 || design==55) {
+                        // A deterministic field of distinct dots, not noise
+                        // painted as a static line. Only a small edge strip.
+                        float count=compact>.5 ? 24.0 : clamp(floor(w/(9.0*unit)),30.0,300.0);
+                        float motion=t*(design==54 ? .33 : .73);
+                        float lane=u*count-motion;
+                        float cell=floor(lane);
+                        float widthPx=w/count;
+                        float across=(fract(lane)-.5)*widthPx;
+                        float rand=hash(float2(cell,9.0));
+                        float rand2=hash(float2(cell,37.0));
+                        float offset=(rand-.5)*unit*(design==54 ? 12.0 : 10.0);
+                        float dot=unit*(.35+rand2*.85)*(1.0+.24*high);
+                        shapeDistance=length(float2(across,d-offset))-dot;
+                        if(design==54) {
+                            float corner0=(h+arc*.5)/w;
+                            float corner1=(h+v+arc*1.5)/w;
+                            float corner2=(2.0*h+v+arc*2.5)/w;
+                            float corner3=(2.0*h+2.0*v+arc*3.5)/w;
+                            float cornerNear=min(min(periodicDistance(u,corner0),
+                                periodicDistance(u,corner1)),
+                                min(periodicDistance(u,corner2),
+                                    periodicDistance(u,corner3)))*w;
+                            float cornerMask=1.0-smoothstep(18.0*unit,92.0*unit,
+                                cornerNear);
+                            weight=cornerMask*(.25+.53*rand2+.30*hit);
+                        } else {
+                            float flutter=.70+.30*sin(TAU*(u*9.0-t*.13));
+                            weight=flutter*(.21+.35*rand2+.23*mid+.24*hit);
+                        }
+                        highlight=.10*rand2;
+                    } else if(design==56) {
+                        // Smooth side-lights with a small luminous core and a
+                        // controlled haze: no duplicate overlay window.
+                        float y=sin(PI*yNorm);
+                        shapeDistance=abs(d)-unit*(1.6+1.6*low+1.0*hit);
+                        float breathing=.5+.5*sin(t*.95);
+                        weight=sideGate*(.34+.44*y+.17*breathing+.19*low);
+                        highlight=.1*breathing;
+                    } else if(design==57) {
+                        // Flat Flutter: restrained intermittent small strips
+                        // along the edge, tied to the measured bass envelope.
+                        float count=compact>.5 ? 12.0 : clamp(floor(w/(19.0*unit)),28.0,110.0);
+                        float at=(floor(u*count)+.5)/count;
+                        float along=(fract(u*count)-.5)*w/count;
+                        float pulse=sin(TAU*(at*4.0-t*.13));
+                        float lengthBar=unit*(1.2+3.5*low+2.2*mid
+                            +2.5*max(pulse,0.0)*hit);
+                        shapeDistance=length(float2(max(abs(along)-w/count*.21,0.0),
+                            d+lengthBar*.2))-line*(.45+.11*high);
+                        weight=.34+.31*low+.30*hit+.13*max(pulse,0.0);
+                        highlight=.08*high;
+                    } else {
+                        // Fire Lines: coherent traveling flames on the two
+                        // sides only. Smooth band-limited noise avoids flicker.
+                        float flame=noise(float2(u*37.0-t*.71,d/(3.0*unit)));
+                        float ridge=sin(TAU*(u*16.0+t*.13));
+                        float offset=unit*(1.5+6.4*low+4.2*hit)*
+                            (flame*.65+.35*ridge);
+                        shapeDistance=abs(d+offset)-line*(.47+.33*mid);
+                        weight=sideGate*(.25+.47*flame+.38*low+.29*hit);
+                        highlight=.13*high;
+                        tint=.25+.25*sin(TAU*(u*1.8-t*.065));
+                    }
+                } else if(design>=39 && design<=46) {
                     // A separate, genuinely moving family. Geometry responds
                     // to measured FFT bass, mids, highs and real transients.
                     float kick=clamp(hit*.95+low*.36,0.0,1.3);
@@ -764,7 +920,8 @@ internal class ShaderEdgeEngine {
                 // Cull before expensive perimeter mapping, harmonic lookup and SDF
                 // evaluation. This cannot clip visible pixels: minimalLight() uses
                 // an equal or narrower limit. Keep Electric Arcs' original field.
-                if (design!=0 && abs(d)>20.0*max(pixelDensity,.5)) return half4(0.0);
+                if (design!=0 && abs(d)>(
+                    design>=47 ? 29.0 : 24.0)*max(pixelDensity,.5)) return half4(0.0);
                 // Background is genuinely transparent and needs no effect processing.
                 float effectExtent=105.0;
                 if(abs(d)>max(48.0,thicknessPx*spread*effectExtent)) return half4(0.0);
