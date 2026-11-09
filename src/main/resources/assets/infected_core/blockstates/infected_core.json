@@ -1,0 +1,1 @@
+{"variants":{"facing=north":{"model":"infected_core:block/infected_core_body"},"facing=east":{"model":"infected_core:block/infected_core_body","y":90},"facing=south":{"model":"infected_core:block/infected_core_body","y":180},"facing=west":{"model":"infected_core:block/infected_core_body","y":270}}}

@@ -1,0 +1,27 @@
+name: Build Infected Core
+on:
+  push:
+    branches:
+      - 'build/infected-core-0.4.0'
+  workflow_dispatch:
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build actual NeoForge addon
+        run: gradle --no-daemon clean build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Infected-Core-NeoForge-1.21.1
+          path: build/libs/infected-core-0.4.1.jar
+          if-no-files-found: error

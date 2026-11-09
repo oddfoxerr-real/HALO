@@ -1,0 +1,31 @@
+plugins {
+  id 'java-library'
+  id 'net.neoforged.moddev' version '2.0.115'
+}
+group='dev.oddfox'
+version='0.4.1'
+base.archivesName='infected-core'
+java.toolchain.languageVersion=JavaLanguageVersion.of(21)
+neoForge {
+  version='21.1.259'
+  runs { client { client() }; server { server(); programArgument '--nogui' } }
+  mods { infected_core { sourceSet sourceSets.main } }
+}
+repositories {
+  mavenCentral()
+  maven { url='https://maven.createmod.net' }
+  maven { url='https://maven.ryanhcode.dev/releases' }
+  maven { url='https://cursemaven.com' }
+}
+dependencies {
+  implementation('com.simibubi.create:create-1.21.1:6.0.10-280:slim') { transitive=false }
+  implementation('net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1')
+  compileOnly('dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6')
+  runtimeOnly('dev.engine-room.flywheel:flywheel-neoforge-1.21.1:1.0.6')
+  implementation('com.tterrag.registrate:Registrate:MC1.21-1.3.0+67')
+  implementation('dev.ryanhcode.sable:sable-common-1.21.1:2.0.6')
+  runtimeOnly('dev.ryanhcode.sable:sable-neoforge-1.21.1:2.0.6')
+  compileOnly('curse.maven:let-it-walk-1780503:9481043') { transitive=false }
+  runtimeOnly('curse.maven:let-it-walk-1780503:9481043') { transitive=false }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding='UTF-8'; options.release=21 }
