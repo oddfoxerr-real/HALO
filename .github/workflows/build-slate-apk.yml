@@ -18,8 +18,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -35,7 +33,11 @@ jobs:
           test -f slate-project/app/src/main/java/com/odd/slatekeyboard/SlateImeService.kt
       - name: Compile debug APK
         working-directory: slate-project
-        run: gradle --no-daemon --console=plain --stacktrace :app:assembleDebug
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        run: |
+          printf 'sdk.dir=%s\\n' "$ANDROID_HOME" > local.properties
+          gradle --no-daemon --console=plain --stacktrace :app:assembleDebug
       - name: Upload installable APK
         if: success()
         uses: actions/upload-artifact@v4
