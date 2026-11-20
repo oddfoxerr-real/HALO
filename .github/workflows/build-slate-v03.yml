@@ -1,0 +1,51 @@
+name: Build Slate Keyboard v0.3 APK
+on:
+  push:
+    branches: [build/slate-keyboard-0.3.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore Slate v0.2 base project
+        run: |
+          set -euo pipefail
+          base64 -d slate-v2/source.tar.xz.b64 > /tmp/slate.tar.xz
+          echo '236c2e53909776778ee9268f0138f33add5bed8c2dbc02b619133cbc8f6266e2  /tmp/slate.tar.xz' | sha256sum -c -
+          mkdir -p slate-project
+          tar -xJf /tmp/slate.tar.xz -C slate-project
+          test -f slate-project/app/src/main/assets/en_words.tsv
+      - name: Apply v0.3 typing and image clipboard patch
+        run: |
+          set -euo pipefail
+          cat slate-v3/part-*.txt | base64 -d > /tmp/slate-v3.patch.xz
+          echo '119ac7751dfebff44de2943697c835181249b50dbdcbbce27ef64c6e31bde4f3  /tmp/slate-v3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/slate-v3.patch.xz > /tmp/slate-v3.patch
+          cd slate-project
+          patch --batch -p1 < /tmp/slate-v3.patch
+          grep -q 'class ClipboardImageProvider' app/src/main/java/com/odd/slatekeyboard/ClipboardImageProvider.kt
+          grep -q 'fun decodeGlide' app/src/main/java/com/odd/slatekeyboard/SuggestionEngine.kt
+      - name: Compile and package debug APK
+        working-directory: slate-project
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          gradle --no-daemon --console=plain :app:assembleDebug
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SlateKeyboard-v0.3.0-debug
+          path: slate-project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
