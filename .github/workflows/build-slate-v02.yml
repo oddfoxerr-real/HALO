@@ -1,0 +1,42 @@
+name: Build Slate Keyboard v0.2 APK
+on:
+  push:
+    branches: [build/slate-keyboard-0.2.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore application project
+        run: |
+          set -euo pipefail
+          base64 -d slate-v2/source.tar.xz.b64 > /tmp/slate.tar.xz
+          echo '236c2e53909776778ee9268f0138f33add5bed8c2dbc02b619133cbc8f6266e2  /tmp/slate.tar.xz' | sha256sum -c -
+          mkdir -p slate-project
+          tar -xJf /tmp/slate.tar.xz -C slate-project
+          test -f slate-project/app/src/main/java/com/odd/slatekeyboard/SlateImeService.kt
+          test -f slate-project/app/src/main/assets/en_words.tsv
+      - name: Build APK
+        working-directory: slate-project
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          gradle --no-daemon --console=plain :app:assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: SlateKeyboard-v0.2.0-debug
+          path: slate-project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
