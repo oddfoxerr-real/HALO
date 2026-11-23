@@ -1,7 +1,14 @@
-name: Build Slate Keyboard v0.3 APK
+name: Build Slate Keyboard v0.3.1 APK
 on:
   push:
     branches: [build/slate-keyboard-0.3.0]
+  pull_request:
+    branches: [build/slate-keyboard-0.3.0]
+    paths:
+      - 'slate-maintenance/**'
+      - 'slate-v2/**'
+      - 'slate-v3/**'
+      - '.github/workflows/build-slate-v03.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,16 +43,54 @@ jobs:
           patch --batch -p1 < /tmp/slate-v3.patch
           grep -q 'class ClipboardImageProvider' app/src/main/java/com/odd/slatekeyboard/ClipboardImageProvider.kt
           grep -q 'fun decodeGlide' app/src/main/java/com/odd/slatekeyboard/SuggestionEngine.kt
-      - name: Compile and package debug APK
+      - name: Apply clipboard race fix and regression tests
+        run: |
+          set -euo pipefail
+          cp slate-project/app/src/main/java/com/odd/slatekeyboard/ClipboardStore.kt "$RUNNER_TEMP/slate-original-ClipboardStore.kt"
+          (cd slate-project && patch --batch -p1 < ../slate-maintenance/clipboard-race.patch)
+          mkdir -p slate-project/app/src/test/java/com/odd/slatekeyboard
+          cp slate-maintenance/ClipboardStoreTest.kt slate-project/app/src/test/java/com/odd/slatekeyboard/
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          p = Path('slate-project/app/build.gradle.kts')
+          s = p.read_text()
+          assert 'versionCode = 3' in s and 'versionName = "0.3.0"' in s
+          s = s.replace('versionCode = 3', 'versionCode = 4').replace('versionName = "0.3.0"', 'versionName = "0.3.1"')
+          s += '\nandroid { testOptions.unitTests.isIncludeAndroidResources = true }\n'
+          s += 'dependencies {\n    testImplementation("junit:junit:4.13.2")\n    testImplementation("org.robolectric:robolectric:4.16.1")\n}\n'
+          p.write_text(s)
+          PYTHON
+      - name: Reproduce regression, verify fix and package debug APK
         working-directory: slate-project
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          gradle --no-daemon --console=plain :app:assembleDebug
+          bash ../slate-maintenance/verify-clipboard.sh
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slate-Clipboard-Regression
+          path: |
+            slate-project/maintenance-evidence/
+            slate-project/app/build/reports/tests/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Verify and stage APK
+        run: |
+          set -euo pipefail
+          apk=slate-project/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t "$apk" > /dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" > /tmp/slate-badging.txt
+          grep -q "package: name='com.odd.slatekeyboard' versionCode='4' versionName='0.3.1'" /tmp/slate-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$apk"
+          mkdir -p slate-dist
+          cp "$apk" slate-dist/SlateKeyboard-v0.3.1-debug.apk
+          (cd slate-dist && sha256sum SlateKeyboard-v0.3.1-debug.apk > SHA256SUMS.txt)
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SlateKeyboard-v0.3.0-debug
-          path: slate-project/app/build/outputs/apk/debug/app-debug.apk
+          name: SlateKeyboard-v0.3.1-debug
+          path: slate-dist/
           if-no-files-found: error
           retention-days: 30
