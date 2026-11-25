@@ -1,0 +1,145 @@
+--- a/app/src/main/java/com/odd/slatekeyboard/ClipboardStore.kt
++++ b/app/src/main/java/com/odd/slatekeyboard/ClipboardStore.kt
+@@ -14,7 +14,20 @@
+ import java.util.concurrent.Executors
+ 
+ /** Private clipboard history. Text and image copies remain on-device, with per-item controls. */
+-class ClipboardStore(private val context: Context) {
++class ClipboardStore(context: Context) {
++    private val context = context.applicationContext
++
++    companion object {
++        // The IME, picker, settings and provider use separate store instances.
++        private val lock = Any()
++        private var generation = 0L
++        private val io = Executors.newSingleThreadExecutor { task ->
++            Thread(task, "SlateClipboardIO").apply {
++                priority = Thread.NORM_PRIORITY - 1
++                isDaemon = true
++            }
++        }
++    }
+     data class Item(
+         val text: String, val pinned: Boolean, val timestamp: Long,
+         val kind: String = "text", val fileId: String = "", val mime: String = ""
+@@ -26,12 +39,9 @@
+     private val prefs = context.getSharedPreferences("slate_clipboard", Context.MODE_PRIVATE)
+     private val key = "entries"
+     private val main = Handler(Looper.getMainLooper())
+-    private val io = Executors.newSingleThreadExecutor { task ->
+-        Thread(task, "SlateClipboardIO").apply { priority = Thread.NORM_PRIORITY - 1 }
+-    }
+     private val directory = File(context.filesDir, "slate_clip_images")
+ 
+-    @Synchronized fun items(): List<Item> = try {
++    fun items(): List<Item> = synchronized(lock) { try {
+         val json = JSONArray(prefs.getString(key, "[]"))
+         (0 until json.length()).mapNotNull { index ->
+             val obj = json.optJSONObject(index) ?: return@mapNotNull null
+@@ -45,7 +55,7 @@
+             } else if (value.isNotBlank()) Item(value, obj.optBoolean("pin", false), obj.optLong("at", 0))
+             else null
+         }
+-    } catch (_: Exception) { emptyList() }
++    } catch (_: Exception) { emptyList() } }
+ 
+     private fun imageFile(id: String) = File(directory, "$id.data")
+     fun imageUri(item: Item): Uri = Uri.Builder().scheme("content")
+@@ -53,7 +63,8 @@
+ 
+     fun thumbnailFile(item: Item): File? = if (item.isImage) imageFile(item.fileId).takeIf { it.exists() } else null
+ 
+-    @Synchronized private fun save(entries: List<Item>) {
++    // Called only while holding the process-wide lock.
++    private fun save(entries: List<Item>) {
+         val retained = entries.take(35)
+         val array = JSONArray()
+         retained.forEach { item ->
+@@ -85,7 +96,7 @@
+         if (item.intent != null) return
+         val text = item.text?.toString()?.trim()?.take(2000).orEmpty()
+         if (text.isBlank()) return
+-        synchronized(this) {
++        synchronized(lock) {
+             val current = items()
+             val pinned = current.firstOrNull { !it.isImage && it.text == text }?.pinned ?: false
+             save((listOf(Item(text, pinned, System.currentTimeMillis())) + current.filterNot { !it.isImage && it.text == text })
+@@ -97,15 +108,23 @@
+     /** Copy content-URI bytes promptly while clipboard/photo-picker access is still valid. */
+     fun captureImage(uri: Uri, mime: String, onChanged: (() -> Unit)? = null) {
+         if (!KeyboardPrefs.clipboardHistory(context) || !mime.startsWith("image/")) return
++        val requestGeneration = synchronized(lock) { generation }
+         io.execute {
+             var file: File? = null
+             try {
++                if (synchronized(lock) { requestGeneration != generation } ||
++                    !KeyboardPrefs.clipboardHistory(context)) return@execute
+                 // URI owned by this IME: just make the existing entry recent again.
+                 if (uri.authority == "com.odd.slatekeyboard.images") {
+                     val id = uri.lastPathSegment.orEmpty()
+-                    val existing = synchronized(this) { items().firstOrNull { it.fileId == id } }
++                    val existing = synchronized(lock) { items().firstOrNull { it.fileId == id } }
+                     if (existing != null) {
+-                        synchronized(this) { save(listOf(existing.copy(timestamp = System.currentTimeMillis())) + items().filterNot { it.identity == existing.identity }) }
++                        synchronized(lock) {
++                            if (requestGeneration != generation || !KeyboardPrefs.clipboardHistory(context)) return@execute
++                            save((listOf(existing.copy(timestamp = System.currentTimeMillis())) +
++                                items().filterNot { it.identity == existing.identity })
++                                .sortedWith(compareByDescending<Item> { it.pinned }.thenByDescending { it.timestamp }))
++                        }
+                         if (onChanged != null) main.post { onChanged() }
+                     }
+                     return@execute
+@@ -113,9 +132,10 @@
+                 directory.mkdirs()
+                 val id = UUID.randomUUID().toString().replace("-", "")
+                 val destination = imageFile(id)
+-                file = destination
++                val pending = File(directory, "$id.pending")
++                file = pending
+                 context.contentResolver.openInputStream(uri)?.use { input ->
+-                    FileOutputStream(destination).use { output ->
++                    FileOutputStream(pending).use { output ->
+                         val buffer = ByteArray(32 * 1024)
+                         var bytes = 0L
+                         while (true) {
+@@ -128,20 +148,33 @@
+                         if (bytes == 0L) throw IllegalArgumentException("Empty image")
+                     }
+                 } ?: throw IllegalArgumentException("Image source unavailable")
+-                synchronized(this) {
++                synchronized(lock) {
++                    // Clear/disable must win over any image already queued or copying.
++                    if (requestGeneration != generation || !KeyboardPrefs.clipboardHistory(context)) return@execute
++                    if (!pending.renameTo(destination)) throw java.io.IOException("Could not publish clipboard image")
++                    file = destination
+                     val entry = Item("Image", false, System.currentTimeMillis(), "image", id, mime)
+                     save((listOf(entry) + items()).sortedWith(compareByDescending<Item> { it.pinned }.thenByDescending { it.timestamp }))
+                 }
++                file = null // The published entry now owns the file.
+                 if (onChanged != null) main.post { onChanged() }
+-            } catch (_: Exception) { file?.delete() }
++            } catch (_: Exception) {
++                // A failed copy never becomes a history entry.
++            } finally { file?.delete() }
+         }
+     }
+ 
+-    @Synchronized fun togglePin(item: Item) {
++    fun togglePin(item: Item) = synchronized(lock) {
+         save(items().map { if (it.identity == item.identity) it.copy(pinned = !it.pinned) else it }
+             .sortedWith(compareByDescending<Item> { it.pinned }.thenByDescending { it.timestamp }))
+     }
+-    @Synchronized fun remove(item: Item) = save(items().filterNot { it.identity == item.identity })
+-    @Synchronized fun clearUnpinned() = save(items().filter { it.pinned })
+-    @Synchronized fun clearAll() = save(emptyList())
++    fun remove(item: Item) = synchronized(lock) { save(items().filterNot { it.identity == item.identity }) }
++    fun clearUnpinned() = synchronized(lock) {
++        generation += 1
++        save(items().filter { it.pinned })
++    }
++    fun clearAll() = synchronized(lock) {
++        generation += 1
++        save(emptyList())
++    }
+ }
